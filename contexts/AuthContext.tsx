@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
@@ -32,44 +34,72 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      await new Promise((r) => setTimeout(r, 1500));
-      if (!email || !password) throw new Error('Vui lòng nhập đầy đủ thông tin');
-      if (password.length < 6) throw new Error('Mật khẩu phải có ít nhất 6 ký tự');
-      const mockUser: AuthUser = {
-        id: 'user_1',
-        name: email.split('@')[0],
-        email,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
-        provider: 'email',
-      };
-      return mockUser;
+      try {
+        const response = await axios.post(
+          'http://192.168.1.55:5000/api/login', 
+          { email, password },
+          { headers: { 'bypass-tunnel-reminder': 'true' } }
+        );
+        return response.data;
+      } catch (error: any) {
+        throw new Error(error.response?.data?.message || 'Đăng nhập thất bại');
+      }
     },
     onSuccess: async (data) => {
-      setUser(data);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      if (data && data.user) {
+        const userToSave: AuthUser = {
+          id: data.user.id || data.user._id,
+          name: data.user.name,
+          email: data.user.email,
+          avatar: data.user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
+          provider: 'email',
+        };
+        setUser(userToSave);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userToSave));
+        if (data.token) {
+          await AsyncStorage.setItem('user_token', data.token);
+        }
+      }
     },
   });
 
   const registerMutation = useMutation({
     mutationFn: async ({ name, email, password }: { name: string; email: string; password: string }) => {
-      await new Promise((r) => setTimeout(r, 1500));
-      if (!name || !email || !password) throw new Error('Vui lòng nhập đầy đủ thông tin');
-      if (password.length < 6) throw new Error('Mật khẩu phải có ít nhất 6 ký tự');
-      if (!email.includes('@')) throw new Error('Email không hợp lệ');
-      const mockUser: AuthUser = {
-        id: 'user_' + Date.now(),
-        name,
-        email,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
-        provider: 'email',
-      };
-      return mockUser;
+      try {
+        const response = await axios.post(
+          'http://192.168.1.55:5000/api/register', 
+          { name, email, password },
+          { headers: { 'bypass-tunnel-reminder': 'true' } }
+        );
+        return response.data; 
+      } catch (error: any) {
+        // Fix lỗi log {} bằng cách stringify lỗi
+        console.log("LỖI PHẢI HỒI TỪ BE:", JSON.stringify(error.response?.data));
+        throw new Error(error.response?.data?.message || 'Đăng ký thất bại');
+      }
     },
     onSuccess: async (data) => {
-      setUser(data);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      if (data && data.user) {
+        // Đảm bảo dữ liệu khớp với Interface AuthUser
+        const userToSave: AuthUser = {
+          id: data.user.id || data.user._id, // Lấy id hoặc _id từ MongoDB
+          name: data.user.name,
+          email: data.user.email,
+          avatar: data.user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
+          provider: 'email',
+        };
+
+        setUser(userToSave);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userToSave));
+        
+        if (data.token) {
+          await AsyncStorage.setItem('user_token', data.token);
+        }
+        console.log("Đăng ký thành công và đã lưu User vào State");
+      }
     },
   });
+
 
   const socialLoginMutation = useMutation({
     mutationFn: async (provider: 'google' | 'zalo') => {
