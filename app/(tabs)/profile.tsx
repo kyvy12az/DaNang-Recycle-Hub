@@ -5,9 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,10 +20,9 @@ import {
   ChevronRight,
   Scale,
   Wallet,
-  ArrowUpCircle,
-  ArrowDownCircle,
-  X,
-  RefreshCcw,
+  Plus,
+  Minus,
+  ArrowRight,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { mockProfile, mockTransactions } from '@/mocks/data';
@@ -37,77 +33,14 @@ import { useWalletStore } from '@/stores/walletStore';
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
-  const { vndBalance, greenPoints, withdrawCash, convertPointsToCash } = useWalletStore();
+  const { logout } = useAuth();
+  const { getFormattedBalance } = useWalletStore();
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [showDepositModal, setShowDepositModal] = useState<boolean>(false);
-  const [showWithdrawModal, setShowWithdrawModal] = useState<boolean>(false);
-  const [showConvertModal, setShowConvertModal] = useState<boolean>(false);
-  const [depositAmount, setDepositAmount] = useState<string>('');
-  const [withdrawAmount, setWithdrawAmount] = useState<string>('');
-  const [convertPoints, setConvertPoints] = useState<string>('');
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 1200);
     return () => clearTimeout(timer);
   }, []);
-
-  const handleDeposit = () => {
-    const amount = parseInt(depositAmount);
-    if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
-      return;
-    }
-    if (amount < 10000) {
-      Alert.alert('Lỗi', 'Số tiền nạp tối thiểu là 10,000₫');
-      return;
-    }
-    // TODO: Implement actual deposit logic with payment gateway
-    Alert.alert('Thành công', `Đã nạp ${amount.toLocaleString()}₫ vào ví`);
-    setShowDepositModal(false);
-    setDepositAmount('');
-  };
-
-  const handleWithdraw = () => {
-    const amount = parseInt(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
-      return;
-    }
-    if (amount < 50000) {
-      Alert.alert('Lỗi', 'Số tiền rút tối thiểu là 50,000₫');
-      return;
-    }
-    if (amount > vndBalance) {
-      Alert.alert('Lỗi', 'Số dư không đủ để rút');
-      return;
-    }
-    withdrawCash(amount);
-    Alert.alert('Thành công! 🎉', `Đã tạo lệnh rút ${amount.toLocaleString()}₫. Tiền sẽ về tài khoản trong 1-2 ngày.`);
-    setShowWithdrawModal(false);
-    setWithdrawAmount('');
-  };
-
-  const handleConvertPoints = () => {
-    const points = parseInt(convertPoints);
-    if (isNaN(points) || points <= 0) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điểm hợp lệ');
-      return;
-    }
-    if (points > greenPoints) {
-      Alert.alert('Không đủ điểm', `Bạn chỉ có ${greenPoints.toLocaleString()} điểm xanh`);
-      return;
-    }
-    if (points < 1000) {
-      Alert.alert('Lỗi', 'Số điểm chuyển đổi tối thiểu là 1,000 điểm');
-      return;
-    }
-    const cashAmount = (points / 1000) * 10000;
-    convertPointsToCash(points);
-    Alert.alert('Thành công! ✨', `Đã chuyển ${points.toLocaleString()} điểm thành ${cashAmount.toLocaleString()}₫`);
-    setShowConvertModal(false);
-    setConvertPoints('');
-  };
 
   if (isLoading) {
     return <EcoLoader message="Đang tải hồ sơ..." size="large" />;
@@ -115,6 +48,14 @@ export default function ProfileScreen() {
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('vi-VN') + 'đ';
+  };
+
+  const handleDeposit = () => {
+    router.push('/wallet/deposit' as any);
+  };
+
+  const handleWithdraw = () => {
+    router.push('/wallet/withdraw' as any);
   };
 
   return (
@@ -166,91 +107,59 @@ export default function ProfileScreen() {
       >
         {/* Wallet Section */}
         <View style={styles.walletSection}>
-          {/* VND Balance Card */}
-          <TouchableOpacity 
-            style={styles.balanceCard} 
-            activeOpacity={0.95}
-            onPress={() => router.push('/transaction-history' as any)}
-          >
-            <LinearGradient
-              colors={['#2E7D32', '#43A047', '#66BB6A']}
-              style={styles.balanceGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={styles.balanceHeader}>
-                <View style={styles.balanceIconContainer}>
-                  <Wallet size={24} color="#FFFFFF" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.balanceLabel}>Số dư VND</Text>
-                </View>
-                <TouchableOpacity 
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    router.push('/transaction-history' as any);
-                  }}
-                >
-                  <Text style={styles.historyLink}>Lịch sử →</Text>
-                </TouchableOpacity>
+          <View style={styles.walletCard}>
+            <View style={styles.walletHeader}>
+              <View style={styles.walletIconContainer}>
+                <Wallet size={22} color={Colors.white} />
               </View>
-              <Text style={styles.balanceAmount}>{vndBalance.toLocaleString()}₫</Text>
-              <View style={styles.balanceFooter}>
-                <TouchableOpacity 
-                  style={styles.balanceAction}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setShowWithdrawModal(true);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <ArrowUpCircle size={16} color="#FFFFFF" />
-                  <Text style={styles.balanceActionText}>Rút tiền</Text>
-                </TouchableOpacity>
-                <View style={styles.balanceActionDivider} />
-                <TouchableOpacity 
-                  style={styles.balanceAction}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setShowDepositModal(true);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <ArrowDownCircle size={16} color="#FFFFFF" />
-                  <Text style={styles.balanceActionText}>Nạp tiền</Text>
-                </TouchableOpacity>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Green Points Card */}
-          <TouchableOpacity style={styles.pointsCard} activeOpacity={0.95}>
-            <LinearGradient
-              colors={['#00897B', '#26A69A', '#4DB6AC']}
-              style={styles.pointsGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={styles.pointsHeader}>
-                <View style={styles.pointsIconContainer}>
-                  <Leaf size={24} color="#FFFFFF" />
-                </View>
-                <Text style={styles.pointsLabel}>Điểm Xanh</Text>
-              </View>
-              <Text style={styles.pointsAmount}>{greenPoints.toLocaleString()} điểm</Text>
-              <TouchableOpacity 
-                style={styles.pointsButton}
-                onPress={() => setShowConvertModal(true)}
+              <Text style={styles.walletLabel}>Ví tiền của bạn</Text>
+            </View>
+            <Text style={styles.walletBalance}>{getFormattedBalance()}</Text>
+            <View style={styles.walletPoints}>
+              <Award size={16} color={Colors.greenPoint} />
+              <Text style={styles.walletPointsText}>{mockProfile.greenPoints.toLocaleString()} Điểm Xanh</Text>
+            </View>
+            
+            {/* Action Buttons */}
+            <View style={styles.walletActions}>
+              <TouchableOpacity
+                style={styles.depositButton}
+                onPress={handleDeposit}
                 activeOpacity={0.8}
+                testID="deposit-button"
               >
-                <RefreshCcw size={16} color="#00897B" />
-                <Text style={styles.pointsButtonText}>Đổi thành tiền</Text>
+                <LinearGradient
+                  colors={['#4CAF50', '#2E7D32']}
+                  style={styles.actionGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Plus size={18} color={Colors.white} />
+                  <Text style={styles.actionText}>Nạp tiền</Text>
+                </LinearGradient>
               </TouchableOpacity>
-            </LinearGradient>
-          </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.withdrawButton}
+                onPress={handleWithdraw}
+                activeOpacity={0.8}
+                testID="withdraw-button"
+              >
+                <LinearGradient
+                  colors={['#0288D1', '#01579B']}
+                  style={styles.actionGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Minus size={18} color={Colors.white} />
+                  <Text style={styles.actionText}>Rút tiền</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
+        {/* Rewards Button */}
         <TouchableOpacity
           style={styles.rewardsButton}
           onPress={() => router.push('/rewards' as any)}
@@ -265,7 +174,7 @@ export default function ProfileScreen() {
             <Gift size={24} color="#795548" />
             <View style={styles.rewardsTextContainer}>
               <Text style={styles.rewardsTitle}>Đổi điểm lấy quà</Text>
-              <Text style={styles.rewardsSubtitle}>Bạn có {greenPoints.toLocaleString()} điểm xanh</Text>
+              <Text style={styles.rewardsSubtitle}>Bạn có {mockProfile.greenPoints} điểm xanh</Text>
             </View>
             <ChevronRight size={20} color="#795548" />
           </LinearGradient>
@@ -286,7 +195,37 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-
+        <View style={styles.historySection}>
+          <View style={styles.historyHeader}>
+            <Text style={styles.sectionTitle}>Lịch sử giao dịch</Text>
+            <TouchableOpacity
+              style={styles.viewAllButton}
+              onPress={() => router.push('/profile/history' as any)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.viewAllText}>Xem tất cả</Text>
+              <ArrowRight size={16} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
+          {mockTransactions.slice(0, 3).map((tx) => (
+            <View key={tx.id} style={styles.txCard}>
+              <View style={styles.txIconContainer}>
+                <Leaf size={18} color={Colors.primary} />
+              </View>
+              <View style={styles.txInfo}>
+                <Text style={styles.txTitle}>
+                  {tx.items.map(i => `${i.wasteType.name} ${i.quantity}kg`).join(', ')}
+                </Text>
+                <Text style={styles.txPartner}>{tx.partnerName}</Text>
+                <Text style={styles.txDate}>{tx.date}</Text>
+              </View>
+              <View style={styles.txRight}>
+                <Text style={styles.txPrice}>{formatPrice(tx.totalPrice)}</Text>
+                <Text style={styles.txPoints}>+{tx.greenPoints} 🌿</Text>
+              </View>
+            </View>
+          ))}
+        </View>
 
         <TouchableOpacity
           style={styles.logoutButton}
@@ -299,223 +238,6 @@ export default function ProfileScreen() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
-
-      {/* Deposit Modal */}
-      <Modal
-        visible={showDepositModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDepositModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nạp tiền vào ví</Text>
-              <TouchableOpacity onPress={() => setShowDepositModal(false)}>
-                <X size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.modalBalanceText}>
-              Số dư hiện tại: <Text style={styles.modalBalanceAmount}>{vndBalance.toLocaleString()}₫</Text>
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập số tiền"
-                placeholderTextColor={Colors.textLight}
-                keyboardType="number-pad"
-                value={depositAmount}
-                onChangeText={setDepositAmount}
-              />
-              <Text style={styles.inputSuffix}>₫</Text>
-            </View>
-
-            <View style={styles.quickAmounts}>
-              {[50000, 100000, 200000, 500000].map((amount) => (
-                <TouchableOpacity
-                  key={amount}
-                  style={styles.quickAmountButton}
-                  onPress={() => setDepositAmount(amount.toString())}
-                >
-                  <Text style={styles.quickAmountText}>{(amount / 1000).toFixed(0)}K</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.modalNote}>
-              • Số tiền nạp tối thiểu: 10,000₫{'\n'}
-              • Hỗ trợ: Ví điện tử, Thẻ ATM, Chuyển khoản{'\n'}
-              • Miễn phí giao dịch
-            </Text>
-
-            <TouchableOpacity 
-              style={styles.modalButton}
-              onPress={handleDeposit}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={[Colors.primary, Colors.accent]}
-                style={styles.modalButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.modalButtonText}>Xác nhận nạp tiền</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Withdraw Modal */}
-      <Modal
-        visible={showWithdrawModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowWithdrawModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Rút tiền</Text>
-              <TouchableOpacity onPress={() => setShowWithdrawModal(false)}>
-                <X size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalBalanceText}>
-              Số dư: <Text style={styles.modalBalanceAmount}>{vndBalance.toLocaleString()}₫</Text>
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập số tiền"
-                placeholderTextColor={Colors.textLight}
-                value={withdrawAmount}
-                onChangeText={setWithdrawAmount}
-                keyboardType="number-pad"
-              />
-              <Text style={styles.inputSuffix}>₫</Text>
-            </View>
-
-            <View style={styles.quickAmounts}>
-              {[50000, 100000, 200000, 500000].map((amount) => (
-                <TouchableOpacity
-                  key={amount}
-                  style={styles.quickAmountButton}
-                  onPress={() => setWithdrawAmount(amount.toString())}
-                >
-                  <Text style={styles.quickAmountText}>{(amount / 1000).toFixed(0)}K</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.modalNote}>
-              • Số tiền rút tối thiểu: 50,000₫{'\n'}
-              • Phí rút: Miễn phí{'\n'}
-              • Thời gian xử lý: 1-2 ngày làm việc
-            </Text>
-
-            <TouchableOpacity 
-              style={styles.modalButton}
-              onPress={handleWithdraw}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#2E7D32', '#43A047']}
-                style={styles.modalButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.modalButtonText}>Xác nhận rút tiền</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Convert Points Modal */}
-      <Modal
-        visible={showConvertModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowConvertModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chuyển điểm thành tiền</Text>
-              <TouchableOpacity onPress={() => setShowConvertModal(false)}>
-                <X size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.modalBalanceText}>
-              Điểm xanh: <Text style={styles.modalBalanceAmount}>{greenPoints.toLocaleString()} điểm</Text>
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập số điểm"
-                placeholderTextColor={Colors.textLight}
-                value={convertPoints}
-                onChangeText={setConvertPoints}
-                keyboardType="number-pad"
-              />
-              <Text style={styles.inputSuffix}>điểm</Text>
-            </View>
-
-            {convertPoints && parseInt(convertPoints) >= 1000 && (
-              <View style={styles.conversionPreview}>
-                <RefreshCcw size={20} color={Colors.primary} />
-                <Text style={styles.conversionText}>
-                  {parseInt(convertPoints).toLocaleString()} điểm = {((parseInt(convertPoints) / 1000) * 10000).toLocaleString()}₫
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.quickAmounts}>
-              {[1000, 2000, 5000, 10000].map((points) => (
-                <TouchableOpacity
-                  key={points}
-                  style={styles.quickAmountButton}
-                  onPress={() => setConvertPoints(points.toString())}
-                  disabled={points > greenPoints}
-                >
-                  <Text style={[
-                    styles.quickAmountText,
-                    points > greenPoints && styles.quickAmountTextDisabled
-                  ]}>{(points / 1000).toFixed(0)}K</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.modalNote}>
-              • Tỷ lệ: 1,000 điểm = 10,000₫{'\n'}
-              • Số điểm tối thiểu: 1,000 điểm{'\n'}
-              • Chuyển đổi ngay lập tức
-            </Text>
-
-            <TouchableOpacity 
-              style={styles.modalButton}
-              onPress={handleConvertPoints}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#00897B', '#26A69A']}
-                style={styles.modalButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.modalButtonText}>Xác nhận chuyển đổi</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -600,129 +322,6 @@ const styles = StyleSheet.create({
   bodyContent: {
     padding: 16,
   },
-  walletSection: {
-    marginBottom: 20,
-    gap: 12,
-  },
-  balanceCard: {
-    borderRadius: 20,
-    overflow: 'hidden' as const,
-    elevation: 4,
-    shadowColor: '#2E7D32',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  balanceGradient: {
-    padding: 20,
-  },
-  balanceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-  },
-  balanceIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  balanceLabel: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  historyLink: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: '#FFFFFF',
-    textDecorationLine: 'underline' as const,
-  },
-  balanceAmount: {
-    fontSize: 36,
-    fontWeight: '800' as const,
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  balanceFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  balanceAction: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  balanceActionText: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: '#FFFFFF',
-  },
-  balanceActionDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  pointsCard: {
-    borderRadius: 20,
-    overflow: 'hidden' as const,
-    elevation: 4,
-    shadowColor: '#00897B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  pointsGradient: {
-    padding: 20,
-  },
-  pointsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-  },
-  pointsIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pointsLabel: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  pointsAmount: {
-    fontSize: 32,
-    fontWeight: '800' as const,
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  pointsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-  },
-  pointsButtonText: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: '#00897B',
-  },
   rewardsButton: {
     borderRadius: 16,
     overflow: 'hidden' as const,
@@ -788,6 +387,22 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   historySection: {},
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  viewAllText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.primary,
+  },
   txCard: {
     flexDirection: 'row',
     backgroundColor: Colors.white,
@@ -855,121 +470,82 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: Colors.error,
   },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+  // Wallet styles
+  walletSection: {
+    marginBottom: 20,
   },
-  modalContent: {
+  walletCard: {
     backgroundColor: Colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800' as const,
-    color: Colors.text,
-  },
-  modalBalanceText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 20,
-  },
-  modalBalanceAmount: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: Colors.primary,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-  },
-  input: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '600' as const,
-    color: Colors.text,
-    paddingVertical: 14,
-  },
-  inputSuffix: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.textLight,
-    marginLeft: 8,
-  },
-  quickAmounts: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  quickAmountButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: Colors.backgroundLight,
-    alignItems: 'center',
+    borderRadius: 20,
+    padding: 20,
     borderWidth: 1,
     borderColor: Colors.border,
-  },
-  quickAmountText: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: Colors.primary,
-  },
-  quickAmountTextDisabled: {
-    color: Colors.textLight,
-  },
-  modalNote: {
-    fontSize: 12,
-    color: Colors.textLight,
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  modalButton: {
-    borderRadius: 14,
-    overflow: 'hidden' as const,
     elevation: 2,
-    shadowColor: '#2E7D32',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
-  modalButtonGradient: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: Colors.white,
-  },
-  conversionPreview: {
+  walletHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    padding: 14,
-    backgroundColor: Colors.primaryLight + '20',
-    borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  conversionText: {
+  walletIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walletLabel: {
     fontSize: 14,
     fontWeight: '600' as const,
-    color: Colors.primary,
+    color: Colors.textSecondary,
+  },
+  walletBalance: {
+    fontSize: 32,
+    fontWeight: '800' as const,
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  walletPoints: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 20,
+  },
+  walletPointsText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
+  walletActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  depositButton: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden' as const,
+  },
+  withdrawButton: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden' as const,
+  },
+  actionGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  actionText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.white,
   },
 });

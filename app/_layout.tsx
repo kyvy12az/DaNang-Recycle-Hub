@@ -5,13 +5,12 @@ import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet, Animated, Easing, Dimensions } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { LinearGradient } from "expo-linear-gradient";
-import { Image } from "expo-image";
 import Colors from "@/constants/colors";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync();
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: _SCREEN_WIDTH, height: _SCREEN_HEIGHT } = Dimensions.get('window');
 const queryClient = new QueryClient();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -28,7 +27,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/' as any);
     }
-  }, [isAuthenticated, isLoading, segments]);
+  }, [isAuthenticated, isLoading, segments, router]);
 
   return <>{children}</>;
 }
@@ -63,6 +62,13 @@ function RootLayoutNav() {
         name="seller-post"
         options={{
           title: "Đăng rác tái chế",
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="seller/upload"
+        options={{
+          title: "Chụp ảnh & Nhận diện AI",
           presentation: "card",
         }}
       />
@@ -116,234 +122,109 @@ function RootLayoutNav() {
           presentation: "card",
         }}
       />
+      <Stack.Screen
+        name="profile/history"
+        options={{
+          title: "Lịch sử giao dịch",
+          headerShown: false,
+          presentation: "card",
+        }}
+      />
     </Stack>
   );
 }
 
 function AppSplash({ onFinish }: { onFinish: () => void }) {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0.9)).current;
   const fadeTitle = useRef(new Animated.Value(0)).current;
-  const slideTitle = useRef(new Animated.Value(30)).current;
+  const slideTitle = useRef(new Animated.Value(20)).current;
   const fadeSlogan = useRef(new Animated.Value(0)).current;
-  const slideSlogan = useRef(new Animated.Value(20)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const fadeOut = useRef(new Animated.Value(1)).current;
-  const fadeIllustration = useRef(new Animated.Value(0)).current;
-  const scaleIllustration = useRef(new Animated.Value(0.8)).current;
-  
-  const bin1Float = useRef(new Animated.Value(0)).current;
-  const bin2Float = useRef(new Animated.Value(0)).current;
-  const bin3Float = useRef(new Animated.Value(0)).current;
-  const people1Move = useRef(new Animated.Value(0)).current;
-  const people2Move = useRef(new Animated.Value(0)).current;
-  const treeFloat = useRef(new Animated.Value(0)).current;
+  const particle1 = useRef(new Animated.Value(0)).current;
+  const particle2 = useRef(new Animated.Value(0)).current;
+  const particle3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 3000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.08, duration: 1400, easing: Easing.bezier(0.4, 0, 0.2, 1), useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 1400, easing: Easing.bezier(0.4, 0, 0.2, 1), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.05, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.9, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     ).start();
 
-    const floatAnim = (anim: Animated.Value, delay: number, range: number) =>
+    const particleLoop = (anim: Animated.Value, dur: number) =>
       Animated.loop(
         Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(anim, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(anim, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ])
       );
-
-    floatAnim(bin1Float, 0, 8).start();
-    floatAnim(bin2Float, 200, 10).start();
-    floatAnim(bin3Float, 400, 6).start();
-    floatAnim(people1Move, 100, 5).start();
-    floatAnim(people2Move, 300, 7).start();
-    floatAnim(treeFloat, 150, 6).start();
+    particleLoop(particle1, 1800).start();
+    particleLoop(particle2, 2200).start();
+    particleLoop(particle3, 1600).start();
 
     Animated.sequence([
-      Animated.delay(200),
-      Animated.parallel([
-        Animated.timing(fadeIllustration, { toValue: 1, duration: 800, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-        Animated.timing(scaleIllustration, { toValue: 1, duration: 800, easing: Easing.out(Easing.back(1.1)), useNativeDriver: true }),
-      ]),
-      Animated.delay(100),
+      Animated.delay(300),
       Animated.parallel([
         Animated.timing(fadeTitle, { toValue: 1, duration: 600, useNativeDriver: true }),
-        Animated.timing(slideTitle, { toValue: 0, duration: 600, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        Animated.timing(slideTitle, { toValue: 0, duration: 600, useNativeDriver: true }),
       ]),
-      Animated.delay(100),
-      Animated.parallel([
-        Animated.timing(fadeSlogan, { toValue: 1, duration: 600, useNativeDriver: true }),
-        Animated.timing(slideSlogan, { toValue: 0, duration: 600, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-      ]),
-      Animated.timing(progressAnim, { toValue: 1, duration: 1800, easing: Easing.bezier(0.65, 0, 0.35, 1), useNativeDriver: false }),
-      Animated.delay(300),
-      Animated.timing(fadeOut, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeSlogan, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(progressAnim, { toValue: 1, duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: false }),
+      Animated.delay(200),
+      Animated.timing(fadeOut, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start(() => {
       onFinish();
     });
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onFinish]);
 
+  const spin = rotateAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const progressWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
 
   return (
     <Animated.View style={[splashStyles.container, { opacity: fadeOut }]}>
       <LinearGradient
-        colors={['#E8F5E9', '#F1F8E9', '#E0F7FA', '#E1F5FE']}
+        colors={['#E8F5E9', '#C8E6C9', '#E0F7FA', '#B2EBF2']}
         start={{ x: 0, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
+        end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Dragon Bridge Silhouette Background */}
-      <View style={splashStyles.bridgeSilhouette}>
-        <View style={splashStyles.bridgeArc} />
-        <View style={[splashStyles.bridgeLine, { top: '48%', left: '5%', width: '25%' }]} />
-        <View style={[splashStyles.bridgeLine, { top: '48%', right: '5%', width: '25%' }]} />
-      </View>
+      <Animated.View style={[splashStyles.particle, splashStyles.particle1, { opacity: particle1, transform: [{ translateY: particle1.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) }] }]} />
+      <Animated.View style={[splashStyles.particle, splashStyles.particle2, { opacity: particle2, transform: [{ translateY: particle2.interpolate({ inputRange: [0, 1], outputRange: [0, -15] }) }] }]} />
+      <Animated.View style={[splashStyles.particle, splashStyles.particle3, { opacity: particle3, transform: [{ translateY: particle3.interpolate({ inputRange: [0, 1], outputRange: [0, -25] }) }] }]} />
 
       <View style={splashStyles.content}>
-        {/* Illustration Section */}
-        <Animated.View style={[
-          splashStyles.illustrationContainer,
-          { 
-            opacity: fadeIllustration,
-            transform: [{ scale: scaleIllustration }]
-          }
-        ]}>
-          {/* Trees Background */}
-          <Animated.View style={[
-            splashStyles.tree,
-            { left: '5%', top: '25%', transform: [{ translateY: treeFloat.interpolate({ inputRange: [0, 1], outputRange: [0, -6] }) }] }
-          ]}>
-            <Text style={splashStyles.treeEmoji}>🌳</Text>
-          </Animated.View>
-          <Animated.View style={[
-            splashStyles.tree,
-            { right: '8%', top: '20%', transform: [{ translateY: treeFloat.interpolate({ inputRange: [0, 1], outputRange: [0, 6] }) }] }
-          ]}>
-            <Text style={splashStyles.treeEmoji}>🌲</Text>
-          </Animated.View>
-
-          {/* Recycling Logo Center */}
-          <Animated.View style={[splashStyles.logoCircle, { transform: [{ scale: pulseAnim }] }]}>
-            <LinearGradient
-              colors={['#66BB6A', '#4CAF50', '#388E3C']}
-              style={splashStyles.logoGradient}
-            >
-              <Image
-                source={require('@/assets/images/logo.png')}
-                style={splashStyles.recycleIcon}
-                contentFit="contain"
-              />
-            </LinearGradient>
-          </Animated.View>
-
-          {/* People sorting waste */}
-          <Animated.View style={[
-            splashStyles.person,
-            { 
-              bottom: '12%', 
-              left: '8%',
-              transform: [{ translateX: people1Move.interpolate({ inputRange: [0, 1], outputRange: [0, 5] }) }]
-            }
-          ]}>
-            <Text style={splashStyles.personEmoji}>🧑‍🦱</Text>
-          </Animated.View>
-          <Animated.View style={[
-            splashStyles.person,
-            { 
-              bottom: '15%', 
-              right: '12%',
-              transform: [{ translateX: people2Move.interpolate({ inputRange: [0, 1], outputRange: [0, -5] }) }]
-            }
-          ]}>
-            <Text style={splashStyles.personEmoji}>👩</Text>
-          </Animated.View>
-          <View style={[splashStyles.person, { bottom: '10%', left: '42%' }]}>
-            <Text style={splashStyles.personEmoji}>🧒</Text>
-          </View>
-
-          {/* Recycle Bins */}
-          <Animated.View style={[
-            splashStyles.bin,
-            { 
-              bottom: '2%', 
-              left: '10%',
-              transform: [{ translateY: bin1Float.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }) }]
-            }
-          ]}>
-            <View style={[splashStyles.binBox, { backgroundColor: '#FFB3BA' }]}>
-              <Text style={splashStyles.binText}>🗑️</Text>
-              <Text style={splashStyles.binLabel}>PLASTIC</Text>
+        <Animated.View style={[splashStyles.logoContainer, { transform: [{ scale: pulseAnim }] }]}>
+          <View style={splashStyles.logoOuter}>
+            <Animated.View style={[splashStyles.logoRing, { transform: [{ rotate: spin }] }]} />
+            <View style={splashStyles.logoInner}>
+              <Text style={splashStyles.logoEmoji}>♻</Text>
             </View>
-          </Animated.View>
-          <Animated.View style={[
-            splashStyles.bin,
-            { 
-              bottom: '2%', 
-              left: '38%',
-              transform: [{ translateY: bin2Float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] }) }]
-            }
-          ]}>
-            <View style={[splashStyles.binBox, { backgroundColor: '#BAE1B3' }]}>
-              <Text style={splashStyles.binText}>📄</Text>
-              <Text style={splashStyles.binLabel}>PAPER</Text>
-            </View>
-          </Animated.View>
-          <Animated.View style={[
-            splashStyles.bin,
-            { 
-              bottom: '2%', 
-              right: '10%',
-              transform: [{ translateY: bin3Float.interpolate({ inputRange: [0, 1], outputRange: [0, -6] }) }]
-            }
-          ]}>
-            <View style={[splashStyles.binBox, { backgroundColor: '#FFFFBA' }]}>
-              <Text style={splashStyles.binText}>🔧</Text>
-              <Text style={splashStyles.binLabel}>METAL</Text>
-            </View>
-          </Animated.View>
-
-          {/* Decorative elements */}
-          <View style={[splashStyles.cloud, { top: '8%', left: '10%' }]}>
-            <Text style={splashStyles.cloudEmoji}>☁️</Text>
-          </View>
-          <View style={[splashStyles.cloud, { top: '5%', right: '15%' }]}>
-            <Text style={splashStyles.cloudEmoji}>☁️</Text>
           </View>
         </Animated.View>
 
-        {/* Title Section */}
-        <Animated.View style={{ 
-          opacity: fadeTitle, 
-          transform: [{ translateY: slideTitle }],
-          alignItems: 'center',
-          marginTop: 20,
-        }}>
-          <Text style={splashStyles.titleMain}>DaNang</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={splashStyles.titleMain}>Recycle</Text>
-            <Text style={[splashStyles.titleMain, { color: '#66BB6A' }]}> Hub</Text>
-          </View>
+        <Animated.View style={{ opacity: fadeTitle, transform: [{ translateY: slideTitle }] }}>
+          <Text style={splashStyles.title}>DaNang Recycle Hub</Text>
         </Animated.View>
 
-        {/* Slogan */}
-        <Animated.View style={{ 
-          opacity: fadeSlogan, 
-          transform: [{ translateY: slideSlogan }],
-          marginTop: 12,
-          paddingHorizontal: 40,
-        }}>
-          <Text style={splashStyles.slogan}>Cùng chung tay vì Đà Nẵng xanh</Text>
-          <Text style={splashStyles.subSlogan}>Tái chế thông minh - Thành phố bền vững</Text>
+        <Animated.View style={{ opacity: fadeSlogan }}>
+          <Text style={splashStyles.slogan}>Kiếm tiền từ rác – Bảo vệ biển Đà Nẵng</Text>
         </Animated.View>
 
-        {/* Progress Bar */}
-        <Animated.View style={{ opacity: fadeSlogan, width: '75%', marginTop: 24 }}>
-          <Text style={splashStyles.progressLabel}>ĐANG KHỞI ĐỘNG</Text>
+        <Animated.View style={{ opacity: fadeSlogan, width: '60%' }}>
           <View style={splashStyles.progressTrack}>
             <Animated.View style={[splashStyles.progressFill, { width: progressWidth as any }]} />
           </View>
@@ -362,151 +243,98 @@ const splashStyles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
-    width: '100%',
+    gap: 18,
   },
-  bridgeSilhouette: {
-    position: 'absolute',
-    top: '20%',
-    width: '100%',
-    height: 120,
-    opacity: 0.08,
+  particle: {
+    position: 'absolute' as const,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  bridgeArc: {
-    position: 'absolute',
-    top: 0,
-    left: '15%',
-    width: '70%',
-    height: 100,
-    borderTopLeftRadius: 200,
-    borderTopRightRadius: 200,
-    borderWidth: 8,
-    borderColor: '#2E7D32',
-    borderBottomWidth: 0,
+  particle1: {
+    top: '25%',
+    left: '20%',
+    backgroundColor: 'rgba(76,175,80,0.3)',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
-  bridgeLine: {
-    position: 'absolute',
-    height: 3,
-    backgroundColor: '#2E7D32',
+  particle2: {
+    top: '35%',
+    right: '15%',
+    backgroundColor: 'rgba(33,150,243,0.25)',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  illustrationContainer: {
-    width: SCREEN_WIDTH * 0.85,
-    height: SCREEN_WIDTH * 0.85,
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
+  particle3: {
+    bottom: '30%',
+    left: '30%',
+    backgroundColor: 'rgba(38,166,154,0.3)',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
-  logoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-  },
-  logoGradient: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.9)',
-  },
-  recycleIcon: {
-    width: 110,
-    height: 110,
-  },
-  tree: {
-    position: 'absolute',
-  },
-  treeEmoji: {
-    fontSize: 36,
-  },
-  person: {
-    position: 'absolute',
-  },
-  personEmoji: {
-    fontSize: 32,
-  },
-  bin: {
-    position: 'absolute',
-  },
-  binBox: {
-    width: 52,
-    height: 62,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 4,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
-  },
-  binText: {
-    fontSize: 20,
-    marginBottom: 2,
-  },
-  binLabel: {
-    fontSize: 7,
-    fontWeight: '700',
-    color: '#2C3E50',
-    letterSpacing: 0.3,
-  },
-  cloud: {
-    position: 'absolute',
-  },
-  cloudEmoji: {
-    fontSize: 28,
-    opacity: 0.6,
-  },
-  titleMain: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#1B5E20',
-    letterSpacing: 0.5,
-    textAlign: 'center',
-  },
-  slogan: {
-    fontSize: 16,
-    color: '#2E7D32',
-    fontWeight: '600',
-    textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  subSlogan: {
-    fontSize: 12,
-    color: '#5A6B7A',
-    fontWeight: '400',
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  progressLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#66BB6A',
-    letterSpacing: 1.2,
-    textAlign: 'center',
+  logoContainer: {
     marginBottom: 8,
   },
+  logoOuter: {
+    width: 110,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoRing: {
+    position: 'absolute' as const,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 4,
+    borderColor: 'transparent',
+    borderTopColor: '#2E7D32',
+    borderRightColor: '#4CAF50',
+    borderBottomColor: '#2196F3',
+  },
+  logoInner: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  logoEmoji: {
+    fontSize: 32,
+    color: '#2E7D32',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '800' as const,
+    color: '#1B5E20',
+    letterSpacing: 0.5,
+    textAlign: 'center' as const,
+  },
+  slogan: {
+    fontSize: 14,
+    color: '#5A6B7A',
+    fontWeight: '500' as const,
+    textAlign: 'center' as const,
+  },
   progressTrack: {
-    height: 6,
-    backgroundColor: 'rgba(102, 187, 106, 0.2)',
-    borderRadius: 3,
-    overflow: 'hidden',
+    height: 4,
+    backgroundColor: 'rgba(46,125,50,0.15)',
+    borderRadius: 2,
+    overflow: 'hidden' as const,
   },
   progressFill: {
     height: '100%',
-    borderRadius: 3,
-    backgroundColor: '#66BB6A',
+    backgroundColor: '#2E7D32',
+    borderRadius: 2,
   },
 });
 
@@ -514,7 +342,7 @@ export default function RootLayout() {
   const [showSplash, setShowSplash] = useState<boolean>(true);
 
   useEffect(() => {
-    SplashScreen.hideAsync();
+    void SplashScreen.hideAsync();
   }, []);
 
   return (

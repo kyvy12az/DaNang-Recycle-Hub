@@ -1,220 +1,252 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export interface WalletTransaction {
+// Generate mock transactions for initial state
+function generateMockTransactions(): TransactionRecord[] {
+  const now = new Date();
+  return [
+    {
+      id: 'TXN001',
+      type: 'sale',
+      amount: 95000,
+      description: 'Bán 10kg nhựa PET',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'TXN002',
+      type: 'deposit',
+      amount: 500000,
+      bankName: 'Vietcombank',
+      description: 'Nạp tiền Vietcombank',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'TXN003',
+      type: 'bonus',
+      amount: 5000,
+      description: 'Thưởng điểm xanh tuần 10',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'TXN004',
+      type: 'redeem',
+      amount: 15000,
+      description: 'Đổi voucher Highlands Coffee',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'TXN005',
+      type: 'sale',
+      amount: 32000,
+      description: 'Bán 5kg giấy carton',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'TXN006',
+      type: 'withdraw',
+      amount: 100000,
+      bankName: 'MoMo',
+      description: 'Rút tiền về MoMo',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'TXN007',
+      type: 'deposit',
+      amount: 200000,
+      bankName: 'Techcombank',
+      description: 'Nạp tiền Techcombank',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'TXN008',
+      type: 'sale',
+      amount: 125000,
+      description: 'Bán 8kg nhôm phế liệu',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'TXN009',
+      type: 'bonus',
+      amount: 10000,
+      description: 'Thưởng ngườii dùng thân thiết',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'TXN010',
+      type: 'redeem',
+      amount: 20000,
+      description: 'Đổi túi vải tái chế',
+      status: 'completed',
+      timestamp: new Date(now.getTime() - 12 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  ];
+}
+
+export interface Bank {
   id: string;
-  type: 'sale' | 'purchase' | 'reward_redeem' | 'withdrawal' | 'point_to_cash' | 'bonus';
-  amount: number; // VND
-  points: number; // Điểm xanh
-  description: string;
-  date: string;
-  status: 'completed' | 'pending' | 'failed';
-  relatedId?: string; // ID của listing, reward, etc.
+  name: string;
+  code: string;
+  icon: string;
+  url: string;
+  color: string;
+}
+
+export type TransactionType = 'deposit' | 'withdraw' | 'sale' | 'redeem' | 'bonus';
+
+export interface TransactionRecord {
+  id: string;
+  type: TransactionType;
+  amount: number;
+  bankName?: string;
+  description?: string;
+  status: 'pending' | 'completed' | 'failed';
+  timestamp: string;
+  note?: string;
 }
 
 interface WalletState {
-  vndBalance: number; // Số dư VND
-  greenPoints: number; // Điểm xanh
-  transactions: WalletTransaction[];
+  vndBalance: number;
+  selectedBank: Bank | null;
+  pendingAmount: number;
+  pendingType: 'deposit' | 'withdraw' | null;
+  otpAttempts: number;
+  lastOtpTime: number | null;
+  transactions: TransactionRecord[];
+  greenPoints: number;
   
   // Actions
-  addFromSale: (listingId: string, amount: number, points: number, description: string) => void;
-  deductForPurchase: (listingId: string, amount: number, description: string) => void;
-  redeemReward: (rewardId: string, pointsCost: number, rewardTitle: string) => void;
-  convertPointsToCash: (points: number) => void; // 1000 điểm = 10,000 VND
-  withdrawCash: (amount: number) => void;
-  addBonus: (points: number, description: string) => void;
-  resetWallet: () => void;
+  setSelectedBank: (bank: Bank | null) => void;
+  setPendingTransaction: (type: 'deposit' | 'withdraw', amount: number) => void;
+  clearPendingTransaction: () => void;
+  incrementOtpAttempts: () => void;
+  resetOtpAttempts: () => void;
+  setLastOtpTime: (time: number) => void;
+  
+  // Transaction actions
+  deposit: (amount: number, bankName: string) => void;
+  withdraw: (amount: number, bankName: string) => boolean;
+  addFromSale: (orderId: string, amount: number, points: number, description: string) => void;
+  deductForPurchase: (orderId: string, amount: number, description: string) => void;
+  
+  // Getters
+  canWithdraw: (amount: number) => boolean;
+  getFormattedBalance: () => string;
 }
 
-// Mock initial transactions
-const mockInitialTransactions: WalletTransaction[] = [
-  {
-    id: 't1',
-    type: 'sale',
-    amount: 68000,
-    points: 80,
-    description: 'Bán 8kg nhựa PET + giấy carton',
-    date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2h trước
-    status: 'completed',
-    relatedId: '1',
-  },
-  {
-    id: 't2',
-    type: 'sale',
-    amount: 50000,
-    points: 40,
-    description: 'Bán 2kg nhôm lon',
-    date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 ngày trước
-    status: 'completed',
-    relatedId: '2',
-  },
-  {
-    id: 't3',
-    type: 'reward_redeem',
-    amount: 0,
-    points: -500,
-    description: 'Đổi voucher Highlands Coffee 20%',
-    date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 ngày trước
-    status: 'completed',
-    relatedId: 'r1',
-  },
-  {
-    id: 't4',
-    type: 'sale',
-    amount: 90000,
-    points: 130,
-    description: 'Bán 13kg giấy + nhựa',
-    date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'completed',
-  },
-  {
-    id: 't5',
-    type: 'bonus',
-    amount: 0,
-    points: 100,
-    description: '🎉 Thưởng đăng ký thành viên mới',
-    date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'completed',
-  },
-  {
-    id: 't6',
-    type: 'point_to_cash',
-    amount: 50000,
-    points: -5000,
-    description: 'Chuyển 5,000 điểm thành 50,000₫',
-    date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'completed',
-  },
-  {
-    id: 't7',
-    type: 'withdrawal',
-    amount: -100000,
-    points: 0,
-    description: 'Rút tiền về VietcomBank ***1234',
-    date: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'completed',
-  },
+export const MOCK_BANKS: Bank[] = [
+  { id: '1', name: 'Vietcombank', code: 'VCB', icon: 'landmark', url: 'https://vietcombank.vn/pay', color: '#1B5E20' },
+  { id: '2', name: 'BIDV', code: 'BIDV', icon: 'landmark', url: 'https://bidv.vn/payment', color: '#01579B' },
+  { id: '3', name: 'Techcombank', code: 'TCB', icon: 'landmark', url: 'https://techcombank.com/pay', color: '#D32F2F' },
+  { id: '4', name: 'MoMo', code: 'MOMO', icon: 'wallet', url: 'https://momo.vn/pay', color: '#D500F9' },
+  { id: '5', name: 'ZaloPay', code: 'ZALO', icon: 'wallet', url: 'https://zalopay.vn/pay', color: '#00B0FF' },
+  { id: '6', name: 'Agribank', code: 'AGB', icon: 'landmark', url: 'https://agribank.com.vn/pay', color: '#2E7D32' },
+  { id: '7', name: 'Sacombank', code: 'SCB', icon: 'landmark', url: 'https://sacombank.com/pay', color: '#00695C' },
 ];
 
-export const useWalletStore = create<WalletState>((set) => ({
-  vndBalance: 258000, // Số dư khởi đầu
-  greenPoints: 1850, // Điểm khởi đầu
-  transactions: mockInitialTransactions,
+export const useWalletStore = create<WalletState>()(
+  persist(
+    (set, get) => ({
+      vndBalance: 250000, // Mock số dư ban đầu
+      selectedBank: null,
+      pendingAmount: 0,
+      pendingType: null,
+      otpAttempts: 0,
+      lastOtpTime: null,
+      transactions: generateMockTransactions(),
+      greenPoints: 150, // Mock điểm xanh ban đầu
 
-  addFromSale: (listingId, amount, points, description) => 
-    set((state) => ({
-      vndBalance: state.vndBalance + amount,
-      greenPoints: state.greenPoints + points,
-      transactions: [
-        {
-          id: `t_${Date.now()}`,
+      setSelectedBank: (bank) => set({ selectedBank: bank }),
+      
+      setPendingTransaction: (type, amount) => set({ 
+        pendingType: type, 
+        pendingAmount: amount 
+      }),
+      
+      clearPendingTransaction: () => set({ 
+        pendingType: null, 
+        pendingAmount: 0,
+        selectedBank: null 
+      }),
+      
+      incrementOtpAttempts: () => set((state) => ({ 
+        otpAttempts: state.otpAttempts + 1 
+      })),
+      
+      resetOtpAttempts: () => set({ otpAttempts: 0 }),
+      
+      setLastOtpTime: (time) => set({ lastOtpTime: time }),
+
+      deposit: (amount, bankName) => {
+        const newTransaction: TransactionRecord = {
+          id: `TXN${Date.now()}`,
+          type: 'deposit',
+          amount,
+          bankName,
+          status: 'completed',
+          timestamp: new Date().toISOString(),
+        };
+        
+        set((state) => ({
+          vndBalance: state.vndBalance + amount,
+          transactions: [newTransaction, ...state.transactions],
+        }));
+      },
+
+      withdraw: (amount, bankName) => {
+        if (get().vndBalance < amount) return false;
+        
+        const newTransaction: TransactionRecord = {
+          id: `TXN${Date.now()}`,
+          type: 'withdraw',
+          amount,
+          bankName,
+          status: 'completed',
+          timestamp: new Date().toISOString(),
+        };
+        
+        set((state) => ({
+          vndBalance: state.vndBalance - amount,
+          transactions: [newTransaction, ...state.transactions],
+        }));
+        return true;
+      },
+
+      addFromSale: (orderId, amount, points, description) => {
+        const newTransaction: TransactionRecord = {
+          id: orderId,
           type: 'sale',
           amount,
-          points,
           description,
-          date: new Date().toISOString(),
           status: 'completed',
-          relatedId: listingId,
-        },
-        ...state.transactions,
-      ],
-    })),
+          timestamp: new Date().toISOString(),
+        };
+        
+        set((state) => ({
+          vndBalance: state.vndBalance + amount,
+          greenPoints: state.greenPoints + points,
+          transactions: [newTransaction, ...state.transactions],
+        }));
+      },
 
-  deductForPurchase: (listingId, amount, description) =>
-    set((state) => ({
-      vndBalance: state.vndBalance - amount,
-      transactions: [
-        {
-          id: `t_${Date.now()}`,
-          type: 'purchase',
-          amount: -amount,
-          points: 0,
-          description,
-          date: new Date().toISOString(),
-          status: 'completed',
-          relatedId: listingId,
-        },
-        ...state.transactions,
-      ],
-    })),
-
-  redeemReward: (rewardId, pointsCost, rewardTitle) =>
-    set((state) => ({
-      greenPoints: state.greenPoints - pointsCost,
-      transactions: [
-        {
-          id: `t_${Date.now()}`,
-          type: 'reward_redeem',
-          amount: 0,
-          points: -pointsCost,
-          description: `Đổi thưởng: ${rewardTitle}`,
-          date: new Date().toISOString(),
-          status: 'completed',
-          relatedId: rewardId,
-        },
-        ...state.transactions,
-      ],
-    })),
-
-  convertPointsToCash: (points) =>
-    set((state) => {
-      const cashAmount = (points / 1000) * 10000; // 1000 điểm = 10k VND
-      return {
-        greenPoints: state.greenPoints - points,
-        vndBalance: state.vndBalance + cashAmount,
-        transactions: [
-          {
-            id: `t_${Date.now()}`,
-            type: 'point_to_cash',
-            amount: cashAmount,
-            points: -points,
-            description: `Chuyển ${points.toLocaleString()} điểm thành ${cashAmount.toLocaleString()}₫`,
-            date: new Date().toISOString(),
-            status: 'completed',
-          },
-          ...state.transactions,
-        ],
-      };
+      canWithdraw: (amount) => get().vndBalance >= amount,
+      
+      getFormattedBalance: () => {
+        return get().vndBalance.toLocaleString('vi-VN') + ' ₫';
+      },
     }),
-
-  withdrawCash: (amount) =>
-    set((state) => ({
-      vndBalance: state.vndBalance - amount,
-      transactions: [
-        {
-          id: `t_${Date.now()}`,
-          type: 'withdrawal',
-          amount: -amount,
-          points: 0,
-          description: `Rút tiền ${amount.toLocaleString()}₫`,
-          date: new Date().toISOString(),
-          status: 'completed',
-        },
-        ...state.transactions,
-      ],
-    })),
-
-  addBonus: (points, description) =>
-    set((state) => ({
-      greenPoints: state.greenPoints + points,
-      transactions: [
-        {
-          id: `t_${Date.now()}`,
-          type: 'bonus',
-          amount: 0,
-          points,
-          description,
-          date: new Date().toISOString(),
-          status: 'completed',
-        },
-        ...state.transactions,
-      ],
-    })),
-
-  resetWallet: () =>
-    set({
-      vndBalance: 258000,
-      greenPoints: 1850,
-      transactions: mockInitialTransactions,
-    }),
-}));
+    {
+      name: 'wallet-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);

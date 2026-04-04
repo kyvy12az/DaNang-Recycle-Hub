@@ -15,16 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.kyvydev.danangrecyclehub",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "bundleIdentifier": "com.kyvydev.danangrecyclehub"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.kyvydev.danangrecyclehub",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.kyvydev.danangrecyclehub"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -36,8 +34,10 @@
           "origin": "https://rork.com/"
         }
       ],
-      "expo-font",
-      "expo-web-browser"
+      ["expo-camera", {
+        "cameraPermission": "Cho phép ứng dụng sử dụng camera"
+      }],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
