@@ -14,6 +14,15 @@ interface AuthUser {
 }
 
 const STORAGE_KEY = 'auth_user';
+const MOCK_ADMIN_EMAIL = 'kyvydev@admin.com';
+const MOCK_ADMIN_PASSWORD = 'kyvydev';
+const MOCK_ADMIN_USER: AuthUser = {
+  id: 'mock-admin',
+  name: 'Ky Vy Dev',
+  email: MOCK_ADMIN_EMAIL,
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
+  provider: 'email',
+};
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -34,6 +43,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
+      if (
+        email.trim().toLowerCase() === MOCK_ADMIN_EMAIL &&
+        password === MOCK_ADMIN_PASSWORD
+      ) {
+        return { user: MOCK_ADMIN_USER, token: 'mock-admin-token' };
+      }
+
       try {
         const response = await axios.post(
           'http://192.168.1.55:5000/api/login',
