@@ -9,60 +9,151 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Send, Phone, ImagePlus, Video } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { mockChatMessages } from '@/mocks/data';
 import { ChatMessage } from '@/types';
+import { apiUrl } from '@/config/api';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface ApiChatMessage {
+  id: number;
+  sender?: string;
+  content?: string;
+  createdAt?: string;
+  user?: {
+    id?: number;
+    username?: string;
+    fullName?: string;
+  };
+}
+
+const normalizeUserId = (value: unknown): string => {
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') return value;
+  return '';
+};
+
+const formatTime = (raw?: string): string => {
+  if (!raw) return new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+};
 
 export default function ChatScreen() {
   const router = useRouter();
-  const { name } = useLocalSearchParams();
-  const [messages, setMessages] = useState<ChatMessage[]>(mockChatMessages);
+  const { user } = useAuth();
+  const { name, recipientId } = useLocalSearchParams();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState<string>('');
+  const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
+  const [sending, setSending] = useState<boolean>(false);
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
+
+  const currentUserId = normalizeUserId(user?.id);
+  const targetUserId = normalizeUserId(recipientId);
 
   // Mock avatars
   const myAvatar = 'https://i.pravatar.cc/150?img=33';
   const otherAvatar = 'https://i.pravatar.cc/150?img=12';
 
-  useEffect(() => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: false });
-    }, 100);
-  }, []);
-
-  const handleSend = () => {
-    if (!inputText.trim()) return;
-
-    const newMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      senderId: 'me',
-      text: inputText.trim(),
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      isMe: true,
+  const mapApiMessageToUi = (item: ApiChatMessage): ChatMessage => {
+    const senderId = normalizeUserId(item.user?.id) || item.sender || 'unknown';
+    return {
+      id: String(item.id),
+      senderId,
+      text: item.content || '',
+      timestamp: formatTime(item.createdAt),
+      isMe: senderId === currentUserId,
     };
+  };
 
-    setMessages(prev => [...prev, newMessage]);
+  const loadConversation = async () => {
+    if (!targetUserId) {
+      setMessages([]);
+      return;
+    }
+
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      Alert.alert('Chưa đăng nhập', 'Vui lòng đăng nhập lại để tải tin nhắn.');
+      return;
+    }
+
+    setIsLoadingMessages(true);
+    try {
+      const response = await axios.get(apiUrl(`/api/messages/conversations/${targetUserId}?page=0&size=50`), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'bypass-tunnel-reminder': 'true',
+        },
+      });
+
+      const items: ApiChatMessage[] = Array.isArray(response.data?.content) ? response.data.content : [];
+      setMessages(items.map(mapApiMessageToUi));
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+    } catch (error: any) {
+      const serverMessage = error?.response?.data?.message;
+      Alert.alert('Không tải được hội thoại', serverMessage || 'Vui lòng thử lại sau.');
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  };
+
+  useEffect(() => {
+    loadConversation();
+  }, [targetUserId, currentUserId]);
+
+  const handleSend = async () => {
+    if (!inputText.trim() || !targetUserId) return;
+
+    const token = await AsyncStorage.getItem('user_token');
+    if (!token) {
+      Alert.alert('Chưa đăng nhập', 'Vui lòng đăng nhập lại để gửi tin nhắn.');
+      return;
+    }
+
+    setSending(true);
+    const textToSend = inputText.trim();
     setInputText('');
 
-    setTimeout(() => {
-      const autoReply: ChatMessage = {
-        id: `msg-${Date.now() + 1}`,
-        senderId: 'other',
-        text: 'Vâng, tôi đã nhận được tin nhắn. Cảm ơn bạn!',
-        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        isMe: false,
-      };
-      setMessages(prev => [...prev, autoReply]);
-    }, 1500);
+    try {
+      const response = await axios.post(
+        apiUrl('/api/messages'),
+        {
+          recipientId: Number(targetUserId),
+          content: textToSend,
+          type: 'MESSAGE',
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'bypass-tunnel-reminder': 'true',
+          },
+        }
+      );
 
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+      const newMessage = mapApiMessageToUi(response.data as ApiChatMessage);
+      setMessages((prev) => [...prev, newMessage]);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+    } catch (error: any) {
+      setInputText(textToSend);
+      const serverMessage = error?.response?.data?.message;
+      Alert.alert('Gửi thất bại', serverMessage || 'Không thể gửi tin nhắn.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handlePhoneCall = () => {
@@ -151,6 +242,18 @@ export default function ChatScreen() {
         contentContainerStyle={styles.messageList}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        ListEmptyComponent={
+          isLoadingMessages ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.loadingText}>Đang tải hội thoại...</Text>
+            </View>
+          ) : (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Chưa có tin nhắn nào</Text>
+            </View>
+          )
+        }
       />
 
       <View style={styles.inputBar}>
@@ -180,14 +283,18 @@ export default function ChatScreen() {
         <TouchableOpacity
           style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
           onPress={handleSend}
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() || sending || !targetUserId}
           activeOpacity={0.7}
         >
           <LinearGradient
             colors={inputText.trim() ? ['#66BB6A', '#4CAF50'] : ['#E0E0E0', '#E0E0E0']}
             style={styles.sendButtonGradient}
           >
-            <Send size={20} color={inputText.trim() ? Colors.white : Colors.textLight} />
+            {sending ? (
+              <ActivityIndicator size="small" color={Colors.white} />
+            ) : (
+              <Send size={20} color={inputText.trim() ? Colors.white : Colors.textLight} />
+            )}
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -222,6 +329,17 @@ const styles = StyleSheet.create({
   messageList: {
     padding: 16,
     gap: 10,
+    flexGrow: 1,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  loadingText: {
+    marginTop: 8,
+    color: Colors.textSecondary,
+    fontSize: 13,
   },
   messageBubbleContainer: {
     flexDirection: 'row',
