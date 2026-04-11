@@ -19,9 +19,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import Constants from 'expo-constants';
+import { makeRedirectUri } from 'expo-auth-session';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -42,38 +42,51 @@ export default function LoginScreen() {
     process.env.EXPO_PUBLIC_EXPO_PROJECT_FULL_NAME ||
     (Constants.expoConfig?.owner && Constants.expoConfig?.slug
       ? `@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
-      : undefined);
+      : '');
 
-  const projectNameForProxy =
-    Constants.expoConfig?.owner && Constants.expoConfig?.slug
-      ? `@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
-      : undefined;
+  const appScheme = Array.isArray(Constants.expoConfig?.scheme)
+    ? Constants.expoConfig.scheme[0]
+    : Constants.expoConfig?.scheme || 'danangrecyclehub';
 
-  const redirectUri = expoProjectFullName
-    ? `https://auth.expo.io/${expoProjectFullName}`
-    : AuthSession.makeRedirectUri({ scheme: 'danangrecyclehub' });
+  const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
-  useEffect(() => {
-    console.log('expoProjectFullName =', expoProjectFullName);
-    console.log('projectNameForProxy =', projectNameForProxy);
-    console.log('redirectUri =', redirectUri);
-  }, [expoProjectFullName, projectNameForProxy, redirectUri]);
+  const appReturnUri = makeRedirectUri({
+    scheme: appScheme,
+    path: 'redirect',
+  });
+
+  const redirectUri = isExpoGo
+    ? (expoProjectFullName ? `https://auth.expo.io/${expoProjectFullName}` : '')
+    : appReturnUri;
+
+  const buildExpoProxyStartUrl = (authUrl: string) => {
+    const params = new URLSearchParams({
+      authUrl,
+      returnUrl: appReturnUri,
+    });
+    return `${redirectUri}/start?${params.toString()}`;
+  };
+
+  const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+  const googleAuthConfig = isExpoGo
+    ? {
+        clientId: googleClientId,
+        redirectUri,
+        responseType: 'id_token',
+        shouldAutoExchangeCode: false,
+        scopes: ['openid', 'profile', 'email'],
+      }
+    : {
+        clientId: googleClientId,
+        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || googleClientId,
+        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || googleClientId,
+        webClientId: googleClientId,
+        redirectUri,
+        scopes: ['openid', 'profile', 'email'],
+      };
 
   const [googleRequest, googleResponse, googlePromptAsync] =
-    Google.useAuthRequest({
-      clientId:
-        process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID ||
-        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-      iosClientId:
-        process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
-        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-      androidClientId:
-        process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
-        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-      redirectUri,
-      scopes: ["openid", "profile", "email"],
-    });
+    Google.useAuthRequest(googleAuthConfig);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
@@ -97,6 +110,20 @@ export default function LoginScreen() {
   const spin = logoRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
   useEffect(() => {
+    const decodeJwtPayload = (token: string) => {
+      try {
+        const payload = token.split('.')[1];
+        if (!payload) return null;
+        const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const padLength = (4 - (normalized.length % 4)) % 4;
+        const padded = normalized.padEnd(normalized.length + padLength, '=');
+        const json = globalThis.atob(padded);
+        return JSON.parse(json) as Record<string, any>;
+      } catch {
+        return null;
+      }
+    };
+
     const completeGoogleSignIn = async () => {
       if (!googleResponse) {
         return;
@@ -105,7 +132,11 @@ export default function LoginScreen() {
       if (googleResponse.type !== 'success') {
         setGoogleOauthLoading(false);
         if (googleResponse.type === 'error') {
-          setGoogleOauthError('Đăng nhập Google thất bại');
+          const providerError =
+            (googleResponse.params as any)?.error_description ||
+            (googleResponse.params as any)?.error ||
+            'Đăng nhập Google thất bại';
+          setGoogleOauthError(providerError);
         }
         return;
       }
@@ -119,10 +150,12 @@ export default function LoginScreen() {
           throw new Error('Không lấy được Google idToken');
         }
 
+        const tokenPayload = decodeJwtPayload(idToken);
+
         let profile = {
-          name: 'Google User',
-          email: '',
-          avatar: null as string | null,
+          name: tokenPayload?.name || tokenPayload?.given_name || 'Google User',
+          email: tokenPayload?.email || '',
+          avatar: tokenPayload?.picture || null as string | null,
         };
 
         if (accessToken) {
@@ -169,17 +202,25 @@ export default function LoginScreen() {
 
   const handleSocialLogin = (provider: 'google' | 'zalo') => {
     if (provider === 'google') {
-      if (!expoProjectFullName) {
+      if (!redirectUri || !googleClientId) {
         Alert.alert(
           'Thiếu cấu hình OAuth',
-          'Hãy thêm EXPO_PUBLIC_EXPO_PROJECT_FULL_NAME vào .env theo dạng @username/slug để dùng Google Login trong Expo Go.'
+          'Thiếu EXPO_PUBLIC_EXPO_PROJECT_FULL_NAME, owner/slug, hoặc EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.'
         );
         return;
       }
 
       setGoogleOauthError(null);
       setGoogleOauthLoading(true);
-      void googlePromptAsync();
+
+      const promptOptions =
+        isExpoGo && googleRequest?.url && expoProjectFullName
+          ? {
+              url: buildExpoProxyStartUrl(googleRequest.url),
+            }
+          : undefined;
+
+      void googlePromptAsync(promptOptions);
       return;
     }
 

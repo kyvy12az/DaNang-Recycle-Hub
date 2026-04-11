@@ -178,6 +178,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         if (data.token) {
           await saveToken(data.token);
         }
+        console.log('Đăng nhập Google thành công và đã lưu User vào State')
       }
     },
   });
