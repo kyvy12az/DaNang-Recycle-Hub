@@ -217,12 +217,7 @@ export default function BuyerDetailScreen() {
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.chatButton}
-          onPress={() =>
-            router.push({
-              pathname: '/chat' as any,
-              params: { name: listing.sellerName, recipientId: listing.sellerId },
-            })
-          }
+          onPress={() => router.push({ pathname: '/chat' as any, params: { name: listing.sellerName } })}
           activeOpacity={0.8}
         >
           <MessageCircle size={22} color={Colors.primary} />

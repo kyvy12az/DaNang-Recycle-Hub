@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMutation } from '@tanstack/react-query';
-import { apiUrl } from '@/config/api';
 
 interface AuthUser {
   id: string;
@@ -21,6 +20,7 @@ interface AuthUser {
 }
 
 const STORAGE_KEY = 'auth_user';
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.5:5000').replace(/\/$/, '');
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -43,8 +43,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
       try {
         const response = await axios.post(
-          apiUrl('/api/auth/login'),
-          { username: email, password },
+          `${API_BASE_URL}/api/login`,
+          { email, password },
           { headers: { 'bypass-tunnel-reminder': 'true' } }
         );
         return response.data;
@@ -56,9 +56,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (data && data.user) {
         const userToSave: AuthUser = {
           id: data.user.id || data.user._id,
-          name: data.user.fullName || data.user.username || data.user.name,
+          name: data.user.name,
           email: data.user.email,
-          avatar: data.user.avatarUrl || data.user.avatar || 'https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png',
+          avatar: data.user.avatar || 'https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png',
           provider: 'email',
           phone: data.user.phone,
           address: data.user.address,
@@ -81,8 +81,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     mutationFn: async ({ name, email, password }: { name: string; email: string; password: string }) => {
       try {
         const response = await axios.post(
-          apiUrl('/api/auth/register'),
-          { username: email, email, password, fullName: name },
+          `${API_BASE_URL}/api/register`,
+          { name, email, password },
           { headers: { 'bypass-tunnel-reminder': 'true' } }
         );
         return response.data;
@@ -95,9 +95,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (data && data.user) {
         const userToSave: AuthUser = {
           id: data.user.id || data.user._id,
-          name: data.user.fullName || data.user.username || data.user.name,
+          name: data.user.name,
           email: data.user.email,
-          avatar: data.user.avatarUrl || data.user.avatar || 'https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png',
+          avatar: data.user.avatar || 'https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png',
           provider: 'email',
           phone: data.user.phone,
           address: data.user.address,
