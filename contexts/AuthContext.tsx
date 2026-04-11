@@ -11,18 +11,15 @@ interface AuthUser {
   email: string;
   avatar: string;
   provider: 'email' | 'google' | 'zalo';
+  phone?: string;
+  address?: string;
+  greenPoints?: number;
+  totalWeight?: number;
+  totalTransactions?: number;
+  createdAt?: string;
 }
 
 const STORAGE_KEY = 'auth_user';
-const MOCK_ADMIN_EMAIL = 'kyvydev@admin.com';
-const MOCK_ADMIN_PASSWORD = 'kyvydev';
-const MOCK_ADMIN_USER: AuthUser = {
-  id: 'mock-admin',
-  name: 'Ky Vy Dev',
-  email: MOCK_ADMIN_EMAIL,
-  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
-  provider: 'email',
-};
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -43,16 +40,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const loginMutation = useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      if (
-        email.trim().toLowerCase() === MOCK_ADMIN_EMAIL &&
-        password === MOCK_ADMIN_PASSWORD
-      ) {
-        return { user: MOCK_ADMIN_USER, token: 'mock-admin-token' };
-      }
 
       try {
         const response = await axios.post(
-          'http://192.168.1.55:5000/api/login',
+          'http://192.168.1.160:5000/api/login',
           { email, password },
           { headers: { 'bypass-tunnel-reminder': 'true' } }
         );
@@ -67,8 +58,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           id: data.user.id || data.user._id,
           name: data.user.name,
           email: data.user.email,
-          avatar: data.user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
+          avatar:  data.user.avatar ||'https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png',
           provider: 'email',
+          phone: data.user.phone,
+          address: data.user.address,
+          greenPoints: data.user.greenPoints || 0,
+          totalWeight: data.user.totalWeight || 0,
+          totalTransactions: data.user.totalTransactions || 0,
+          createdAt: data.user.createdAt,
         };
         setUser(userToSave);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userToSave));
@@ -83,7 +80,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     mutationFn: async ({ name, email, password }: { name: string; email: string; password: string }) => {
       try {
         const response = await axios.post(
-          'http://192.168.1.55:5000/api/register',
+          'http://192.168.1.160:5000/api/register',
           { name, email, password },
           { headers: { 'bypass-tunnel-reminder': 'true' } }
         );
@@ -99,8 +96,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           id: data.user.id || data.user._id,
           name: data.user.name,
           email: data.user.email,
-          avatar: data.user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
+          avatar: data.user.avatar || 'https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png',
           provider: 'email',
+          phone: data.user.phone,
+          address: data.user.address,
+          greenPoints: data.user.greenPoints || 0,
+          totalWeight: data.user.totalWeight || 0,
+          totalTransactions: data.user.totalTransactions || 0,
+          createdAt: data.user.createdAt,
         };
 
         setUser(userToSave);
@@ -123,7 +126,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         id: 'user_' + provider + '_' + Date.now(),
         name: names[provider],
         email: emails[provider],
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
+        avatar: 'https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png',
         provider,
       };
       return mockUser;

@@ -24,13 +24,15 @@ const jwt = require("jsonwebtoken");
           id: user._id,
           name: user.name,
           email: user.email,
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
-          provider: 'email'
+          avatar: 'https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png',
+          provider: 'email',
+          createdAt: user.createdAt,
         }
       });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: err.message || "Lỗi Server nội bộ" });
+      
     }
   };
 
@@ -62,8 +64,9 @@ exports.login = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&h=200&fit=crop',
-        provider: 'email'
+        avatar: 'https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png',
+        provider: 'email',
+        createdAt: user.createdAt,
       }
     });
 

@@ -25,7 +25,7 @@ import {
   ArrowRight,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { mockProfile, mockTransactions } from '@/mocks/data';
+import { mockTransactions } from '@/mocks/data';
 import EcoLoader from '@/components/EcoLoader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWalletStore } from '@/stores/walletStore';
@@ -33,7 +33,23 @@ import { useWalletStore } from '@/stores/walletStore';
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const displayUser = {
+    name: user?.name || 'Chưa có tên',
+    avatar: user?.avatar || "https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png",
+    greenPoints: user?.greenPoints || 0,
+    totalWeight: user?.totalWeight || 0,
+    totalTransactions: user?.totalTransactions || 0,
+    address: user?.address || 'Chưa cập nhật địa chỉ',
+    phone: user?.phone || 'Chưa cập nhật SĐT',
+    joinDate: user?.createdAt 
+  ? new Date(user.createdAt).toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit', 
+      year: 'numeric'
+    })
+  : '',
+  };
   const { getFormattedBalance } = useWalletStore();
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -47,7 +63,7 @@ export default function ProfileScreen() {
   }
 
   const formatPrice = (price: number) => {
-    return price.toLocaleString('vi-VN') + 'đ';
+    return price.toLocaleString('vi-VN') + 'VND';
   };
 
   const handleDeposit = () => {
@@ -66,35 +82,35 @@ export default function ProfileScreen() {
       >
         <View style={styles.profileRow}>
           <Image
-            source={typeof mockProfile.avatar === 'string' ? { uri: mockProfile.avatar } : mockProfile.avatar}
+            source={typeof displayUser.avatar === 'string' ? { uri: displayUser.avatar } : displayUser.avatar}
             style={styles.avatar}
             contentFit="cover"
           />
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{mockProfile.name}</Text>
+            <Text style={styles.profileName}>{displayUser.name}</Text>
             <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>Người bán</Text>
+              <Text style={styles.roleBadgeText}>Thành viên mới 🌿</Text>
             </View>
-            <Text style={styles.joinDate}>Tham gia từ {mockProfile.joinDate}</Text>
+            <Text style={styles.joinDate}>Tham gia từ {displayUser.joinDate}</Text>
           </View>
         </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Award size={20} color={Colors.greenPoint} />
-            <Text style={styles.statNumber}>{mockProfile.greenPoints.toLocaleString()}</Text>
+            <Text style={styles.statNumber}>{displayUser.greenPoints.toLocaleString()}</Text>
             <Text style={styles.statLabel}>Điểm xanh</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Scale size={20} color={Colors.white} />
-            <Text style={styles.statNumber}>{mockProfile.totalWeight} kg</Text>
+            <Text style={styles.statNumber}>{displayUser.totalWeight} kg</Text>
             <Text style={styles.statLabel}>Đã tái chế</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <History size={20} color={Colors.white} />
-            <Text style={styles.statNumber}>{mockProfile.totalTransactions}</Text>
+            <Text style={styles.statNumber}>{displayUser.totalTransactions}</Text>
             <Text style={styles.statLabel}>Giao dịch</Text>
           </View>
         </View>
@@ -117,7 +133,7 @@ export default function ProfileScreen() {
             <Text style={styles.walletBalance}>{getFormattedBalance()}</Text>
             <View style={styles.walletPoints}>
               <Award size={16} color={Colors.greenPoint} />
-              <Text style={styles.walletPointsText}>{mockProfile.greenPoints.toLocaleString()} Điểm Xanh</Text>
+              <Text style={styles.walletPointsText}>{displayUser.greenPoints.toLocaleString()} Điểm Xanh</Text>
             </View>
             
             {/* Action Buttons */}
@@ -174,7 +190,7 @@ export default function ProfileScreen() {
             <Gift size={24} color="#795548" />
             <View style={styles.rewardsTextContainer}>
               <Text style={styles.rewardsTitle}>Đổi điểm lấy quà</Text>
-              <Text style={styles.rewardsSubtitle}>Bạn có {mockProfile.greenPoints} điểm xanh</Text>
+              <Text style={styles.rewardsSubtitle}>Bạn có {displayUser.greenPoints} điểm xanh</Text>
             </View>
             <ChevronRight size={20} color="#795548" />
           </LinearGradient>
@@ -185,12 +201,12 @@ export default function ProfileScreen() {
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <MapPin size={18} color={Colors.primary} />
-              <Text style={styles.infoText}>{mockProfile.address}</Text>
+              <Text style={styles.infoText}>{displayUser.address}</Text>
             </View>
             <View style={styles.infoDivider} />
             <View style={styles.infoRow}>
               <Phone size={18} color={Colors.primary} />
-              <Text style={styles.infoText}>{mockProfile.phone}</Text>
+              <Text style={styles.infoText}>{displayUser.phone}</Text>
             </View>
           </View>
         </View>

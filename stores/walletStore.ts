@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+AsyncStorage.clear();
+
 // Generate mock transactions for initial state
 function generateMockTransactions(): TransactionRecord[] {
   const now = new Date();
