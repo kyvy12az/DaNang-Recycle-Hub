@@ -1,11 +1,14 @@
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import { Buffer } from 'buffer';
+import { readAsStringAsync } from 'expo-file-system/legacy';
 import Constants from 'expo-constants';
 
 // TensorFlow dependencies - loaded only in development builds, not in Expo Go
 let tf: any = null;
 let decodeJpeg: any = null;
 let bundleResourceIO: any = null;
+let loadGraphModel: any = null;
+let loadLayersModel: any = null;
 let dependenciesLoaded = false;
 let dependenciesAvailable = false;
 
@@ -31,12 +34,20 @@ const loadDependencies = async () => {
   }
 
   try {
-    const tfModule = await import('@tensorflow/tfjs');
+    // Import tfjs-core first
+    const tfCoreModule = await import('@tensorflow/tfjs-core');
+    // Import tfjs-layers to register image operations like tf.image.resizeBilinear
+    const tfLayersModule = await import('@tensorflow/tfjs-layers');
+    // Import converter for model loading
+    const tfConverterModule = await import('@tensorflow/tfjs-converter');
+    // Import react-native for decoding and bundling
     const tfReactNative = await import('@tensorflow/tfjs-react-native');
 
-    tf = tfModule;
+    tf = tfCoreModule;
     decodeJpeg = tfReactNative.decodeJpeg;
     bundleResourceIO = tfReactNative.bundleResourceIO;
+    loadGraphModel = tfConverterModule.loadGraphModel;
+    loadLayersModel = tfLayersModule.loadLayersModel;
 
     dependenciesAvailable = true;
     console.log('✅ TensorFlow.js loaded successfully');
@@ -139,10 +150,10 @@ export async function loadTrashModel(): Promise<boolean> {
 
       // Support both GraphModel and LayersModel exports.
       try {
-        tfjsModel = await tf.loadGraphModel(modelIOHandler);
+        tfjsModel = await loadGraphModel(modelIOHandler);
         console.log('✅ TFJS GraphModel loaded successfully');
       } catch {
-        tfjsModel = await tf.loadLayersModel(modelIOHandler);
+        tfjsModel = await loadLayersModel(modelIOHandler);
         console.log('✅ TFJS LayersModel loaded successfully');
       }
     } catch (tfjsError) {
@@ -183,19 +194,19 @@ async function imageToTensor(imageUri: string, tf: any, decodeJpeg: any): Promis
     return batched;
   } else {
     // Native: Sử dụng FileSystem để đọc file và xử lý
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
+    const base64 = await readAsStringAsync(imageUri, {
       encoding: 'base64',
     });
 
-    // Decode base64 thành Uint8Array (works in React Native without atob)
-    const imageBuffer = tf.util.encodeString(base64, 'base64').buffer;
-    const bytes = new Uint8Array(imageBuffer);
+    // Decode base64 thành bytes JPEG thực sự
+    const bytes = Uint8Array.from(Buffer.from(base64, 'base64'));
 
     // Sử dụng decodeJpeg từ @tensorflow/tfjs-react-native
     const imageTensor = decodeJpeg(bytes, 3);
     const resized = tf.image.resizeBilinear(imageTensor, [224, 224], true);
-    const normalized = resized.toFloat().div(tf.scalar(255.0));
-    const batched = normalized.expandDims(0);
+    // Use tf.div and tf.expandDims instead of tensor methods
+    const normalized = tf.div(resized, 255.0);
+    const batched = tf.expandDims(normalized, 0);
 
     // Cleanup
     imageTensor.dispose();
@@ -229,8 +240,8 @@ export async function predictTrash(imageUri: string): Promise<TrashPrediction[]>
     // Dự đoán
     // Support GraphModel.executeAsync / GraphModel.predict / LayersModel.predict
     const rawOutput =
-      typeof tfjsModel.executeAsync === 'function'
-        ? await tfjsModel.executeAsync(inputTensor)
+      typeof tfjsModel.execute === 'function'
+        ? tfjsModel.execute(inputTensor)
         : tfjsModel.predict(inputTensor);
 
     const predictionTensor = Array.isArray(rawOutput) ? rawOutput[0] : rawOutput;
@@ -247,6 +258,13 @@ export async function predictTrash(imageUri: string): Promise<TrashPrediction[]>
       }))
       .sort((a, b) => b.confidence - a.confidence)
       .slice(0, 3);
+
+    if (predictions.length > 0) {
+      const topPrediction = predictions[0];
+      console.log(
+        `AI nhận diện: ${topPrediction.classNameVi} (${topPrediction.className}) | confidence=${(topPrediction.confidence * 100).toFixed(2)}% | category=${topPrediction.category} | estimatedWeight=${topPrediction.estimatedWeight ?? 'N/A'}kg | pricePerKg=${topPrediction.pricePerKg}`
+      );
+    }
 
     predictionTensor.dispose();
     if (Array.isArray(rawOutput)) {

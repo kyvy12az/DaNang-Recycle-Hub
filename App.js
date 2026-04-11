@@ -9,8 +9,11 @@ import {
   View,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as FileSystem from 'expo-file-system';
-import * as tf from '@tensorflow/tfjs';
+import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
+import { Buffer } from 'buffer';
+import * as tf from '@tensorflow/tfjs-core';
+import '@tensorflow/tfjs-layers'; // Register image operations
+import { loadGraphModel } from '@tensorflow/tfjs-converter';
 import '@tensorflow/tfjs-react-native';
 import { bundleResourceIO, decodeJpeg } from '@tensorflow/tfjs-react-native';
 
@@ -57,7 +60,7 @@ export default function App() {
         ];
 
         // Load graph model from local bundled assets
-        const loadedModel = await tf.loadGraphModel(
+        const loadedModel = await loadGraphModel(
           bundleResourceIO(modelJson, modelWeights)
         );
 
@@ -83,21 +86,24 @@ export default function App() {
   }, []);
 
   // Convert captured camera image to tensor [1, 224, 224, 3] and normalize to 0..1
-  const preprocessImageToTensor = async (photoUri) => {
-    // Read captured file as base64
-    const base64 = await FileSystem.readAsStringAsync(photoUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+  const preprocessImageToTensor = async (photoBase64OrUri) => {
+    const base64 =
+      typeof photoBase64OrUri === 'string' &&
+      !photoBase64OrUri.startsWith('file:') &&
+      !photoBase64OrUri.startsWith('content:')
+        ? photoBase64OrUri
+        : await readAsStringAsync(photoBase64OrUri, {
+            encoding: EncodingType.Base64,
+          });
 
     // Decode base64 to bytes then decode JPEG to tensor [H, W, 3]
-    const imageBuffer = tf.util.encodeString(base64, 'base64').buffer;
-    const raw = new Uint8Array(imageBuffer);
+    const raw = Uint8Array.from(Buffer.from(base64, 'base64'));
     const imageTensor = decodeJpeg(raw);
 
-    // Resize to model input shape, cast float, normalize 0..1, add batch dimension
+    // Resize to model input shape, normalize 0..1, add batch dimension
     const resized = tf.image.resizeBilinear(imageTensor, [224, 224]);
-    const normalized = resized.toFloat().div(tf.scalar(255.0));
-    const batched = normalized.expandDims(0);
+    const normalized = tf.div(resized, 255.0);
+    const batched = tf.expandDims(normalized, 0);
 
     // Dispose intermediates to avoid memory leaks
     imageTensor.dispose();
@@ -121,10 +127,11 @@ export default function App() {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
         skipProcessing: true,
+        base64: true,
       });
 
       // 2) Preprocess image to [1,224,224,3], normalized 0..1
-      const inputTensor = await preprocessImageToTensor(photo.uri);
+      const inputTensor = await preprocessImageToTensor(photo.base64 || photo.uri);
 
       // 3) model.predict
       const output = model.predict(inputTensor);
@@ -148,9 +155,16 @@ export default function App() {
         confidence: Number(bestScore),
       });
 
+      console.log(
+        `AI nhận diện: ${CLASS_NAMES[bestIndex] || `class_${bestIndex}`} | confidence=${(Number(bestScore) * 100).toFixed(2)}%`
+      );
+
       // Cleanup
       inputTensor.dispose();
       outputTensor.dispose();
+      if (Array.isArray(output)) {
+        output.forEach(t => t.dispose && t.dispose());
+      }
     } catch (error) {
       console.error('Predict error:', error);
       Alert.alert('Predict error', 'Khong the classify anh. Vui long thu lai.');

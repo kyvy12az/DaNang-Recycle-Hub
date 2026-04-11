@@ -21,7 +21,6 @@ import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import Constants from 'expo-constants';
-import { makeRedirectUri } from 'expo-auth-session';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -38,52 +37,24 @@ export default function LoginScreen() {
   const [googleOauthLoading, setGoogleOauthLoading] = useState<boolean>(false);
   const [googleOauthError, setGoogleOauthError] = useState<string | null>(null);
 
-  const expoProjectFullName =
-    process.env.EXPO_PUBLIC_EXPO_PROJECT_FULL_NAME ||
-    (Constants.expoConfig?.owner && Constants.expoConfig?.slug
-      ? `@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
-      : '');
-
-  const appScheme = Array.isArray(Constants.expoConfig?.scheme)
-    ? Constants.expoConfig.scheme[0]
-    : Constants.expoConfig?.scheme || 'danangrecyclehub';
+  const isValidGoogleClientId = (value?: string) =>
+    typeof value === 'string' && /\.apps\.googleusercontent\.com$/.test(value.trim());
 
   const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
-  const appReturnUri = makeRedirectUri({
-    scheme: appScheme,
-    path: 'redirect',
-  });
+  const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID?.trim() || '';
+  const androidClientPrefix = isValidGoogleClientId(androidClientId)
+    ? androidClientId.replace('.apps.googleusercontent.com', '')
+    : '';
+  const androidRedirectUri = androidClientPrefix
+    ? `com.googleusercontent.apps.${androidClientPrefix}:/oauthredirect`
+    : undefined;
 
-  const redirectUri = isExpoGo
-    ? (expoProjectFullName ? `https://auth.expo.io/${expoProjectFullName}` : '')
-    : appReturnUri;
-
-  const buildExpoProxyStartUrl = (authUrl: string) => {
-    const params = new URLSearchParams({
-      authUrl,
-      returnUrl: appReturnUri,
-    });
-    return `${redirectUri}/start?${params.toString()}`;
+  const googleAuthConfig = {
+    androidClientId: androidClientId || undefined,
+    redirectUri: androidRedirectUri,
+    scopes: ['openid', 'profile', 'email'],
   };
-
-  const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
-  const googleAuthConfig = isExpoGo
-    ? {
-        clientId: googleClientId,
-        redirectUri,
-        responseType: 'id_token',
-        shouldAutoExchangeCode: false,
-        scopes: ['openid', 'profile', 'email'],
-      }
-    : {
-        clientId: googleClientId,
-        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || googleClientId,
-        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || googleClientId,
-        webClientId: googleClientId,
-        redirectUri,
-        scopes: ['openid', 'profile', 'email'],
-      };
 
   const [googleRequest, googleResponse, googlePromptAsync] =
     Google.useAuthRequest(googleAuthConfig);
@@ -181,10 +152,16 @@ export default function LoginScreen() {
           throw new Error('Google không trả về email hợp lệ');
         }
 
+        console.log('[Google OAuth] Lấy thông tin Google thành công:', {
+          email: profile.email,
+          name: profile.name,
+        });
+
         loginWithGoogle({
           idToken,
           profile,
         });
+        console.log('[Google OAuth] Đã gửi idToken lên backend để đăng nhập');
         setGoogleOauthLoading(false);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Đăng nhập Google thất bại';
@@ -202,25 +179,30 @@ export default function LoginScreen() {
 
   const handleSocialLogin = (provider: 'google' | 'zalo') => {
     if (provider === 'google') {
-      if (!redirectUri || !googleClientId) {
+      if (isExpoGo) {
         Alert.alert(
-          'Thiếu cấu hình OAuth',
-          'Thiếu EXPO_PUBLIC_EXPO_PROJECT_FULL_NAME, owner/slug, hoặc EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.'
+          'Yêu cầu Native Build',
+          'Google login yêu cầu Development Build. Hãy chạy: npx expo run:android'
         );
+        return;
+      }
+
+      if (!androidClientId || !isValidGoogleClientId(androidClientId)) {
+        Alert.alert(
+          'Lỗi cấu hình',
+          `Thiếu hoặc sai Android Google Client ID. Định dạng phải là: xxx.apps.googleusercontent.com`
+        );
+        return;
+      }
+
+      if (!androidRedirectUri) {
+        Alert.alert('Lỗi cấu hình', 'Không tạo được redirect URI cho Android Google OAuth.');
         return;
       }
 
       setGoogleOauthError(null);
       setGoogleOauthLoading(true);
-
-      const promptOptions =
-        isExpoGo && googleRequest?.url && expoProjectFullName
-          ? {
-              url: buildExpoProxyStartUrl(googleRequest.url),
-            }
-          : undefined;
-
-      void googlePromptAsync(promptOptions);
+      void googlePromptAsync();
       return;
     }
 

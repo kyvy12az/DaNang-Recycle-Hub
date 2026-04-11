@@ -3,6 +3,10 @@ const { withRorkMetro } = require("@rork-ai/toolkit-sdk/metro");
 
 const config = getDefaultConfig(__dirname);
 
+config.resolver.assetExts = Array.from(
+  new Set([...(config.resolver.assetExts || []), 'bin'])
+);
+
 // Add resolver to block Node.js-only TensorFlow backends
 config.resolver = {
   ...config.resolver,
@@ -12,7 +16,8 @@ config.resolver = {
       moduleName === '@tensorflow/tfjs-backend-cpu' ||
       moduleName === '@tensorflow/tfjs-backend-wasm' ||
       moduleName === '@tensorflow/tfjs-node' ||
-      moduleName === '@tensorflow/tfjs-node-gpu'
+      moduleName === '@tensorflow/tfjs-node-gpu' ||
+      moduleName === 'long' // Block 'long' package required by tf.node.js
     ) {
       return {
         type: 'empty',
