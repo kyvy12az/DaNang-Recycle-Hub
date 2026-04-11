@@ -9,4 +9,7 @@ router.post("/register", authController.register);
 // API đăng nhập
 router.post("/login", authController.login);
 
+// API đăng nhập Google
+router.post("/auth/google", authController.googleLogin);
+
 module.exports = router;

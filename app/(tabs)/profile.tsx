@@ -5,6 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,20 +25,32 @@ import {
   Plus,
   Minus,
   ArrowRight,
+  Camera,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { mockTransactions } from '@/mocks/data';
 import EcoLoader from '@/components/EcoLoader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWalletStore } from '@/stores/walletStore';
+import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { logout, user } = useAuth();
+  const { handleAvatarUpload, isLoading: isUploadingAvatar, error: uploadError } = useAvatarUpload();
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const getAvatarSource = () => {
+    if (user?.avatar) {
+      return { uri: user.avatar };
+    }
+    // trả về avatar mặc định từ thư mục assets
+    return require('../../assets/images/avatars/Avt-Default.png');
+  };
+
   const displayUser = {
     name: user?.name || 'Chưa có tên',
-    avatar: user?.avatar || "https://avatarngau.sbs/wp-content/uploads/2025/09/hinh-anh-chung-tay-bao-ve-moi-truong.png",
     greenPoints: user?.greenPoints || 0,
     totalWeight: user?.totalWeight || 0,
     totalTransactions: user?.totalTransactions || 0,
@@ -51,12 +65,26 @@ export default function ProfileScreen() {
   : '',
   };
   const { getFormattedBalance } = useWalletStore();
-  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 1200);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (uploadError) {
+      Alert.alert('Upload Lỗi', uploadError);
+    }
+  }, [uploadError]);
+
+  const handleAvatarPress = async () => {
+    if (isUploadingAvatar) return;
+    
+    const success = await handleAvatarUpload();
+    if (success) {
+      Alert.alert('Thành công', 'Avatar đã được cập nhật');
+    }
+  };
 
   if (isLoading) {
     return <EcoLoader message="Đang tải hồ sơ..." size="large" />;
@@ -81,11 +109,24 @@ export default function ProfileScreen() {
         style={[styles.header, { paddingTop: insets.top + 16 }]}
       >
         <View style={styles.profileRow}>
-          <Image
-            source={typeof displayUser.avatar === 'string' ? { uri: displayUser.avatar } : displayUser.avatar}
-            style={styles.avatar}
-            contentFit="cover"
-          />
+          <TouchableOpacity 
+            onPress={handleAvatarPress}
+            disabled={isUploadingAvatar}
+            style={styles.avatarContainer}
+          >
+            <Image
+              source={getAvatarSource()}
+              style={styles.avatar}
+              contentFit="cover"
+            />
+            <View style={styles.cameraIconContainer}>
+              {isUploadingAvatar ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Camera size={16} color="white" strokeWidth={2.5} />
+              )}
+            </View>
+          </TouchableOpacity>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{displayUser.name}</Text>
             <View style={styles.roleBadge}>
@@ -273,12 +314,31 @@ const styles = StyleSheet.create({
     gap: 14,
     marginBottom: 20,
   },
+  avatarContainer: {
+    position: 'relative' as const,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
   avatar: {
     width: 64,
     height: 64,
     borderRadius: 32,
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.4)',
+  },
+  cameraIconContainer: {
+    position: 'absolute' as const,
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.8)',
   },
   profileInfo: {
     flex: 1,

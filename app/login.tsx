@@ -11,23 +11,69 @@ import {
   Animated,
   Easing,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
+import * as Google from 'expo-auth-session/providers/google';
+import Constants from 'expo-constants';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { login, isLoggingIn, loginError, socialLogin, isSocialLogging } = useAuth();
+  const { login, isLoggingIn, loginError, loginWithGoogle, isGoogleLogging, googleLoginError } = useAuth();
 
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [googleOauthLoading, setGoogleOauthLoading] = useState<boolean>(false);
+  const [googleOauthError, setGoogleOauthError] = useState<string | null>(null);
+
+  const expoProjectFullName =
+    process.env.EXPO_PUBLIC_EXPO_PROJECT_FULL_NAME ||
+    (Constants.expoConfig?.owner && Constants.expoConfig?.slug
+      ? `@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
+      : undefined);
+
+  const projectNameForProxy =
+    Constants.expoConfig?.owner && Constants.expoConfig?.slug
+      ? `@${Constants.expoConfig.owner}/${Constants.expoConfig.slug}`
+      : undefined;
+
+  const redirectUri = expoProjectFullName
+    ? `https://auth.expo.io/${expoProjectFullName}`
+    : AuthSession.makeRedirectUri({ scheme: 'danangrecyclehub' });
+
+  useEffect(() => {
+    console.log('expoProjectFullName =', expoProjectFullName);
+    console.log('projectNameForProxy =', projectNameForProxy);
+    console.log('redirectUri =', redirectUri);
+  }, [expoProjectFullName, projectNameForProxy, redirectUri]);
+
+  const [googleRequest, googleResponse, googlePromptAsync] =
+    Google.useAuthRequest({
+      clientId:
+        process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID ||
+        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      iosClientId:
+        process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
+        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      androidClientId:
+        process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
+        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      redirectUri,
+      scopes: ["openid", "profile", "email"],
+    });
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
@@ -50,15 +96,98 @@ export default function LoginScreen() {
 
   const spin = logoRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
+  useEffect(() => {
+    const completeGoogleSignIn = async () => {
+      if (!googleResponse) {
+        return;
+      }
+
+      if (googleResponse.type !== 'success') {
+        setGoogleOauthLoading(false);
+        if (googleResponse.type === 'error') {
+          setGoogleOauthError('Đăng nhập Google thất bại');
+        }
+        return;
+      }
+
+      try {
+        const auth = googleResponse.authentication;
+        const accessToken = auth?.accessToken || (googleResponse.params as any)?.access_token;
+        const idToken = auth?.idToken || (googleResponse.params as any)?.id_token;
+
+        if (!idToken) {
+          throw new Error('Không lấy được Google idToken');
+        }
+
+        let profile = {
+          name: 'Google User',
+          email: '',
+          avatar: null as string | null,
+        };
+
+        if (accessToken) {
+          const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          });
+
+          if (!profileResponse.ok) {
+            throw new Error('Không thể lấy thông tin tài khoản Google');
+          }
+
+          const profileData = await profileResponse.json();
+          profile = {
+            name: profileData.name || profileData.given_name || 'Google User',
+            email: profileData.email || '',
+            avatar: profileData.picture || null,
+          };
+        }
+
+        if (!profile.email) {
+          throw new Error('Google không trả về email hợp lệ');
+        }
+
+        loginWithGoogle({
+          idToken,
+          profile,
+        });
+        setGoogleOauthLoading(false);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Đăng nhập Google thất bại';
+        setGoogleOauthError(errorMessage);
+        setGoogleOauthLoading(false);
+      }
+    };
+
+    void completeGoogleSignIn();
+  }, [googleResponse, loginWithGoogle]);
+
   const handleLogin = () => {
     login({ email, password });
   };
 
   const handleSocialLogin = (provider: 'google' | 'zalo') => {
-    socialLogin(provider);
+    if (provider === 'google') {
+      if (!expoProjectFullName) {
+        Alert.alert(
+          'Thiếu cấu hình OAuth',
+          'Hãy thêm EXPO_PUBLIC_EXPO_PROJECT_FULL_NAME vào .env theo dạng @username/slug để dùng Google Login trong Expo Go.'
+        );
+        return;
+      }
+
+      setGoogleOauthError(null);
+      setGoogleOauthLoading(true);
+      void googlePromptAsync();
+      return;
+    }
+
+    Alert.alert('Tính năng đang phát triển', 'Đăng nhập bằng Zalo chưa được hỗ trợ.');
   };
 
-  const isDisabled = isLoggingIn || isSocialLogging;
+  const displayError = loginError || googleLoginError || googleOauthError;
+  const isDisabled = isLoggingIn || isGoogleLogging || googleOauthLoading || !googleRequest;
 
   return (
     <View style={styles.container}>
@@ -97,9 +226,9 @@ export default function LoginScreen() {
             <Text style={styles.welcomeText}>Đăng nhập</Text>
             <Text style={styles.subtitleText}>Chào mừng bạn quay trở lại!</Text>
 
-            {loginError && (
+            {displayError && (
               <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{loginError}</Text>
+                <Text style={styles.errorText}>{displayError}</Text>
               </View>
             )}
 
@@ -192,7 +321,7 @@ export default function LoginScreen() {
                   />
                 </View>
                 <Text style={styles.socialButtonText}>Google</Text>
-                {isSocialLogging && <ActivityIndicator size="small" color={Colors.textSecondary} style={{ marginLeft: 6 }} />}
+                {(isGoogleLogging || googleOauthLoading) && <ActivityIndicator size="small" color={Colors.textSecondary} style={{ marginLeft: 6 }} />}
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -210,7 +339,7 @@ export default function LoginScreen() {
                   />
                 </View>
                 <Text style={styles.socialButtonText}>Zalo</Text>
-                {isSocialLogging && <ActivityIndicator size="small" color={Colors.textSecondary} style={{ marginLeft: 6 }} />}
+                <Text style={styles.socialNote}>Chưa hỗ trợ</Text>
               </TouchableOpacity>
             </View>
 
@@ -433,6 +562,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     color: Colors.text,
+  },
+  socialNote: {
+    fontSize: 11,
+    color: Colors.textLight,
+    marginLeft: 4,
   },
   registerRow: {
     flexDirection: 'row',
