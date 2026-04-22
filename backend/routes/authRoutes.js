@@ -12,4 +12,6 @@ router.post("/login", authController.login);
 // API đăng nhập Google
 router.post("/auth/google", authController.googleLogin);
 
+router.put("/users/profile", authController.authMiddleware, authController.updateProfile);
+
 module.exports = router;

@@ -7,6 +7,10 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +30,9 @@ import {
   Minus,
   ArrowRight,
   Camera,
+  Pencil,
+  X,
+  Check,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { mockTransactions } from '@/mocks/data';
@@ -37,15 +44,22 @@ import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { logout, user } = useAuth();
+  const { logout, user, updateUser } = useAuth();
   const { handleAvatarUpload, isLoading: isUploadingAvatar, error: uploadError } = useAvatarUpload();
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    address: '',
+    phone: '',
+  });
 
   const getAvatarSource = () => {
     if (user?.avatar) {
       return { uri: user.avatar };
     }
-    // trả về avatar mặc định từ thư mục assets
     return require('../../assets/images/avatars/Avt-Default.png');
   };
 
@@ -56,14 +70,15 @@ export default function ProfileScreen() {
     totalTransactions: user?.totalTransactions || 0,
     address: user?.address || 'Chưa cập nhật địa chỉ',
     phone: user?.phone || 'Chưa cập nhật SĐT',
-    joinDate: user?.createdAt 
-  ? new Date(user.createdAt).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit', 
-      year: 'numeric'
-    })
-  : '',
+    joinDate: user?.createdAt
+      ? new Date(user.createdAt).toLocaleDateString('vi-VN', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : '',
   };
+
   const { getFormattedBalance } = useWalletStore();
 
   useEffect(() => {
@@ -79,10 +94,44 @@ export default function ProfileScreen() {
 
   const handleAvatarPress = async () => {
     if (isUploadingAvatar) return;
-    
     const success = await handleAvatarUpload();
     if (success) {
       Alert.alert('Thành công', 'Avatar đã được cập nhật');
+    }
+  };
+
+  const handleOpenEditModal = () => {
+    setEditForm({
+      name: user?.name || '',
+      address: user?.address || '',
+      phone: user?.phone || '',
+    });
+    setIsEditModalVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editForm.name.trim()) {
+      Alert.alert('Lỗi', 'Tên không được để trống');
+      return;
+    }
+    if (editForm.phone && !/^[0-9]{9,11}$/.test(editForm.phone.trim())) {
+      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await updateUser({
+        name: editForm.name.trim(),
+        address: editForm.address.trim(),
+        phone: editForm.phone.trim(),
+      });
+      setIsEditModalVisible(false);
+      Alert.alert('Thành công', 'Thông tin đã được cập nhật');
+    } catch (error) {
+      Alert.alert('Lỗi', 'Không thể cập nhật thông tin. Vui lòng thử lại.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -109,7 +158,7 @@ export default function ProfileScreen() {
         style={[styles.header, { paddingTop: insets.top + 16 }]}
       >
         <View style={styles.profileRow}>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleAvatarPress}
             disabled={isUploadingAvatar}
             style={styles.avatarContainer}
@@ -176,8 +225,7 @@ export default function ProfileScreen() {
               <Award size={16} color={Colors.greenPoint} />
               <Text style={styles.walletPointsText}>{displayUser.greenPoints.toLocaleString()} Điểm Xanh</Text>
             </View>
-            
-            {/* Action Buttons */}
+
             <View style={styles.walletActions}>
               <TouchableOpacity
                 style={styles.depositButton}
@@ -195,7 +243,7 @@ export default function ProfileScreen() {
                   <Text style={styles.actionText}>Nạp tiền</Text>
                 </LinearGradient>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={styles.withdrawButton}
                 onPress={handleWithdraw}
@@ -237,9 +285,24 @@ export default function ProfileScreen() {
           </LinearGradient>
         </TouchableOpacity>
 
+        {/* Personal Info Section */}
         <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
-          <View style={styles.infoCard}>
+          <View style={styles.infoSectionHeader}>
+            <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={handleOpenEditModal}
+              activeOpacity={0.7}
+            >
+              <Pencil size={14} color={Colors.primary} />
+              <Text style={styles.editButtonText}>Chỉnh sửa</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={styles.infoCard}
+            onPress={handleOpenEditModal}
+            activeOpacity={0.85}
+          >
             <View style={styles.infoRow}>
               <MapPin size={18} color={Colors.primary} />
               <Text style={styles.infoText}>{displayUser.address}</Text>
@@ -249,7 +312,7 @@ export default function ProfileScreen() {
               <Phone size={18} color={Colors.primary} />
               <Text style={styles.infoText}>{displayUser.phone}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.historySection}>
@@ -295,6 +358,126 @@ export default function ProfileScreen() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {/* ── Edit Profile Modal ── */}
+      <Modal
+        visible={isEditModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsEditModalVisible(false)}
+          />
+          <View style={styles.modalContainer}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chỉnh sửa thông tin</Text>
+              <TouchableOpacity
+                onPress={() => setIsEditModalVisible(false)}
+                style={styles.modalCloseButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={20} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Body */}
+            <View style={styles.modalBody}>
+              {/* Name */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Họ và tên</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={editForm.name}
+                    onChangeText={(v) => setEditForm((prev) => ({ ...prev, name: v }))}
+                    placeholder="Nhập họ và tên"
+                    placeholderTextColor={Colors.textLight}
+                    returnKeyType="next"
+                    maxLength={50}
+                  />
+                </View>
+              </View>
+
+              {/* Address */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Địa chỉ</Text>
+                <View style={[styles.inputWrapper, styles.inputWrapperMultiline]}>
+                  <TextInput
+                    style={[styles.textInput, styles.textInputMultiline]}
+                    value={editForm.address}
+                    onChangeText={(v) => setEditForm((prev) => ({ ...prev, address: v }))}
+                    placeholder="Nhập địa chỉ"
+                    placeholderTextColor={Colors.textLight}
+                    multiline
+                    numberOfLines={2}
+                    returnKeyType="next"
+                    maxLength={150}
+                  />
+                </View>
+              </View>
+
+              {/* Phone */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Số điện thoại</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={editForm.phone}
+                    onChangeText={(v) => setEditForm((prev) => ({ ...prev, phone: v }))}
+                    placeholder="Nhập số điện thoại"
+                    placeholderTextColor={Colors.textLight}
+                    keyboardType="phone-pad"
+                    returnKeyType="done"
+                    maxLength={11}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Modal Footer */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setIsEditModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelButtonText}>Hủy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+                onPress={handleSaveProfile}
+                activeOpacity={0.8}
+                disabled={isSaving}
+              >
+                <LinearGradient
+                  colors={['#4CAF50', '#2E7D32']}
+                  style={styles.saveGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator size="small" color={Colors.white} />
+                  ) : (
+                    <>
+                      <Check size={16} color={Colors.white} />
+                      <Text style={styles.saveButtonText}>Lưu thay đổi</Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -430,11 +613,30 @@ const styles = StyleSheet.create({
   infoSection: {
     marginBottom: 20,
   },
+  infoSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700' as const,
     color: Colors.text,
-    marginBottom: 12,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  editButtonText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.primary,
   },
   infoCard: {
     backgroundColor: Colors.white,
@@ -621,6 +823,123 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.white,
+  },
+
+  // ── Modal styles ──
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  modalContainer: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 32,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    gap: 16,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
+  inputWrapper: {
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    backgroundColor: '#FAFAFA',
+    paddingHorizontal: 14,
+    paddingVertical: 2,
+  },
+  inputWrapperMultiline: {
+    paddingVertical: 8,
+  },
+  textInput: {
+    fontSize: 15,
+    color: Colors.text,
+    paddingVertical: 10,
+  },
+  textInputMultiline: {
+    minHeight: 56,
+    textAlignVertical: 'top',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.white,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
+  saveButton: {
+    flex: 2,
+    borderRadius: 14,
+    overflow: 'hidden' as const,
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  saveButtonText: {
+    fontSize: 15,
     fontWeight: '700' as const,
     color: Colors.white,
   },

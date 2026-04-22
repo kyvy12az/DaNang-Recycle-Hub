@@ -16,6 +16,11 @@ const normalizeUser = (user, provider = user.provider || "email") => ({
   email: user.email,
   avatar: user.avatar,
   provider,
+  phone: user.phone ?? null,
+  address: user.address ?? null,
+  greenPoints: user.greenPoints ?? 0,
+  totalWeight: user.totalWeight ?? 0,
+  totalTransactions: user.totalTransactions ?? 0,
   createdAt: user.createdAt,
 });
 
@@ -159,5 +164,62 @@ exports.googleLogin = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(401).json({ message: err.message || "Đăng nhập Google thất bại" });
+  }
+};
+
+// ── Middleware xác thực JWT ──
+exports.authMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Không có token xác thực" });
+  }
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.id || decoded._id || decoded.userId;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Token không hợp lệ hoặc đã hết hạn" });
+  }
+};
+
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, address, phone } = req.body;
+
+    if (name !== undefined && name.trim() === "") {
+      return res.status(400).json({ message: "Tên không được để trống" });
+    }
+    if (phone && !/^[0-9]{9,11}$/.test(phone.trim())) {
+      return res.status(400).json({ message: "Số điện thoại không hợp lệ" });
+    }
+
+    const updateFields = {};
+    if (name !== undefined)    updateFields.name    = name.trim();
+    if (address !== undefined) updateFields.address = address.trim();
+    if (phone !== undefined)   updateFields.phone   = phone.trim();
+
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ message: "Không có thông tin nào để cập nhật" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.userId,
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật thông tin thành công",
+      user: normalizeUser(updatedUser),
+    });
+  } catch (error) {
+    console.error("Lỗi cập nhật profile:", error);
+    return res.status(500).json({ message: "Lỗi server", error: error.message });
   }
 };

@@ -22,7 +22,7 @@ interface AuthUser {
 
 const STORAGE_KEY = 'auth_user';
 const TOKEN_KEY = 'user_token_secure';
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.5:5000').replace(/\/$/, '');
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
 
 type GoogleProfile = {
   name: string;
@@ -222,6 +222,34 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
   }, [user]);
 
+  const updateUser = useCallback(async (fields: { name?: string; address?: string; phone?: string }) => {
+    if (!user) throw new Error('Chưa đăng nhập');
+
+    const token = await getStoredToken();
+
+    const response = await axios.put(
+      `${API_BASE_URL}/api/users/profile`,
+      fields,
+      {
+        headers: {
+          'bypass-tunnel-reminder': 'true',
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const updatedData = response.data?.user ?? response.data ?? {};
+    const updatedUser: AuthUser = {
+      ...user,
+      name: updatedData.name ?? fields.name ?? user.name,
+      address: updatedData.address ?? fields.address ?? user.address,
+      phone: updatedData.phone ?? fields.phone ?? user.phone,
+    };
+
+    setUser(updatedUser);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+  }, [user]);
+
   const getAuthToken = useCallback(async (): Promise<string | null> => {
     try {
       const token = await getStoredToken();
@@ -250,6 +278,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     socialLoginError: socialLoginMutation.error?.message ?? null,
     logout,
     updateAvatarUrl,
+    updateUser,  
     getAuthToken,
   };
 });

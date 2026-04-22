@@ -37,6 +37,31 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    phone: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    address: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    greenPoints: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalWeight: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalTransactions: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );
