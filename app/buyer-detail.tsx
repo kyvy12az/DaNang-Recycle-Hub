@@ -8,6 +8,7 @@ import {
   Alert,
   Animated,
   Easing,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,22 +20,82 @@ import {
   HandHelping,
   Scale,
   Star,
-  Phone,
 } from 'lucide-react-native';
+import axios from 'axios';
 import Colors from '@/constants/colors';
-import { mockListings } from '@/mocks/data';
 import { useWalletStore } from '@/stores/walletStore';
+import { WasteListing } from '@/types';
 
 const logoImage = require('@/assets/images/logo.png');
 
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
+
+// Dùng lại hàm map từ BuyerListingsScreen
+const mapListingFromAPI = (item: any): WasteListing => ({
+  id: item._id || item.id,
+  sellerId: item.sellerId,
+  sellerName: item.sellerName,
+  sellerAvatar: item.sellerAvatar || 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+  items: (item.items || []).map((wi: any, index: number) => ({
+    id: wi._id || `item-${index}`,
+    wasteType: {
+      id: wi.wasteTypeId,
+      name: wi.wasteTypeName,
+      category: wi.wasteTypeCategory || 'other',
+      pricePerKg: wi.pricePerKg,
+      icon: 'package',
+      color: wi.wasteTypeColor || '#4CAF50',
+    },
+    quantity: wi.quantity,
+    estimatedPrice: wi.estimatedPrice,
+  })),
+  totalPrice: item.totalPrice,
+  totalWeight: item.totalWeight,
+  address: item.address,
+  district: item.district || '',
+  note: item.note || '',
+  pickupTime: item.pickupTime,
+  status: item.status,
+  createdAt: item.createdAt
+    ? new Date(item.createdAt).toLocaleDateString('vi-VN')
+    : '',
+  imageUrl: item.imageUrl || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=400',
+  greenPoints: item.greenPoints || 0,
+});
 
 export default function BuyerDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const [listing, setListing] = useState<WasteListing | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState<boolean>(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const { vndBalance, deductForPurchase } = useWalletStore();
+
+  // Fetch dữ liệu thật từ API
+  useEffect(() => {
+    const fetchListing = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await axios.get(`${API_BASE_URL}/api/listings/${id}`, {
+          headers: { 'bypass-tunnel-reminder': 'true' },
+        });
+        // BE có thể trả về { listing: {...} } hoặc trực tiếp object
+        const raw = response.data.listing || response.data;
+        setListing(mapListingFromAPI(raw));
+      } catch (err: any) {
+        console.error('Lỗi fetch listing detail:', err.message);
+        setError('Không thể tải thông tin bài đăng. Vui lòng thử lại.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (id) fetchListing();
+  }, [id]);
 
   useEffect(() => {
     if (isAccepting) {
@@ -69,19 +130,7 @@ export default function BuyerDetailScreen() {
     }
   }, [isAccepting]);
 
-  const listing = mockListings.find(l => l.id === id);
-
-  if (!listing) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>Không tìm thấy bài đăng</Text>
-      </View>
-    );
-  }
-
-  const formatPrice = (price: number) => {
-    return price.toLocaleString('vi-VN') + 'đ';
-  };
+  const formatPrice = (price: number) => price.toLocaleString('vi-VN') + 'đ';
 
   const spin = rotateAnim.interpolate({
     inputRange: [0, 1],
@@ -89,7 +138,8 @@ export default function BuyerDetailScreen() {
   });
 
   const handleAccept = () => {
-    // Check if user has enough balance
+    if (!listing) return;
+
     if (vndBalance < listing.totalPrice) {
       Alert.alert(
         'Không đủ số dư',
@@ -110,13 +160,11 @@ export default function BuyerDetailScreen() {
             setIsAccepting(true);
             setTimeout(() => {
               setIsAccepting(false);
-              // Deduct from wallet
               deductForPurchase(
                 listing.id,
                 listing.totalPrice,
                 `Mua ${listing.totalWeight}kg rác từ ${listing.sellerName}`
               );
-              
               Alert.alert(
                 'Nhận đơn thành công!',
                 `Đã trừ ${listing.totalPrice.toLocaleString()}₫ từ ví. Hãy đến địa chỉ ${listing.address} để thu gom.`,
@@ -129,6 +177,31 @@ export default function BuyerDetailScreen() {
     );
   };
 
+  // --- Loading state ---
+  if (isLoading) {
+    return (
+      <View style={styles.centerContainer}>
+        <Stack.Screen options={{ title: 'Chi tiết bài đăng' }} />
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Đang tải...</Text>
+      </View>
+    );
+  }
+
+  // --- Error state ---
+  if (error || !listing) {
+    return (
+      <View style={styles.centerContainer}>
+        <Stack.Screen options={{ title: 'Chi tiết bài đăng' }} />
+        <Text style={styles.emptyText}>{error || 'Không tìm thấy bài đăng'}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
+          <Text style={styles.retryText}>Quay lại</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // --- Main content ---
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: listing.sellerName }} />
@@ -240,20 +313,10 @@ export default function BuyerDetailScreen() {
               {isAccepting && (
                 <View style={styles.loaderContainer}>
                   <Animated.View
-                    style={[
-                      styles.spinnerRing,
-                      {
-                        transform: [{ rotate: spin }],
-                      },
-                    ]}
+                    style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]}
                   />
                   <Animated.View
-                    style={[
-                      styles.logoContainer,
-                      {
-                        transform: [{ scale: pulseAnim }],
-                      },
-                    ]}
+                    style={[styles.logoContainer, { transform: [{ scale: pulseAnim }] }]}
                   >
                     <Image
                       source={logoImage}
@@ -278,14 +341,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  emptyContainer: {
+  centerContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 8,
   },
   emptyText: {
     fontSize: 14,
     color: Colors.textSecondary,
+    textAlign: 'center' as const,
+    paddingHorizontal: 32,
+  },
+  retryButton: {
+    marginTop: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+  },
+  retryText: {
+    color: Colors.white,
+    fontWeight: '700' as const,
+    fontSize: 14,
   },
   heroImage: {
     width: '100%',

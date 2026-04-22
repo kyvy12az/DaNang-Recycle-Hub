@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,47 +6,108 @@ import {
   FlatList,
   TouchableOpacity,
   Animated,
+  RefreshControl,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MapPin, Clock, Scale, Filter, ShoppingBag, TrendingUp, Package } from 'lucide-react-native';
+import axios from 'axios';
 import Colors from '@/constants/colors';
-import { mockListings, danangDistricts } from '@/mocks/data';
+import { danangDistricts } from '@/mocks/data';
 import { WasteListing } from '@/types';
 import EcoLoader from '@/components/EcoLoader';
+
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
+
+// Map listing từ BE sang WasteListing dùng trong FE
+const mapListingFromAPI = (item: any): WasteListing => ({
+  id: item._id || item.id,
+  sellerId: item.sellerId,
+  sellerName: item.sellerName,
+  sellerAvatar: item.sellerAvatar || 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+  items: (item.items || []).map((wi: any, index: number) => ({
+    id: wi._id || `item-${index}`,
+    wasteType: {
+      id: wi.wasteTypeId,
+      name: wi.wasteTypeName,
+      category: wi.wasteTypeCategory || 'other',
+      pricePerKg: wi.pricePerKg,
+      icon: 'package',
+      color: wi.wasteTypeColor || '#4CAF50',
+    },
+    quantity: wi.quantity,
+    estimatedPrice: wi.estimatedPrice,
+  })),
+  totalPrice: item.totalPrice,
+  totalWeight: item.totalWeight,
+  address: item.address,
+  district: item.district || '',
+  note: item.note || '',
+  pickupTime: item.pickupTime,
+  status: item.status,
+  createdAt: item.createdAt
+    ? new Date(item.createdAt).toLocaleDateString('vi-VN')
+    : '',
+  imageUrl: item.imageUrl || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=400',
+  greenPoints: item.greenPoints || 0,
+});
 
 export default function BuyerListingsScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [listings, setListings] = useState<WasteListing[]>([]);
   const [selectedDistrict, setSelectedDistrict] = useState<string>('Tất cả');
+  const [error, setError] = useState<string | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setListings(mockListings);
-      setIsLoading(false);
+  const fetchListings = useCallback(async (showLoader = true) => {
+    try {
+      if (showLoader) setIsLoading(true);
+      setError(null);
+
+      const response = await axios.get(`${API_BASE_URL}/api/listings`, {
+        headers: { 'bypass-tunnel-reminder': 'true' },
+        params: { status: 'available', limit: 50 },
+      });
+
+      const mapped = (response.data.listings || []).map(mapListingFromAPI);
+      setListings(mapped);
+
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 400,
         useNativeDriver: true,
       }).start();
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    } catch (err: any) {
+      console.error('Lỗi fetch listings:', err.message);
+      setError('Không thể tải danh sách. Kéo xuống để thử lại.');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [fadeAnim]);
+
+  useEffect(() => {
+    fetchListings();
+  }, [fetchListings]);
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    fadeAnim.setValue(0);
+    fetchListings(false);
+  }, [fetchListings, fadeAnim]);
 
   const filteredListings = selectedDistrict === 'Tất cả'
     ? listings
     : listings.filter(l => l.district === selectedDistrict);
 
-  const formatPrice = (price: number) => {
-    return price.toLocaleString('vi-VN') + 'đ';
-  };
+  const formatPrice = (price: number) => price.toLocaleString('vi-VN') + 'đ';
 
   const districts = ['Tất cả', ...danangDistricts];
 
-  const renderItem = ({ item, index }: { item: WasteListing; index: number }) => (
+  const renderItem = ({ item }: { item: WasteListing }) => (
     <TouchableOpacity
       style={styles.listingCard}
       onPress={() => router.push({ pathname: '/buyer-detail' as any, params: { id: item.id } })}
@@ -75,7 +136,7 @@ export default function BuyerListingsScreen() {
           <Text style={styles.weightBadgeText}>{item.totalWeight} kg</Text>
         </View>
       </View>
-      
+
       <View style={styles.listingContent}>
         <View style={styles.listingHeader}>
           <View style={styles.avatarContainer}>
@@ -118,13 +179,15 @@ export default function BuyerListingsScreen() {
             <View style={styles.metaIconContainer}>
               <MapPin size={14} color={Colors.primary} />
             </View>
-            <Text style={styles.metaText}>{item.district}</Text>
+            <Text style={styles.metaText}>{item.district || item.address}</Text>
           </View>
           <View style={styles.metaItem}>
             <View style={styles.metaIconContainer}>
               <Clock size={14} color={Colors.accent} />
             </View>
-            <Text style={styles.metaText} numberOfLines={1}>{item.pickupTime.split('(')[0]}</Text>
+            <Text style={styles.metaText} numberOfLines={1}>
+              {item.pickupTime.split('(')[0]}
+            </Text>
           </View>
         </View>
       </View>
@@ -133,13 +196,13 @@ export default function BuyerListingsScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           title: 'Danh sách rác bán',
           headerStyle: { backgroundColor: Colors.primary },
           headerTintColor: Colors.white,
           headerTitleStyle: { fontWeight: '700' },
-        }} 
+        }}
       />
 
       <LinearGradient
@@ -158,7 +221,9 @@ export default function BuyerListingsScreen() {
             <View style={styles.statIconContainer}>
               <Package size={20} color={Colors.white} />
             </View>
-            <Text style={styles.statNumber}>{filteredListings.reduce((sum, l) => sum + l.totalWeight, 0)}</Text>
+            <Text style={styles.statNumber}>
+              {filteredListings.reduce((sum, l) => sum + l.totalWeight, 0)}
+            </Text>
             <Text style={styles.statLabel}>Tổng kg</Text>
           </View>
           <View style={styles.statCard}>
@@ -186,26 +251,16 @@ export default function BuyerListingsScreen() {
           contentContainerStyle={styles.filterList}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={[
-                styles.filterChip,
-                item === selectedDistrict && styles.filterChipActive,
-              ]}
+              style={[styles.filterChip, item === selectedDistrict && styles.filterChipActive]}
               onPress={() => setSelectedDistrict(item)}
               activeOpacity={0.8}
             >
               {item === selectedDistrict ? (
-                <LinearGradient
-                  colors={['#66BB6A', '#4CAF50']}
-                  style={styles.filterChipGradient}
-                >
-                  <Text style={styles.filterChipTextActive}>
-                    {item}
-                  </Text>
+                <LinearGradient colors={['#66BB6A', '#4CAF50']} style={styles.filterChipGradient}>
+                  <Text style={styles.filterChipTextActive}>{item}</Text>
                 </LinearGradient>
               ) : (
-                <Text style={styles.filterChipText}>
-                  {item}
-                </Text>
+                <Text style={styles.filterChipText}>{item}</Text>
               )}
             </TouchableOpacity>
           )}
@@ -214,6 +269,11 @@ export default function BuyerListingsScreen() {
 
       {isLoading ? (
         <EcoLoader message="Đang tải danh sách..." size="large" />
+      ) : error ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>Có lỗi xảy ra</Text>
+          <Text style={styles.emptyText}>{error}</Text>
+        </View>
       ) : (
         <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
           <FlatList
@@ -222,6 +282,14 @@ export default function BuyerListingsScreen() {
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                colors={[Colors.primary]}
+                tintColor={Colors.primary}
+              />
+            }
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <View style={styles.emptyIconContainer}>
@@ -340,7 +408,6 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: Colors.white,
   },
-
   listContent: {
     padding: 16,
     gap: 16,

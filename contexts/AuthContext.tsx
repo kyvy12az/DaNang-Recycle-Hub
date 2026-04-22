@@ -22,7 +22,7 @@ interface AuthUser {
 
 const STORAGE_KEY = 'auth_user';
 const TOKEN_KEY = 'user_token_secure';
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
 
 type GoogleProfile = {
   name: string;

@@ -193,17 +193,17 @@ export default function HomeScreen() {
         <View style={styles.impactRow}>
           <View style={[styles.impactCard, { backgroundColor: '#E8F5E9' }]}>
             <Leaf size={24} color={Colors.primary} />
-            <Text style={styles.impactNumber}>87 kg</Text>
+            <Text style={styles.impactNumber}>0 kg</Text>
             <Text style={styles.impactLabel}>Đã tái chế</Text>
           </View>
           <View style={[styles.impactCard, { backgroundColor: '#FFF8E1' }]}>
             <Award size={24} color={Colors.sandDark} />
-            <Text style={styles.impactNumber}>1,250</Text>
+            <Text style={styles.impactNumber}>0</Text>
             <Text style={styles.impactLabel}>Điểm xanh</Text>
           </View>
           <View style={[styles.impactCard, { backgroundColor: '#E0F7FA' }]}>
             <TrendingUp size={24} color={Colors.accent} />
-            <Text style={styles.impactNumber}>15</Text>
+            <Text style={styles.impactNumber}>0</Text>
             <Text style={styles.impactLabel}>Giao dịch</Text>
           </View>
         </View>

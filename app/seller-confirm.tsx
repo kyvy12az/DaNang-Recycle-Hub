@@ -6,18 +6,24 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MapPin, Clock, FileText, Truck, Check } from 'lucide-react-native';
+import axios from 'axios';
 import Colors from '@/constants/colors';
 import { WasteItem } from '@/types';
 import EcoLoader from '@/components/EcoLoader';
+import { useAuth } from '@/contexts/AuthContext';
 
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
 
 export default function SellerConfirmScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { user, getAuthToken } = useAuth();
+
   const [note, setNote] = useState<string>((params.note as string) || '');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -26,18 +32,59 @@ export default function SellerConfirmScreen() {
   const totalWeight = Number(params.totalWeight) || 0;
   const totalPoints = Number(params.totalPoints) || 0;
   const pickupTime = (params.pickupTime as string) || '';
-  const address = (params.address as string) || '25 Bạch Đằng, Hải Châu, Đà Nẵng';
+  const imageUri = (params.imageUri as string) || '';
+
+  // Lấy địa chỉ từ user đang đăng nhập
+  const address = user?.address || 'Chưa cập nhật địa chỉ';
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('vi-VN') + 'đ';
   };
 
-  const handleSubmit = () => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+  const handleSubmit = async () => {
+    if (!user?.address) {
+      Alert.alert(
+        'Chưa có địa chỉ',
+        'Vui lòng cập nhật địa chỉ trong hồ sơ trước khi đăng bài.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const token = await getAuthToken();
+
+      await axios.post(
+        `${API_BASE_URL}/api/listings`,
+        {
+          items,
+          totalPrice,
+          totalWeight,
+          greenPoints: totalPoints,
+          note,
+          pickupTime,
+          imageUrl: imageUri || null,
+        },
+        {
+          headers: {
+            'bypass-tunnel-reminder': 'true',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       router.push('/seller-success' as any);
-    }, 2000);
+    } catch (error: any) {
+      console.error('Lỗi đăng bài:', error.response?.data || error.message);
+      Alert.alert(
+        'Lỗi',
+        error.response?.data?.message || 'Không thể đăng bài. Vui lòng thử lại.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -139,7 +186,7 @@ export default function SellerConfirmScreen() {
             end={{ x: 1, y: 0 }}
           >
             {isSubmitting ? (
-              <EcoLoader message="Đang xử lý..." size="small" variant="inline" />
+              <EcoLoader message="Đang đăng bài..." size="small" variant="inline" />
             ) : (
               <>
                 <Check size={22} color={Colors.white} />
