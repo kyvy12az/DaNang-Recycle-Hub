@@ -7,6 +7,9 @@ export interface AIRecognitionResult {
   wasteType: WasteType;
   confidence: number;
   estimatedWeight: number;
+  group?: 'recyclable' | 'organic' | 'hazardous' | 'non-recyclable';
+  status?: 'success' | 'low-confidence' | 'fallback' | 'needs-review';
+  guidance?: string;
 }
 
 interface SellerState {
@@ -87,6 +90,9 @@ export const useSellerStore = create<SellerState>()(
     {
       name: 'seller-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        confidenceThreshold: state.confidenceThreshold,
+      }),
     }
   )
 );

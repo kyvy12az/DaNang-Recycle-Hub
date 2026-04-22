@@ -42,7 +42,11 @@ export default function LoginScreen() {
 
   const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() || '';
   const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID?.trim() || '';
+  const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() || '';
+  const expoClientId = process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID?.trim() || '';
+  const iosClientIdFallback = iosClientId || webClientId || expoClientId || androidClientId;
   const androidClientPrefix = isValidGoogleClientId(androidClientId)
     ? androidClientId.replace('.apps.googleusercontent.com', '')
     : '';
@@ -51,8 +55,11 @@ export default function LoginScreen() {
     : undefined;
 
   const googleAuthConfig = {
-    androidClientId: androidClientId || undefined,
-    redirectUri: androidRedirectUri,
+    iosClientId: Platform.OS === 'ios' ? iosClientIdFallback || undefined : undefined,
+    androidClientId: Platform.OS === 'android' ? androidClientId || undefined : undefined,
+    webClientId: Platform.OS === 'web' ? webClientId || undefined : undefined,
+    clientId: expoClientId || undefined,
+    redirectUri: Platform.OS === 'android' ? androidRedirectUri : undefined,
     scopes: ['openid', 'profile', 'email'],
   };
 
@@ -182,20 +189,27 @@ export default function LoginScreen() {
       if (isExpoGo) {
         Alert.alert(
           'Yêu cầu Native Build',
-          'Google login yêu cầu Development Build. Hãy chạy: npx expo run:android'
+          `Google login yêu cầu Development Build. Hãy chạy: npx expo run:${Platform.OS === 'ios' ? 'ios' : 'android'}`
         );
         return;
       }
 
-      if (!androidClientId || !isValidGoogleClientId(androidClientId)) {
+      const platformClientId =
+        Platform.OS === 'ios'
+          ? iosClientIdFallback
+          : Platform.OS === 'android'
+            ? androidClientId
+            : webClientId;
+
+      if (!isValidGoogleClientId(platformClientId)) {
         Alert.alert(
           'Lỗi cấu hình',
-          `Thiếu hoặc sai Android Google Client ID. Định dạng phải là: xxx.apps.googleusercontent.com`
+          'Thiếu hoặc sai Google Client ID cho nền tảng hiện tại. Định dạng phải là: xxx.apps.googleusercontent.com'
         );
         return;
       }
 
-      if (!androidRedirectUri) {
+      if (Platform.OS === 'android' && !androidRedirectUri) {
         Alert.alert('Lỗi cấu hình', 'Không tạo được redirect URI cho Android Google OAuth.');
         return;
       }
@@ -413,8 +427,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#2196F3',
   },
   logoCenter: {
-    width: 58,
-    height: 58,
+    width: 68,
+    height: 68,
     borderRadius: 29,
     backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
@@ -426,8 +440,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   logoImage: {
-    width: 80,
-    height: 80,
+    width: 70,
+    height: 70,
   },
   appName: {
     fontSize: 22,

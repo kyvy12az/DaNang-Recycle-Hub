@@ -1,6 +1,16 @@
 export type UserRole = 'seller' | 'buyer' | null;
 
-export type WasteCategory = 'plastic' | 'paper' | 'metal' | 'glass' | 'electronics' | 'other';
+export type WasteCategory =
+  | 'plastic'
+  | 'paper'
+  | 'metal'
+  | 'glass'
+  | 'electronics'
+  | 'organic'
+  | 'hazardous'
+  | 'textile'
+  | 'residual'
+  | 'other';
 
 export interface WasteType {
   id: string;

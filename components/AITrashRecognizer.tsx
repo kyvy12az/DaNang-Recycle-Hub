@@ -13,6 +13,7 @@ import Colors from '@/constants/colors';
 import {
   loadTrashModel,
   predictTrash,
+  getSubjectSegmentationPreview,
   isConfidenceAcceptable,
   TrashPrediction,
 } from '@/utils/trashModel';
@@ -21,7 +22,11 @@ import { WasteType } from '@/types';
 
 interface AITrashRecognizerProps {
   imageUri: string | null;
-  onRecognitionComplete: (predictions: TrashPrediction[], wasteItems: { wasteType: WasteType; quantity: number; confidence: number }[]) => void;
+  onRecognitionComplete: (
+    predictions: TrashPrediction[],
+    wasteItems: { wasteType: WasteType; quantity: number; confidence: number }[],
+    analysis?: { group?: string; guidance?: string; status?: string; confidence?: number }
+  ) => void;
   onRetry: () => void;
 }
 
@@ -34,6 +39,8 @@ export default function AITrashRecognizer({
   const [predictions, setPredictions] = useState<TrashPrediction[]>([]);
   const [error, setError] = useState<string>('');
   const [modelLoaded, setModelLoaded] = useState(false);
+  const [segmentationPreviewUri, setSegmentationPreviewUri] = useState<string | null>(null);
+  const [segmentationUsed, setSegmentationUsed] = useState(false);
 
   const scanProgress = useState(new Animated.Value(0))[0];
   const resultFade = useState(new Animated.Value(0))[0];
@@ -78,13 +85,18 @@ export default function AITrashRecognizer({
     }).start();
 
     try {
+      const segmentationPreview = await getSubjectSegmentationPreview(imageUri);
+      setSegmentationPreviewUri(segmentationPreview.uri);
+      setSegmentationUsed(segmentationPreview.used);
+
       // Chạy AI prediction
       const results = await predictTrash(imageUri);
       setPredictions(results);
+      const currentTopPrediction = results[0];
 
       // Chuyển đổi prediction thành WasteItems
       const wasteItems = results
-        .filter(p => isConfidenceAcceptable(p.confidence, 0.5)) // Lọc confidence >= 50%
+        .filter((p) => p.isSellable && isConfidenceAcceptable(p.confidence, 0.5))
         .map((p) => {
           const matchedType = mapPredictionToWasteType(p);
 
@@ -105,14 +117,49 @@ export default function AITrashRecognizer({
       }).start();
 
       // Gọi callback với kết quả
-      onRecognitionComplete(results, wasteItems);
+      onRecognitionComplete(results, wasteItems, {
+        group: currentTopPrediction?.group,
+        guidance: currentTopPrediction?.guidance,
+        status: currentTopPrediction?.status,
+        confidence: currentTopPrediction?.confidence,
+      });
 
     } catch (err) {
       console.error('Recognition error:', err);
-      setError('Không thể nhận diện rác. Vui lòng thử lại.');
+      setError(err instanceof Error && err.message ? err.message : 'Không thể nhận diện rác. Vui lòng thử lại.');
       setStep('error');
     }
   }, [imageUri, onRecognitionComplete, scanProgress, resultFade]);
+
+  const getStatusText = (status?: TrashPrediction['status']) => {
+    switch (status) {
+      case 'success':
+        return 'Đã phân loại tốt';
+      case 'low-confidence':
+        return 'Độ tin cậy trung bình';
+      case 'fallback':
+        return 'Đã dùng AI dự phòng';
+      case 'needs-review':
+        return 'Cần kiểm tra lại';
+      default:
+        return 'Đang chờ phân loại';
+    }
+  };
+
+  const getGroupText = (group?: TrashPrediction['group']) => {
+    switch (group) {
+      case 'recyclable':
+        return 'Tái chế';
+      case 'organic':
+        return 'Hữu cơ';
+      case 'hazardous':
+        return 'Nguy hại';
+      case 'non-recyclable':
+        return 'Không tái chế';
+      default:
+        return 'Chưa xác định';
+    }
+  };
 
   // Kiểm tra confidence đủ cao không
   const topPrediction = predictions[0];
@@ -128,17 +175,31 @@ export default function AITrashRecognizer({
     const className = prediction.className.toLowerCase();
     const category = prediction.category.toLowerCase();
 
+    const directTypeByClass: Record<string, string> = {
+      shoes: 'Giày dép cũ',
+      battery: 'Pin đã qua sử dụng',
+      biological: 'Rác hữu cơ',
+    };
+
+    const exactTypeName = directTypeByClass[className];
+    if (exactTypeName) {
+      const exactMatch = wasteTypes.find((wt) => wt.name === exactTypeName);
+      if (exactMatch) {
+        return exactMatch;
+      }
+    }
+
     const mappedCategoryByClass: Record<string, string> = {
-      battery: 'electronics',
-      biological: 'paper',
+      battery: 'hazardous',
+      biological: 'organic',
       cardboard: 'paper',
       glass: 'glass',
       metal: 'metal',
       paper: 'paper',
       plastic: 'plastic',
-      trash: 'paper',
-      clothes: 'paper',
-      shoes: 'paper',
+      trash: 'residual',
+      clothes: 'textile',
+      shoes: 'textile',
     };
 
     const mappedCategory =
@@ -166,6 +227,9 @@ export default function AITrashRecognizer({
 
         {step === 'scanning' && (
           <View style={styles.scanOverlay}>
+            {segmentationUsed && segmentationPreviewUri && (
+              <Image source={{ uri: segmentationPreviewUri }} style={styles.segmentPreview} contentFit="contain" />
+            )}
             <Scan size={64} color={Colors.primaryLight} />
             <Animated.View style={[styles.scanLine, { width: scanWidth }]} />
           </View>
@@ -227,6 +291,22 @@ export default function AITrashRecognizer({
             </View>
           )}
 
+          {topPrediction?.guidance && (
+            <View style={styles.warningBox}>
+              <Brain size={18} color={Colors.primary} />
+              <Text style={styles.warningText}>{topPrediction.guidance}</Text>
+            </View>
+          )}
+
+          {topPrediction && (
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLine}>Tình trạng phân loại: {getStatusText(topPrediction.status)}</Text>
+              <Text style={styles.summaryLine}>Loại rác: {topPrediction.classNameVi} ({topPrediction.className})</Text>
+              <Text style={styles.summaryLine}>Nhóm phân loại: {getGroupText(topPrediction.group)}</Text>
+              <Text style={styles.summaryLine}>Hướng dẫn xử lý: {topPrediction.guidance}</Text>
+            </View>
+          )}
+
           {predictions.slice(0, 3).map((pred, _index) => (
             <View key={_index} style={styles.predictionItem}>
               <View style={[styles.predictionRank, _index === 0 && styles.predictionRankFirst]}>
@@ -235,6 +315,7 @@ export default function AITrashRecognizer({
               <View style={styles.predictionInfo}>
                 <Text style={styles.predictionName}>{pred.classNameVi}</Text>
                 <Text style={styles.predictionCategory}>{pred.category}</Text>
+                <Text style={styles.predictionCategory}>Nhóm: {pred.group}</Text>
               </View>
               <View style={styles.predictionStats}>
                 <Text style={[styles.confidenceText, { color: pred.confidence >= 0.7 ? Colors.success : pred.confidence >= 0.5 ? Colors.warning : Colors.error }]}>
@@ -264,7 +345,7 @@ export default function AITrashRecognizer({
               onPress={() => {
                 // Chuyển sang form xác nhận
                 const wasteItems = predictions
-                  .filter(p => isConfidenceAcceptable(p.confidence, 0.5))
+                  .filter(p => p.isSellable && isConfidenceAcceptable(p.confidence, 0.5))
                   .map((p) => {
                     const matchedType = mapPredictionToWasteType(p);
                     return {
@@ -273,7 +354,12 @@ export default function AITrashRecognizer({
                       confidence: p.confidence,
                     };
                   });
-                onRecognitionComplete(predictions, wasteItems);
+                onRecognitionComplete(predictions, wasteItems, {
+                  group: topPrediction?.group,
+                  guidance: topPrediction?.guidance,
+                  status: topPrediction?.status,
+                  confidence: topPrediction?.confidence,
+                });
               }}
               activeOpacity={0.8}
             >
@@ -324,6 +410,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(46, 125, 50, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  segmentPreview: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.9,
+    transform: [{ translateY: -24 }],
   },
   scanLine: {
     position: 'absolute',
@@ -420,6 +511,19 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700' as const,
     color: Colors.text,
+  },
+  summaryCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
+    gap: 4,
+  },
+  summaryLine: {
+    fontSize: 13,
+    color: Colors.text,
+    lineHeight: 19,
   },
   warningBox: {
     flexDirection: 'row',

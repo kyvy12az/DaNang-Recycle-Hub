@@ -4,7 +4,7 @@ const { withRorkMetro } = require("@rork-ai/toolkit-sdk/metro");
 const config = getDefaultConfig(__dirname);
 
 config.resolver.assetExts = Array.from(
-  new Set([...(config.resolver.assetExts || []), 'bin'])
+  new Set([...(config.resolver.assetExts || []), 'bin', 'tflite', 'txt'])
 );
 
 // Add resolver to block Node.js-only TensorFlow backends

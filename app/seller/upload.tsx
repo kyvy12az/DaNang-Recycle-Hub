@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Camera, ChevronDown, Plus, Minus, Image as ImageIcon, X } from 'lucide-react-native';
 import { Image } from 'expo-image';
@@ -25,8 +26,10 @@ export default function SellerUploadScreen() {
   const {
     recognizedItems,
     capturedImageUri,
+    aiResults,
     setCapturedImage,
     setRecognizedItems,
+    setAIResults,
     updateItemQuantity,
     removeItem,
     clearAll,
@@ -48,9 +51,22 @@ export default function SellerUploadScreen() {
     }
   }, [capturedImageUri]);
 
+  // Always start with fresh state when reopening the selling screen.
+  useFocusEffect(
+    useCallback(() => {
+      clearAll();
+      setStep('capture');
+      resultFade.setValue(0);
+      return () => {};
+    }, [clearAll, resultFade])
+  );
+
   // Chụp ảnh từ camera
   const handleTakePhoto = useCallback(async () => {
     try {
+      clearAll();
+      setStep('capture');
+
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền camera để chụp ảnh rác');
@@ -76,6 +92,9 @@ export default function SellerUploadScreen() {
   // Chọn ảnh từ thư viện
   const handlePickImage = useCallback(async () => {
     try {
+      clearAll();
+      setStep('capture');
+
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh');
@@ -96,10 +115,10 @@ export default function SellerUploadScreen() {
       console.error('Image picker error:', error);
       Alert.alert('Lỗi', 'Không thể chọn ảnh. Vui lòng thử lại.');
     }
-  }, [setCapturedImage]);
+  }, [clearAll, setCapturedImage]);
 
   // Xử lý kết quả nhận diện AI
-  const handleRecognitionComplete = useCallback((predictions: TrashPrediction[], wasteItems: { wasteType: WasteType; quantity: number; confidence: number }[]) => {
+  const handleRecognitionComplete = useCallback((predictions: TrashPrediction[], wasteItems: { wasteType: WasteType; quantity: number; confidence: number }[], analysis?: { group?: string; guidance?: string; status?: string; confidence?: number }) => {
     // Chuyển đổi thành WasteItem
     const items: WasteItem[] = wasteItems.map((item, index) => ({
       id: `ai-${index}-${Date.now()}`,
@@ -107,6 +126,21 @@ export default function SellerUploadScreen() {
       quantity: item.quantity,
       estimatedPrice: item.wasteType.pricePerKg * item.quantity,
     }));
+
+    setAIResults(
+      predictions.map((prediction) => ({
+        wasteType: mapPredictionToWasteType(prediction),
+        confidence: prediction.confidence,
+        estimatedWeight: prediction.estimatedWeight || 1,
+        group: prediction.group,
+        status: prediction.status,
+        guidance: prediction.guidance,
+      }))
+    );
+
+    if (analysis?.guidance) {
+      console.log(`AI guidance: ${analysis.guidance}`);
+    }
 
     setRecognizedItems(items);
     setStep('result');
@@ -116,7 +150,43 @@ export default function SellerUploadScreen() {
       duration: 500,
       useNativeDriver: true,
     }).start();
-  }, [setRecognizedItems, resultFade]);
+  }, [setRecognizedItems, setAIResults, resultFade]);
+
+  const mapPredictionToWasteType = useCallback((prediction: TrashPrediction): WasteType => {
+    const className = prediction.className.toLowerCase();
+    const category = prediction.category.toLowerCase();
+
+    const directTypeByClass: Record<string, string> = {
+      shoes: 'Giày dép cũ',
+      battery: 'Pin đã qua sử dụng',
+      biological: 'Rác hữu cơ',
+    };
+
+    const exactTypeName = directTypeByClass[className];
+    if (exactTypeName) {
+      const exactMatch = wasteTypes.find((wt) => wt.name === exactTypeName);
+      if (exactMatch) {
+        return exactMatch;
+      }
+    }
+
+    const mappedCategoryByClass: Record<string, string> = {
+      battery: 'hazardous',
+      biological: 'organic',
+      cardboard: 'paper',
+      glass: 'glass',
+      metal: 'metal',
+      paper: 'paper',
+      plastic: 'plastic',
+      trash: 'residual',
+      clothes: 'textile',
+      shoes: 'textile',
+    };
+
+    const mappedCategory = mappedCategoryByClass[className] || mappedCategoryByClass[category] || category;
+    const matched = wasteTypes.find((wt) => wt.category === mappedCategory);
+    return matched || wasteTypes[0];
+  }, []);
 
   // Chụp lại ảnh
   const handleRetryCapture = useCallback(() => {
@@ -183,6 +253,114 @@ export default function SellerUploadScreen() {
   const formatPrice = (price: number) => {
     return price.toLocaleString('vi-VN') + 'đ';
   };
+
+  const mapCategoryToGroup = (
+    category: string
+  ): 'recyclable' | 'organic' | 'hazardous' | 'non-recyclable' => {
+    switch (category) {
+      case 'organic':
+        return 'organic';
+      case 'hazardous':
+        return 'hazardous';
+      case 'plastic':
+      case 'paper':
+      case 'metal':
+      case 'glass':
+      case 'textile':
+      case 'electronics':
+        return 'recyclable';
+      default:
+        return 'non-recyclable';
+    }
+  };
+
+  const getGuidanceByGroup = (group: 'recyclable' | 'organic' | 'hazardous' | 'non-recyclable') => {
+    switch (group) {
+      case 'recyclable':
+        return 'Rửa sạch, để khô và tách riêng trước khi bàn giao thu gom.';
+      case 'organic':
+        return 'Nên tách riêng để ủ compost hoặc bỏ đúng thùng rác hữu cơ.';
+      case 'hazardous':
+        return 'Tách riêng tuyệt đối, không trộn với rác thường, đưa đến điểm thu gom chuyên dụng.';
+      case 'non-recyclable':
+        return 'Không phù hợp thu mua tái chế, xử lý theo luồng rác còn lại.';
+      default:
+        return 'Phân loại riêng trước khi xử lý.';
+    }
+  };
+
+  const getStatusText = (status?: 'success' | 'low-confidence' | 'fallback' | 'needs-review') => {
+    switch (status) {
+      case 'success':
+        return 'Đã phân loại tốt';
+      case 'low-confidence':
+        return 'Độ tin cậy trung bình';
+      case 'fallback':
+        return 'Đã dùng AI dự phòng';
+      case 'needs-review':
+        return 'Cần kiểm tra lại';
+      default:
+        return 'Chưa xác định';
+    }
+  };
+
+  const getGroupText = (group?: 'recyclable' | 'organic' | 'hazardous' | 'non-recyclable') => {
+    switch (group) {
+      case 'recyclable':
+        return 'Tái chế';
+      case 'organic':
+        return 'Hữu cơ';
+      case 'hazardous':
+        return 'Nguy hại';
+      case 'non-recyclable':
+        return 'Không tái chế';
+      default:
+        return 'Chưa xác định';
+    }
+  };
+
+  const getStatusAccent = (status?: 'success' | 'low-confidence' | 'fallback' | 'needs-review') => {
+    switch (status) {
+      case 'success':
+        return Colors.success;
+      case 'low-confidence':
+        return '#F59E0B';
+      case 'fallback':
+        return Colors.primary;
+      case 'needs-review':
+        return '#EF4444';
+      default:
+        return Colors.textSecondary;
+    }
+  };
+
+  const getClassificationByItem = (item: WasteItem, index: number) => {
+    const byCategory = aiResults.find((result) => result.wasteType.category === item.wasteType.category);
+    return byCategory || aiResults[index];
+  };
+
+  const getFallbackClassification = (item: WasteItem) => {
+    const group = mapCategoryToGroup(item.wasteType.category);
+
+    return {
+      wasteType: item.wasteType,
+      confidence: 0.82,
+      estimatedWeight: item.quantity,
+      group,
+      status: 'success' as const,
+      guidance: getGuidanceByGroup(group),
+    };
+  };
+
+  const getVisibleClassification = (item: WasteItem, index: number) => {
+    return getClassificationByItem(item, index) || getFallbackClassification(item);
+  };
+
+  const summaryClassification =
+    aiResults[0] ||
+    (recognizedItems.length > 0 ? getVisibleClassification(recognizedItems[0], 0) : null);
+
+  const showNoSellableNotice = aiResults.length > 0 && recognizedItems.length === 0;
 
   return (
     <View style={styles.container}>
@@ -269,40 +447,120 @@ export default function SellerUploadScreen() {
               <Text style={styles.aiResultTitle}>Kết quả phân tích AI</Text>
             </View>
 
-            {/* Danh sách rác đã nhận diện */}
-            {recognizedItems.map((item) => (
-              <View key={item.id} style={styles.itemCard}>
-                <View style={[styles.itemColorDot, { backgroundColor: item.wasteType.color }]} />
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>{item.wasteType.name}</Text>
-                  <Text style={styles.itemPrice}>
-                    {formatPrice(item.wasteType.pricePerKg)}/kg
-                  </Text>
-                </View>
-                <View style={styles.quantityControl}>
-                  <TouchableOpacity
-                    style={styles.qtyButton}
-                    onPress={() => handleUpdateQuantity(item.id, -0.5)}
-                  >
-                    <Minus size={16} color={Colors.primary} />
-                  </TouchableOpacity>
-                  <Text style={styles.qtyText}>{item.quantity} kg</Text>
-                  <TouchableOpacity
-                    style={styles.qtyButton}
-                    onPress={() => handleUpdateQuantity(item.id, 0.5)}
-                  >
-                    <Plus size={16} color={Colors.primary} />
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.itemTotal}>{formatPrice(item.estimatedPrice)}</Text>
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => handleRemoveItem(item.id)}
+            {summaryClassification && (
+              <View style={styles.summaryClassificationCard}>
+                <LinearGradient
+                  colors={['#F1F8E9', '#E8F5E9']}
+                  style={styles.summaryClassificationGradient}
                 >
-                  <X size={16} color={Colors.error} />
-                </TouchableOpacity>
+                  <View style={styles.summaryClassificationTopRow}>
+                    <View style={[styles.summaryClassificationIcon, { backgroundColor: getStatusAccent(summaryClassification.status) }]}>
+                      <Text style={styles.summaryClassificationIconText}>✓</Text>
+                    </View>
+                    <View style={styles.summaryClassificationInfo}>
+                      <Text style={styles.summaryClassificationLabel}>Tình trạng phân loại</Text>
+                      <Text style={[styles.summaryClassificationValue, { color: getStatusAccent(summaryClassification.status) }]}>
+                        {getStatusText(summaryClassification.status)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.summaryClassificationDetails}>
+                    <View style={styles.summaryClassificationRow}>
+                      <Text style={styles.summaryClassificationName}>Loại rác</Text>
+                      <Text style={styles.summaryClassificationText}>
+                        {summaryClassification.wasteType.name || summaryClassification.wasteType.category}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryClassificationRow}>
+                      <Text style={styles.summaryClassificationName}>Nhóm phân loại</Text>
+                      <Text style={styles.summaryClassificationText}>
+                        {getGroupText(summaryClassification.group)}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryClassificationGuidanceBlock}>
+                      <Text style={styles.summaryClassificationName}>Hướng dẫn xử lý</Text>
+                      <Text style={styles.summaryClassificationGuidance}>
+                        {summaryClassification.guidance || getGuidanceByGroup(summaryClassification.group)}
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
               </View>
-            ))}
+            )}
+
+            {showNoSellableNotice && (
+              <View style={styles.noticeCard}>
+                <Text style={styles.noticeText}>
+                  AI đã nhận diện loại rác, nhưng mục này không được thêm tự động vào danh sách thu mua.
+                </Text>
+              </View>
+            )}
+
+            {/* Danh sách rác đã nhận diện */}
+            {recognizedItems.map((item, index) => {
+              const classification = getVisibleClassification(item, index);
+
+              return (
+              <View key={item.id} style={styles.itemCard}>
+                <View style={styles.itemHeaderRow}>
+                  <View style={[styles.itemColorDot, { backgroundColor: item.wasteType.color }]} />
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName}>{item.wasteType.name}</Text>
+                    <Text style={styles.itemPrice}>
+                      {formatPrice(item.wasteType.pricePerKg)}/kg
+                    </Text>
+                  </View>
+                  <View style={styles.quantityControl}>
+                    <TouchableOpacity
+                      style={styles.qtyButton}
+                      onPress={() => handleUpdateQuantity(item.id, -0.5)}
+                    >
+                      <Minus size={16} color={Colors.primary} />
+                    </TouchableOpacity>
+                    <Text style={styles.qtyText}>{item.quantity} kg</Text>
+                    <TouchableOpacity
+                      style={styles.qtyButton}
+                      onPress={() => handleUpdateQuantity(item.id, 0.5)}
+                    >
+                      <Plus size={16} color={Colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.itemTotal}>{formatPrice(item.estimatedPrice)}</Text>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => handleRemoveItem(item.id)}
+                  >
+                    <X size={16} color={Colors.error} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.classificationMeta}>
+                  <View style={[styles.statusBadge, { backgroundColor: `${getStatusAccent(classification.status)}14`, borderColor: `${getStatusAccent(classification.status)}33` }]}>
+                    <Text style={[styles.statusBadgeText, { color: getStatusAccent(classification.status) }]}>
+                      {getStatusText(classification.status)}
+                    </Text>
+                  </View>
+                  <View style={styles.metaGrid}>
+                    <View style={styles.metaPill}>
+                      <Text style={styles.metaLabel}>Loại rác</Text>
+                      <Text style={styles.metaValue}>{classification.wasteType.name || item.wasteType.name}</Text>
+                    </View>
+                    <View style={styles.metaPill}>
+                      <Text style={styles.metaLabel}>Nhóm</Text>
+                      <Text style={styles.metaValue}>{getGroupText(classification.group)}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.guidanceBox}>
+                    <Text style={styles.classificationGuidanceLabel}>Hướng dẫn xử lý</Text>
+                    <Text style={styles.classificationGuidance}>
+                      {classification.guidance || getGuidanceByGroup(mapCategoryToGroup(item.wasteType.category))}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              );
+            })}
 
             {/* Thêm loại rác mới */}
             <View style={styles.addSection}>
@@ -569,18 +827,104 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: Colors.text,
   },
-  itemCard: {
+  summaryClassificationCard: {
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  summaryClassificationGradient: {
+    padding: 16,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.12)',
+  },
+  summaryClassificationTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+  },
+  summaryClassificationIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryClassificationIconText: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '700' as const,
+  },
+  summaryClassificationInfo: {
+    flex: 1,
+  },
+  summaryClassificationLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600' as const,
+  },
+  summaryClassificationValue: {
+    fontSize: 18,
+    fontWeight: '800' as const,
+    marginTop: 2,
+  },
+  summaryClassificationDetails: {
+    gap: 10,
+  },
+  summaryClassificationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  summaryClassificationGuidanceBlock: {
+    gap: 6,
+  },
+  summaryClassificationName: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600' as const,
+  },
+  summaryClassificationText: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: '700' as const,
+  },
+  summaryClassificationGuidance: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.primary,
+    fontWeight: '600' as const,
+  },
+  noticeCard: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  noticeText: {
+    fontSize: 12,
+    color: '#8A6D3B',
+    lineHeight: 18,
+    fontWeight: '600' as const,
+  },
+  itemCard: {
+    gap: 10,
     backgroundColor: Colors.white,
     borderRadius: 14,
     padding: 14,
-    gap: 10,
     elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
+  },
+  itemHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   itemColorDot: {
     width: 10,
@@ -629,6 +973,65 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     padding: 4,
+  },
+  classificationMeta: {
+    marginTop: 8,
+    gap: 10,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+  },
+  metaGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  metaPill: {
+    flex: 1,
+    backgroundColor: '#F7FAF7',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E6F0E6',
+    gap: 4,
+  },
+  metaLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600' as const,
+  },
+  metaValue: {
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: '700' as const,
+  },
+  guidanceBox: {
+    backgroundColor: '#F3FBF4',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#D8EDD9',
+    gap: 4,
+  },
+  classificationGuidanceLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  classificationGuidance: {
+    fontSize: 12,
+    color: Colors.primary,
+    lineHeight: 18,
   },
   addSection: {
     marginTop: 4,

@@ -5,9 +5,10 @@ const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is required");
+  throw new Error("JWT_SECRET là bắt buộc");
 }
 
+// hàm tạo một JWT token cho user đã đăng nhập, chứa thông tin id
 const createToken = (userId) => jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: "7d" });
 
 const normalizeUser = (user, provider = user.provider || "email") => ({
@@ -96,6 +97,8 @@ exports.login = async (req, res) => {
   }
 };
 
+// hàm này sẽ gọi API của Google để xác minh idToken và lấy thông tin hồ sơ người dùng, 
+// bao gồm cả email đã xác minh nếu có
 const verifyGoogleIdToken = async (idToken) => {
   const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
 

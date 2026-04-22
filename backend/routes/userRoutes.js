@@ -3,7 +3,7 @@ const router = express.Router();
 
 const userController = require("../controllers/userController");
 
-// PUT route to update avatar URL
+// route để cập nhật URL avatar của người dùng, yêu cầu xác thực bằng JWT
 router.put(
   "/avatar",
   userController.verifyToken,

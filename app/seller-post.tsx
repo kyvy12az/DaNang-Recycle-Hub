@@ -19,9 +19,11 @@ import { Camera, Scan, Check, ChevronDown, Plus, Minus, ImageIcon, MapPin } from
 import Colors from '@/constants/colors';
 import { wasteTypes, mockAIResults, pickupTimeOptions } from '@/mocks/data';
 import { WasteItem } from '@/types';
+import { useSellerStore } from '@/stores/sellerStore';
 
 export default function SellerPostScreen() {
   const router = useRouter();
+  const { aiResults, setAIResults } = useSellerStore();
   const [step, setStep] = useState<'capture' | 'scanning' | 'result'>('capture');
   const [items, setItems] = useState<WasteItem[]>([]);
   const [note, setNote] = useState<string>('');
@@ -99,7 +101,21 @@ export default function SellerPostScreen() {
         quantity: result.quantity,
         estimatedPrice: result.wasteType.pricePerKg * result.quantity,
       }));
+
+      const generatedAIResults = generatedItems.map((item) => {
+        const group = mapCategoryToGroup(item.wasteType.category);
+        return {
+          wasteType: item.wasteType,
+          confidence: 0.82,
+          estimatedWeight: item.quantity,
+          group,
+          status: 'success' as const,
+          guidance: getGuidanceByGroup(group),
+        };
+      });
+
       setItems(generatedItems);
+      setAIResults(generatedAIResults);
       setStep('result');
 
       Animated.timing(resultFade, {
@@ -148,6 +164,108 @@ export default function SellerPostScreen() {
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('vi-VN') + 'đ';
+  };
+
+  const mapCategoryToGroup = (
+    category: string
+  ): 'recyclable' | 'organic' | 'hazardous' | 'non-recyclable' => {
+    switch (category) {
+      case 'organic':
+        return 'organic';
+      case 'hazardous':
+        return 'hazardous';
+      case 'plastic':
+      case 'paper':
+      case 'metal':
+      case 'glass':
+      case 'textile':
+      case 'electronics':
+        return 'recyclable';
+      default:
+        return 'non-recyclable';
+    }
+  };
+
+  const getGuidanceByGroup = (group: 'recyclable' | 'organic' | 'hazardous' | 'non-recyclable') => {
+    switch (group) {
+      case 'recyclable':
+        return 'Rửa sạch, để khô và tách riêng trước khi bàn giao thu gom.';
+      case 'organic':
+        return 'Nên tách riêng để ủ compost hoặc bỏ đúng thùng rác hữu cơ.';
+      case 'hazardous':
+        return 'Tách riêng tuyệt đối, không trộn với rác thường, đưa đến điểm thu gom chuyên dụng.';
+      case 'non-recyclable':
+        return 'Không phù hợp thu mua tái chế, xử lý theo luồng rác còn lại.';
+      default:
+        return 'Phân loại riêng trước khi xử lý.';
+    }
+  };
+
+  const getStatusText = (status?: 'success' | 'low-confidence' | 'fallback' | 'needs-review') => {
+    switch (status) {
+      case 'success':
+        return 'Đã phân loại tốt';
+      case 'low-confidence':
+        return 'Độ tin cậy trung bình';
+      case 'fallback':
+        return 'Đã dùng AI dự phòng';
+      case 'needs-review':
+        return 'Cần kiểm tra lại';
+      default:
+        return 'Chưa xác định';
+    }
+  };
+
+  const getGroupText = (group?: 'recyclable' | 'organic' | 'hazardous' | 'non-recyclable') => {
+    switch (group) {
+      case 'recyclable':
+        return 'Tái chế';
+      case 'organic':
+        return 'Hữu cơ';
+      case 'hazardous':
+        return 'Nguy hại';
+      case 'non-recyclable':
+        return 'Không tái chế';
+      default:
+        return 'Chưa xác định';
+    }
+  };
+
+  const getStatusAccent = (status?: 'success' | 'low-confidence' | 'fallback' | 'needs-review') => {
+    switch (status) {
+      case 'success':
+        return Colors.success;
+      case 'low-confidence':
+        return '#F59E0B';
+      case 'fallback':
+        return Colors.primary;
+      case 'needs-review':
+        return '#EF4444';
+      default:
+        return Colors.textSecondary;
+    }
+  };
+
+  const getClassificationByItem = (item: WasteItem, index: number) => {
+    const byCategory = aiResults.find((result) => result.wasteType.category === item.wasteType.category);
+    return byCategory || aiResults[index];
+  };
+
+  const getFallbackClassification = (item: WasteItem) => {
+    const group = mapCategoryToGroup(item.wasteType.category);
+
+    return {
+      wasteType: item.wasteType,
+      confidence: 0.82,
+      estimatedWeight: item.quantity,
+      group,
+      status: 'success' as const,
+      guidance: getGuidanceByGroup(group),
+    };
+  };
+
+  const getVisibleClassification = (item: WasteItem, index: number) => {
+    return getClassificationByItem(item, index) || getFallbackClassification(item);
   };
 
   const scanWidth = scanProgress.interpolate({
@@ -253,33 +371,109 @@ export default function SellerPostScreen() {
               <Text style={styles.aiResultTitle}>Kết quả phân tích AI</Text>
             </View>
 
-            {items.map((item, index) => (
-              <View key={item.id} style={styles.itemCard}>
-                <View style={[styles.itemColorDot, { backgroundColor: item.wasteType.color }]} />
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>{item.wasteType.name}</Text>
-                  <Text style={styles.itemPrice}>
-                    {formatPrice(item.wasteType.pricePerKg)}/kg
-                  </Text>
-                </View>
-                <View style={styles.quantityControl}>
-                  <TouchableOpacity
-                    style={styles.qtyButton}
-                    onPress={() => updateQuantity(index, -0.5)}
+            {items.length > 0 && (() => {
+              const summaryClassification = getVisibleClassification(items[0], 0);
+
+              return (
+                <View style={styles.summaryClassificationCard}>
+                  <LinearGradient
+                    colors={['#F1F8E9', '#E8F5E9']}
+                    style={styles.summaryClassificationGradient}
                   >
-                    <Minus size={16} color={Colors.primary} />
-                  </TouchableOpacity>
-                  <Text style={styles.qtyText}>{item.quantity} kg</Text>
-                  <TouchableOpacity
-                    style={styles.qtyButton}
-                    onPress={() => updateQuantity(index, 0.5)}
-                  >
-                    <Plus size={16} color={Colors.primary} />
-                  </TouchableOpacity>
+                    <View style={styles.summaryClassificationTopRow}>
+                      <View style={[styles.summaryClassificationIcon, { backgroundColor: getStatusAccent(summaryClassification.status) }]}>
+                        <Check size={18} color={Colors.white} />
+                      </View>
+                      <View style={styles.summaryClassificationInfo}>
+                        <Text style={styles.summaryClassificationLabel}>Tình trạng phân loại</Text>
+                        <Text style={[styles.summaryClassificationValue, { color: getStatusAccent(summaryClassification.status) }]}>
+                          {getStatusText(summaryClassification.status)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.summaryClassificationDetails}>
+                      <View style={styles.summaryClassificationRow}>
+                        <Text style={styles.summaryClassificationName}>Loại rác</Text>
+                        <Text style={styles.summaryClassificationText}>
+                          {summaryClassification.wasteType.name || summaryClassification.wasteType.category}
+                        </Text>
+                      </View>
+                      <View style={styles.summaryClassificationRow}>
+                        <Text style={styles.summaryClassificationName}>Nhóm phân loại</Text>
+                        <Text style={styles.summaryClassificationText}>
+                          {getGroupText(summaryClassification.group)}
+                        </Text>
+                      </View>
+                      <View style={styles.summaryClassificationGuidanceBlock}>
+                        <Text style={styles.summaryClassificationName}>Hướng dẫn xử lý</Text>
+                        <Text style={styles.summaryClassificationGuidance}>
+                          {summaryClassification.guidance || getGuidanceByGroup(summaryClassification.group)}
+                        </Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
                 </View>
-                <Text style={styles.itemTotal}>{formatPrice(item.estimatedPrice)}</Text>
-              </View>
-            ))}
+              );
+            })()}
+
+            {items.map((item, index) => {
+              const classification = getVisibleClassification(item, index);
+
+              return (
+                <View key={item.id} style={styles.itemCard}>
+                  <View style={styles.itemHeaderRow}>
+                    <View style={[styles.itemColorDot, { backgroundColor: item.wasteType.color }]} />
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemName}>{item.wasteType.name}</Text>
+                      <Text style={styles.itemPrice}>
+                        {formatPrice(item.wasteType.pricePerKg)}/kg
+                      </Text>
+                    </View>
+                    <View style={styles.quantityControl}>
+                      <TouchableOpacity
+                        style={styles.qtyButton}
+                        onPress={() => updateQuantity(index, -0.5)}
+                      >
+                        <Minus size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                      <Text style={styles.qtyText}>{item.quantity} kg</Text>
+                      <TouchableOpacity
+                        style={styles.qtyButton}
+                        onPress={() => updateQuantity(index, 0.5)}
+                      >
+                        <Plus size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.itemTotal}>{formatPrice(item.estimatedPrice)}</Text>
+                  </View>
+
+                  <View style={styles.classificationMeta}>
+                    <View style={[styles.statusBadge, { backgroundColor: `${getStatusAccent(classification.status)}14`, borderColor: `${getStatusAccent(classification.status)}33` }]}>
+                      <Text style={[styles.statusBadgeText, { color: getStatusAccent(classification.status) }]}>
+                        {getStatusText(classification.status)}
+                      </Text>
+                    </View>
+                    <View style={styles.metaGrid}>
+                      <View style={styles.metaPill}>
+                        <Text style={styles.metaLabel}>Loại rác</Text>
+                        <Text style={styles.metaValue}>{classification.wasteType.name || item.wasteType.name}</Text>
+                      </View>
+                      <View style={styles.metaPill}>
+                        <Text style={styles.metaLabel}>Nhóm</Text>
+                        <Text style={styles.metaValue}>{getGroupText(classification.group)}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.guidanceBox}>
+                      <Text style={styles.classificationGuidanceLabel}>Hướng dẫn xử lý</Text>
+                      <Text style={styles.classificationGuidance}>
+                        {classification.guidance || getGuidanceByGroup(mapCategoryToGroup(item.wasteType.category))}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
 
             <View style={styles.timeSection}>
               <Text style={styles.fieldLabel}>Thời gian thu gom</Text>
@@ -517,18 +711,86 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: Colors.text,
   },
-  itemCard: {
+  summaryClassificationCard: {
+    borderRadius: 18,
+    overflow: 'hidden' as const,
+  },
+  summaryClassificationGradient: {
+    padding: 16,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.12)',
+  },
+  summaryClassificationTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+  },
+  summaryClassificationIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryClassificationInfo: {
+    flex: 1,
+  },
+  summaryClassificationLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600' as const,
+  },
+  summaryClassificationValue: {
+    fontSize: 18,
+    fontWeight: '800' as const,
+    marginTop: 2,
+  },
+  summaryClassificationDetails: {
+    gap: 10,
+  },
+  summaryClassificationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  summaryClassificationGuidanceBlock: {
+    gap: 6,
+  },
+  summaryClassificationName: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600' as const,
+  },
+  summaryClassificationText: {
+    flex: 1,
+    textAlign: 'right' as const,
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: '700' as const,
+  },
+  summaryClassificationGuidance: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.primary,
+    fontWeight: '600' as const,
+  },
+  itemCard: {
+    gap: 10,
     backgroundColor: Colors.white,
     borderRadius: 14,
     padding: 14,
-    gap: 10,
     elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
+  },
+  itemHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   itemColorDot: {
     width: 10,
@@ -547,6 +809,65 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  classificationMeta: {
+    marginTop: 8,
+    gap: 10,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+  },
+  metaGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  metaPill: {
+    flex: 1,
+    backgroundColor: '#F7FAF7',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E6F0E6',
+    gap: 4,
+  },
+  metaLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600' as const,
+  },
+  metaValue: {
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: '700' as const,
+  },
+  guidanceBox: {
+    backgroundColor: '#F3FBF4',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#D8EDD9',
+    gap: 4,
+  },
+  classificationGuidanceLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '700' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.4,
+  },
+  classificationGuidance: {
+    fontSize: 12,
+    color: Colors.primary,
+    lineHeight: 18,
   },
   quantityControl: {
     flexDirection: 'row',

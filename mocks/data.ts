@@ -2,6 +2,8 @@ import { WasteType, WasteListing, Transaction, Reward, ChatMessage, EducationTip
 import Colors from '@/constants/colors';
 
 export const wasteTypes: WasteType[] = [
+  { id: '0', name: 'Rác hữu cơ', category: 'organic', pricePerKg: 0, icon: 'leaf', color: '#66BB6A' },
+  { id: '0b', name: 'Pin đã qua sử dụng', category: 'hazardous', pricePerKg: 15000, icon: 'battery', color: '#7E57C2' },
   { id: '1', name: 'Nhựa PET', category: 'plastic', pricePerKg: 10000, icon: 'bottle-water', color: Colors.plastic },
   { id: '2', name: 'Nhựa HDPE', category: 'plastic', pricePerKg: 8000, icon: 'package', color: Colors.plastic },
   { id: '3', name: 'Giấy carton', category: 'paper', pricePerKg: 6000, icon: 'newspaper', color: Colors.paper },
@@ -10,6 +12,8 @@ export const wasteTypes: WasteType[] = [
   { id: '6', name: 'Sắt vụn', category: 'metal', pricePerKg: 7000, icon: 'wrench', color: Colors.metal },
   { id: '7', name: 'Chai thủy tinh', category: 'glass', pricePerKg: 3000, icon: 'wine', color: Colors.glass },
   { id: '8', name: 'Đồ điện tử', category: 'electronics', pricePerKg: 15000, icon: 'smartphone', color: '#7E57C2' },
+  { id: '9', name: 'Quần áo cũ', category: 'textile', pricePerKg: 5000, icon: 'shirt', color: '#8E24AA' },
+  { id: '10', name: 'Giày dép cũ', category: 'textile', pricePerKg: 5000, icon: 'footprints', color: '#5E35B1' },
 ];
 
 export const mockListings: WasteListing[] = [
