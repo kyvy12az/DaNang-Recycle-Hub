@@ -103,6 +103,16 @@ export interface Bank {
   color: string;
 }
 
+export interface VietQRBank {
+  id: number;
+  name: string;
+  code: string; // Tên viết tắt (VCB, MB,...)
+  bin: string;
+  shortName: string;
+  logo: string; // URL logo thực tế
+  transferSupported: number;
+}
+
 export type TransactionType = 'deposit' | 'withdraw' | 'sale' | 'redeem' | 'bonus';
 
 export interface TransactionRecord {
@@ -143,6 +153,19 @@ interface WalletState {
   // Getters
   canWithdraw: (amount: number) => boolean;
   getFormattedBalance: () => string;
+}
+
+fetchBanks: async () => {
+  try {
+    const response = await fetch('https://api.vietqr.io/v2/banks');
+    const data = await response.json();
+    if (data.code === '00') {
+      // Lưu data.data vào state của bạn
+      return data.data;
+    }
+  } catch (error) {
+    console.error('Lỗi khi lấy danh sách ngân hàng:', error);
+  }
 }
 
 export const MOCK_BANKS: Bank[] = [

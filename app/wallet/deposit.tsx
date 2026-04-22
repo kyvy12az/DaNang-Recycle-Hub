@@ -1,27 +1,29 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  FlatList,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import {
-  Landmark,
-  Wallet,
+  ChevronLeft,
   AlertCircle,
   ArrowRight,
+  ShieldCheck,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { useWalletStore, MOCK_BANKS, Bank } from '@/stores/walletStore';
+import { useWalletStore, MOCK_BANKS, Bank, VietQRBank } from '@/stores/walletStore';
 import EcoLoader from '@/components/EcoLoader';
 
 const MIN_DEPOSIT = 10000;
@@ -31,11 +33,31 @@ export default function DepositScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { setSelectedBank, setPendingTransaction, getFormattedBalance } = useWalletStore();
-  
+  const hasFetchedBanksRef = useRef(false);
+
+  // state cho danh sách ngân hàng từ API
+  const [banks, setBanks] = useState<VietQRBank[]>([]);
+  const [isLoadingBanks, setIsLoadingBanks] = useState(true);
+
   const [amount, setAmount] = useState<string>('');
-  const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
+  const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [selectedBankPayload, setSelectedBankPayload] = useState<Bank | null>(null);
+
+  const handleSelectBank = (bank: VietQRBank) => {
+    setSelectedBankId(bank.id);
+
+    // Keep bank selection local for smooth UI; persist to store only on continue.
+    setSelectedBankPayload({
+      id: bank.id.toString(),
+      name: bank.name,
+      code: bank.shortName || bank.code,
+      icon: 'landmark',
+      url: `https://api.vietqr.io/${bank.bin}`,
+      color: '#2E7D32',
+    });
+  };
 
   const formatVND = (value: string): string => {
     const numericValue = value.replace(/[^0-9]/g, '');
@@ -54,373 +76,414 @@ export default function DepositScreen() {
     setAmount(formatted);
   };
 
-  const validateAmount = (): boolean => {
-    const numericAmount = parseVND(amount);
-    
-    if (!numericAmount) {
-      setError('Vui lòng nhập số tiền');
-      return false;
-    }
-    
-    if (numericAmount < MIN_DEPOSIT) {
-      setError(`Số tiền tối thiểu là ${MIN_DEPOSIT.toLocaleString('vi-VN')}đ`);
-      return false;
-    }
-    
-    if (numericAmount > MAX_DEPOSIT) {
-      setError(`Số tiền tối đa là ${MAX_DEPOSIT.toLocaleString('vi-VN')}đ`);
-      return false;
-    }
-    
-    return true;
-  };
-
-  const handleBankSelect = useCallback((bank: Bank) => {
-    setSelectedBankId(bank.id);
-    setSelectedBank(bank);
-  }, [setSelectedBank]);
-
   const handleContinue = async () => {
-    if (!validateAmount()) return;
-    
+    const numericAmount = parseVND(amount);
+    if (numericAmount < MIN_DEPOSIT) {
+      setError(`Tối thiểu ${MIN_DEPOSIT.toLocaleString('vi-VN')}đ`);
+      return;
+    }
+
     if (!selectedBankId) {
-      Alert.alert('Thông báo', 'Vui lòng chọn ngân hàng');
+      Alert.alert('Lưu ý', 'Vui lòng chọn phương thức thanh toán');
+      return;
+    }
+
+    if (!selectedBankPayload) {
+      Alert.alert('Lưu ý', 'Không đọc được thông tin ngân hàng đã chọn. Vui lòng chọn lại.');
       return;
     }
 
     setIsLoading(true);
-    
-    // Giả lập loading
     setTimeout(() => {
       setIsLoading(false);
-      const numericAmount = parseVND(amount);
+      setSelectedBank(selectedBankPayload);
       setPendingTransaction('deposit', numericAmount);
       router.push('/wallet/otp-verify' as any);
-    }, 800);
+    }, 1000);
   };
 
-  const renderBankItem = useCallback(({ item }: { item: Bank }) => {
-    const isSelected = selectedBankId === item.id;
-    const IconComponent = item.code === 'MOMO' || item.code === 'ZALO' ? Wallet : Landmark;
-    
+  useEffect(() => {
+    if (hasFetchedBanksRef.current) return;
+    hasFetchedBanksRef.current = true;
+
+    let cancelled = false;
+
+    const loadBanks = async () => {
+      try {
+        const response = await fetch('https://api.vietqr.io/v2/banks');
+        const result = await response.json();
+        if (!cancelled && result.code === '00') {
+          // Chỉ lấy các ngân hàng phổ biến hoặc tất cả
+          setBanks(result.data);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) setIsLoadingBanks(false);
+      }
+    };
+    loadBanks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const renderBankItem = (bank: VietQRBank) => {
+    const isSelected = selectedBankId === bank.id;
     return (
       <TouchableOpacity
-        style={[styles.bankCard, isSelected && styles.bankCardSelected]}
-        onPress={() => handleBankSelect(item)}
-        activeOpacity={0.8}
-        testID={`bank-item-${item.id}`}
+        key={bank.id}
+        style={[styles.bankItem, isSelected && styles.bankItemSelected]}
+        onPress={() => handleSelectBank(bank)}
       >
-        <View style={[styles.bankIconContainer, { backgroundColor: `${item.color}20` }]}>
-          <IconComponent size={24} color={item.color} />
+        <View style={styles.bankLogoContainer}>
+          <Image
+            source={{ uri: bank.logo }} // Sử dụng link logo từ API
+            style={styles.bankLogo}
+            contentFit="contain"
+          />
         </View>
         <View style={styles.bankInfo}>
-          <Text style={styles.bankName}>{item.name}</Text>
-          <Text style={styles.bankCode}>{item.code}</Text>
+          <Text style={styles.bankNameText}>{bank.shortName}</Text>
+          <Text style={styles.bankSubText}>{bank.name}</Text>
         </View>
-        <View style={[styles.radioButton, isSelected && styles.radioButtonSelected]}>
-          {isSelected && <View style={styles.radioButtonInner} />}
+        <View style={[styles.checkCircle, isSelected && styles.checkCircleActive]}>
+          {isSelected ? <View style={styles.checkInner} /> : null}
         </View>
       </TouchableOpacity>
     );
-  }, [selectedBankId, handleBankSelect]);
+  };
 
-  const quickAmounts = [50000, 100000, 200000, 500000, 1000000];
+  const quickAmounts = [50000, 100000, 200000, 500000];
 
-  if (isLoading) {
-    return <EcoLoader message="Đang xử lý..." size="large" />;
-  }
+  if (isLoading) return <EcoLoader message="Đang kết nối ngân hàng..." />;
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Current Balance */}
-        <LinearGradient
-          colors={[Colors.primaryDark, Colors.primary]}
-          style={styles.balanceCard}
-        >
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Header FinTech Style */}
+      <LinearGradient colors={['#1B5E20', '#2E7D32']} style={[styles.topHeader, { paddingTop: insets.top }]}>
+        <View style={styles.navBar}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ChevronLeft size={28} color={Colors.white} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Nạp tiền vào ví</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={styles.balanceSummary}>
           <Text style={styles.balanceLabel}>Số dư hiện tại</Text>
-          <Text style={styles.balanceAmount}>{getFormattedBalance()}</Text>
-          <View style={styles.balanceDecoration} />
-        </LinearGradient>
+          <Text style={styles.balanceValue}>{getFormattedBalance()}</Text>
+        </View>
+      </LinearGradient>
 
-        {/* Amount Input Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Nhập số tiền cần nạp</Text>
-          <View style={styles.amountInputContainer}>
-            <Text style={styles.currencySymbol}>₫</Text>
-            <TextInput
-              style={styles.amountInput}
-              value={amount}
-              onChangeText={handleAmountChange}
-              placeholder="0"
-              placeholderTextColor={Colors.textLight}
-              keyboardType="numeric"
-              maxLength={15}
-              testID="amount-input"
-            />
-          </View>
-          {error ? (
-            <View style={styles.errorContainer}>
-              <AlertCircle size={16} color={Colors.error} />
-              <Text style={styles.errorText}>{error}</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        >
+          {/* Input Section */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Số tiền nạp</Text>
+            <View style={[styles.inputWrapper, error ? styles.inputError : null]}>
+              <TextInput
+                style={styles.mainInput}
+                value={amount}
+                onChangeText={handleAmountChange}
+                placeholder="0"
+                keyboardType="numeric"
+                placeholderTextColor="#BDBDBD"
+              />
+              <Text style={styles.currencySuffix}>đ</Text>
             </View>
-          ) : (
-            <Text style={styles.hintText}>
-              Tối thiểu {MIN_DEPOSIT.toLocaleString('vi-VN')}đ - Tối đa {MAX_DEPOSIT.toLocaleString('vi-VN')}đ
-            </Text>
-          )}
 
-          {/* Quick Amount Buttons */}
-          <View style={styles.quickAmounts}>
-            {quickAmounts.map((quickAmount) => (
-              <TouchableOpacity
-                key={quickAmount}
-                style={styles.quickAmountButton}
-                onPress={() => handleAmountChange(quickAmount.toString())}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.quickAmountText}>
-                  {quickAmount >= 1000000 
-                    ? `${quickAmount / 1000000}tr` 
-                    : `${quickAmount / 1000}k`}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {error && (
+              <View style={styles.errorRow}>
+                <AlertCircle size={14} color={Colors.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            <View style={styles.quickAmountRow}>
+              {quickAmounts.map((val) => (
+                <TouchableOpacity
+                  key={val}
+                  style={styles.quickBtn}
+                  onPress={() => handleAmountChange(val.toString())}
+                >
+                  <Text style={styles.quickBtnText}>+{val / 1000}k</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
 
-        {/* Bank Selection */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Chọn phương thức thanh toán</Text>
-          <FlatList
-            data={MOCK_BANKS}
-            renderItem={renderBankItem}
-            keyExtractor={(item) => item.id}
-            scrollEnabled={false}
-            contentContainerStyle={styles.bankList}
-          />
-        </View>
-      </ScrollView>
+          {/* Bank Methods Section */}
+          <Text style={styles.sectionLabel}>Phương thức thanh toán</Text>
+          <View style={styles.bankListCard}>
+            {isLoadingBanks ? (
+              <ActivityIndicator color={Colors.primary} style={{ padding: 20 }} />
+            ) : (
+              banks.slice(0, 10).map(renderBankItem) // Demo 10 ngân hàng đầu tiên
+            )}
+          </View>
 
-      {/* Continue Button */}
+          <View style={styles.securityNote}>
+            <ShieldCheck size={16} color="#757575" />
+            <Text style={styles.securityText}>Giao dịch được bảo mật bởi hệ thống ngân hàng liên kết</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Footer Button */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
-          style={[
-            styles.continueButton,
-            (!amount || !selectedBankId) && styles.continueButtonDisabled,
-          ]}
+          style={[styles.btnContinue, (!amount || !selectedBankId) && styles.btnDisabled]}
           onPress={handleContinue}
           disabled={!amount || !selectedBankId}
-          activeOpacity={0.8}
-          testID="continue-button"
         >
           <LinearGradient
-            colors={[Colors.primaryLight, Colors.primary]}
-            style={styles.continueGradient}
+            colors={['#43A047', '#2E7D32']}
+            style={styles.gradientBtn}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            <Text style={styles.continueText}>Tiếp tục</Text>
-            <ArrowRight size={20} color={Colors.white} />
+            <Text style={styles.btnText}>Nạp tiền ngay</Text>
+            <ArrowRight size={20} color="#FFF" />
           </LinearGradient>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F5F7F8',
   },
-  scrollView: {
-    flex: 1,
+  topHeader: {
+    paddingBottom: 30,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  content: {
-    padding: 16,
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    height: 56,
   },
-  balanceCard: {
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 20,
-    overflow: 'hidden',
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  balanceDecoration: {
-    position: 'absolute',
-    top: -50,
-    right: -50,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  balanceSummary: {
+    alignItems: 'center',
+    marginTop: 10,
   },
   balanceLabel: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 8,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    marginBottom: 4,
   },
-  balanceAmount: {
-    fontSize: 32,
-    fontWeight: '800' as const,
-    color: Colors.white,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: Colors.text,
-    marginBottom: 16,
-  },
-  amountInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-  },
-  currencySymbol: {
-    fontSize: 24,
-    fontWeight: '700' as const,
-    color: Colors.primary,
-    marginRight: 12,
-  },
-  amountInput: {
-    flex: 1,
+  balanceValue: {
+    color: '#FFF',
     fontSize: 28,
-    fontWeight: '700' as const,
-    color: Colors.text,
+    fontWeight: '800',
   },
-  hintText: {
-    fontSize: 12,
-    color: Colors.textLight,
-    marginTop: 8,
+  scrollContent: {
+    padding: 16,
   },
-  errorContainer: {
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+    marginBottom: 20,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#424242',
+    marginBottom: 15,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderBottomWidth: 2,
+    borderBottomColor: '#EEEEEE',
+    paddingBottom: 8,
+  },
+  inputError: {
+    borderBottomColor: Colors.error,
+  },
+  mainInput: {
+    flex: 1,
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#1B5E20',
+    padding: 0,
+  },
+  currencySuffix: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1B5E20',
+    marginLeft: 8,
+    marginBottom: 6,
+  },
+  errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     marginTop: 8,
   },
   errorText: {
-    fontSize: 12,
     color: Colors.error,
+    fontSize: 12,
   },
-  quickAmounts: {
+  quickAmountRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 16,
+    justifyContent: 'space-between',
+    marginTop: 20,
   },
-  quickAmountButton: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
+  quickBtn: {
+    backgroundColor: '#F1F8E9',
     paddingHorizontal: 16,
     paddingVertical: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#C8E6C9',
   },
-  quickAmountText: {
+  quickBtnText: {
+    color: '#2E7D32',
+    fontWeight: '700',
     fontSize: 13,
-    fontWeight: '600' as const,
-    color: Colors.primary,
   },
-  bankList: {
-    gap: 10,
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#212121',
+    marginBottom: 12,
+    marginLeft: 4,
   },
-  bankCard: {
+  bankListCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  bankItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    marginBottom: 10,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
   },
-  bankCardSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: '#F1F8E9',
+  bankItemSelected: {
+    backgroundColor: '#F9FBF9',
   },
-  bankIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
+  bankLogoContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#FFF',
     justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  bankLogo: {
+    width: 32,
+    height: 32,
   },
   bankInfo: {
     flex: 1,
     marginLeft: 14,
   },
-  bankName: {
+  bankNameText: {
     fontSize: 15,
-    fontWeight: '700' as const,
-    color: Colors.text,
+    fontWeight: '700',
+    color: '#212121',
   },
-  bankCode: {
+  bankSubText: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: '#9E9E9E',
     marginTop: 2,
   },
-  radioButton: {
+  checkCircle: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: '#E0E0E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkCircleActive: {
+    borderColor: '#2E7D32',
+  },
+  checkInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#2E7D32',
+  },
+  securityNote: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    marginTop: 20,
   },
-  radioButtonSelected: {
-    borderColor: Colors.primary,
-  },
-  radioButtonInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.primary,
+  securityText: {
+    fontSize: 12,
+    color: '#757575',
+    textAlign: 'center',
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.white,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    backgroundColor: '#FFF',
+    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: '#EEE',
   },
-  continueButton: {
+  btnContinue: {
     borderRadius: 16,
-    overflow: 'hidden' as const,
+    overflow: 'hidden',
+    height: 56,
   },
-  continueButtonDisabled: {
-    opacity: 0.5,
+  btnDisabled: {
+    opacity: 0.6,
   },
-  continueGradient: {
+  gradientBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
     gap: 8,
   },
-  continueText: {
+  btnText: {
+    color: '#FFF',
     fontSize: 16,
-    fontWeight: '700' as const,
-    color: Colors.white,
+    fontWeight: '800',
   },
 });

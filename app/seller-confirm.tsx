@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin, Clock, FileText, Truck, Check } from 'lucide-react-native';
+import { MapPin, Clock, FileText, Truck, Check, ArrowLeft } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Colors from '@/constants/colors';
 import { WasteItem } from '@/types';
@@ -21,6 +22,7 @@ const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:50
 
 export default function SellerConfirmScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const { user, getAuthToken } = useAuth();
 
@@ -40,6 +42,14 @@ export default function SellerConfirmScreen() {
   const formatPrice = (price: number) => {
     return price.toLocaleString('vi-VN') + 'đ';
   };
+
+  const handleGoBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/seller/upload' as any);
+  }, [router]);
 
   const handleSubmit = async () => {
     if (!user?.address) {
@@ -89,7 +99,20 @@ export default function SellerConfirmScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Xác nhận thu gom' }} />
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <View style={[styles.customHeader, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity
+          onPress={handleGoBack}
+          style={styles.backButton}
+          activeOpacity={0.7}
+        >
+          <ArrowLeft size={24} color={Colors.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Xác nhận thu gom</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -206,6 +229,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  customHeader: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '800' as const,
+  },
+  headerSpacer: {
+    width: 40,
+    height: 40,
   },
   scroll: {
     flex: 1,

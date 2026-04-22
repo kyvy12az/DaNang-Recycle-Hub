@@ -7,16 +7,18 @@ import {
   Alert,
   Animated,
   Linking,
+  StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  Shield,
+  ShieldCheck,
   Smartphone,
   RotateCcw,
   CheckCircle2,
   AlertCircle,
+  X,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useWalletStore } from '@/stores/walletStore';
@@ -50,15 +52,10 @@ export default function OTPVerifyScreen() {
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const [canResend, setCanResend] = useState(false);
 
-  // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
-  const scaleAnim = useState(new Animated.Value(0.8))[0];
+  const scaleAnim = useState(new Animated.Value(0.9))[0];
 
   useEffect(() => {
-    // Hiển thị OTP mock cho developer
-    console.log('🔐 OTP mock:', MOCK_OTP);
-    
-    // Countdown timer
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -69,157 +66,82 @@ export default function OTPVerifyScreen() {
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
     if (isSuccess) {
       Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 5,
-          useNativeDriver: true,
-        }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(scaleAnim, { toValue: 1, friction: 6, useNativeDriver: true }),
       ]).start();
-
-      // Auto navigate back after success
-      const timeout = setTimeout(() => {
-        router.push('/(tabs)/profile');
-      }, 2000);
-
-      return () => clearTimeout(timeout);
     }
-  }, [isSuccess, router, fadeAnim, scaleAnim]);
+  }, [isSuccess]);
 
   const handleOTPComplete = useCallback(async (otpString: string) => {
     if (isLoading || isSuccess) return;
 
-    if (otpAttempts >= MAX_ATTEMPTS) {
-      setError('Bạn đã nhập sai quá số lần cho phép. Vui lòng thử lại sau.');
-      return;
-    }
-
     setIsLoading(true);
     setError('');
 
-    // Giả lập xử lý
     setTimeout(() => {
       if (otpString === MOCK_OTP) {
-        // OTP đúng - thực hiện giao dịch
         if (pendingType === 'deposit' && selectedBank) {
           deposit(pendingAmount, selectedBank.name);
-          // Mở liên kết ngân hàng (giả lập)
-          if (selectedBank.url) {
-            Linking.openURL(selectedBank.url).catch(() => {
-              console.log('Không thể mở URL:', selectedBank.url);
-            });
-          }
         } else if (pendingType === 'withdraw' && selectedBank) {
           withdraw(pendingAmount, selectedBank.name);
         }
-
         setIsSuccess(true);
         resetOtpAttempts();
       } else {
-        // OTP sai
         incrementOtpAttempts();
-        const remainingAttempts = MAX_ATTEMPTS - otpAttempts - 1;
-        
-        if (remainingAttempts <= 0) {
-          setError('Bạn đã nhập sai quá số lần cho phép.');
-          Alert.alert(
-            'Xác thực thất bại',
-            'Bạn đã nhập sai OTP quá 3 lần. Vui lòng thử lại sau.',
-            [{ text: 'OK', onPress: () => router.back() }]
-          );
-        } else {
-          setError(`Mã OTP không đúng. Còn ${remainingAttempts} lần thử.`);
-          setOtp(Array(6).fill(''));
-        }
+        setError(`Mã xác thực không chính xác. Vui lòng kiểm tra lại.`);
+        setOtp(Array(6).fill(''));
       }
-      
       setIsLoading(false);
     }, 1500);
-  }, [isLoading, isSuccess, otpAttempts, pendingType, selectedBank, pendingAmount, deposit, withdraw, resetOtpAttempts, incrementOtpAttempts, router]);
-
-  const handleResendOTP = () => {
-    if (!canResend) return;
-
-    setCanResend(false);
-    setCountdown(COUNTDOWN_SECONDS);
-    setError('');
-    setOtp(Array(6).fill(''));
-    setLastOtpTime(Date.now());
-
-    // Restart countdown
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          setCanResend(true);
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    // Hiển thị lại OTP mock
-    console.log('🔐 OTP mock mới:', MOCK_OTP);
-    
-    Alert.alert(
-      'Đã gửi lại mã',
-      'Mã OTP mới đã được gửi đến số điện thoại của bạn.\n\n(Dev: OTP = 123456)'
-    );
-  };
+  }, [isLoading, isSuccess, pendingType, selectedBank, pendingAmount]);
 
   const handleCancel = () => {
     clearPendingTransaction();
     router.back();
   };
 
-  if (isLoading) {
-    return <EcoLoader message="Đang xác thực..." size="large" />;
-  }
+  if (isLoading) return <EcoLoader message="Đang xác thực giao dịch..." />;
 
   if (isSuccess) {
     return (
       <View style={styles.successContainer}>
-        <Animated.View
-          style={[
-            styles.successContent,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }],
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={[Colors.success, Colors.primary]}
-            style={styles.successIconContainer}
-          >
-            <CheckCircle2 size={48} color={Colors.white} />
-          </LinearGradient>
-          <Text style={styles.successTitle}>Giao dịch thành công!</Text>
-          <Text style={styles.successAmount}>
-            {pendingType === 'deposit' ? '+' : '-'}{pendingAmount.toLocaleString('vi-VN')} ₫
+        <StatusBar barStyle="dark-content" />
+        <Animated.View style={[styles.successCard, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+          <View style={styles.successIconWrapper}>
+            <CheckCircle2 size={60} color="#4CAF50" />
+          </View>
+          <Text style={styles.successTitle}>Giao dịch thành công</Text>
+          <Text style={styles.successAmountText}>
+            {pendingType === 'deposit' ? '+' : '-'}{pendingAmount.toLocaleString('vi-VN')}đ
           </Text>
-          <Text style={styles.successDescription}>
-            {pendingType === 'deposit'
-              ? 'Số tiền đã được nạp vào ví của bạn'
-              : 'Số tiền sẽ được chuyển đến tài khoản của bạn trong 1-2 ngày làm việc'}
-          </Text>
-          <TouchableOpacity
-            style={styles.backButton}
+          
+          <View style={styles.receiptDetails}>
+            <View style={styles.receiptRow}>
+              <Text style={styles.receiptLabel}>Loại giao dịch</Text>
+              <Text style={styles.receiptValue}>{pendingType === 'deposit' ? 'Nạp tiền vào ví' : 'Rút tiền về thẻ'}</Text>
+            </View>
+            <View style={styles.receiptRow}>
+              <Text style={styles.receiptLabel}>Ngân hàng</Text>
+              <Text style={styles.receiptValue}>{selectedBank?.name}</Text>
+            </View>
+            <View style={styles.receiptRow}>
+              <Text style={styles.receiptLabel}>Thời gian</Text>
+              <Text style={styles.receiptValue}>{new Date().toLocaleTimeString('vi-VN')} - {new Date().toLocaleDateString('vi-VN')}</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity 
+            style={styles.doneButton} 
             onPress={() => router.push('/(tabs)/profile')}
-            activeOpacity={0.8}
           >
-            <Text style={styles.backButtonText}>Quay lại Profile</Text>
+            <Text style={styles.doneButtonText}>Hoàn tất</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -228,93 +150,67 @@ export default function OTPVerifyScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.shieldContainer}>
-          <LinearGradient
-            colors={['#4CAF50', '#2E7D32']}
-            style={styles.shieldGradient}
-          >
-            <Shield size={40} color={Colors.white} />
-          </LinearGradient>
-        </View>
-        <Text style={styles.title}>Xác thực OTP</Text>
-        <Text style={styles.subtitle}>
-          Nhập mã gồm 6 chữ số đã gửi đến
-        </Text>
-        <View style={styles.phoneContainer}>
-          <Smartphone size={16} color={Colors.primary} />
-          <Text style={styles.phoneText}>09x xxx x678</Text>
-        </View>
-      </View>
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar barStyle="dark-content" />
 
-      {/* Transaction Info */}
-      <View style={styles.transactionInfo}>
-        <Text style={styles.transactionLabel}>
-          {pendingType === 'deposit' ? 'Nạp tiền' : 'Rút tiền'}
-        </Text>
-        <Text style={styles.transactionAmount}>
-          {pendingAmount.toLocaleString('vi-VN')} ₫
-        </Text>
-        {selectedBank && (
-          <Text style={styles.transactionBank}>
-            Qua {selectedBank.name}
-          </Text>
-        )}
-      </View>
-
-      {/* OTP Input */}
-      <View style={styles.otpSection}>
-        <OTPInput
-          value={otp}
-          onChange={setOtp}
-          onComplete={handleOTPComplete}
-          disabled={isLoading}
-          error={!!error}
-        />
-        
-        {error ? (
-          <View style={styles.errorContainer}>
-            <AlertCircle size={18} color={Colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-
-        {/* Dev hint */}
-        <View style={styles.devHint}>
-          <Text style={styles.devHintText}>Dev: OTP = {MOCK_OTP}</Text>
-        </View>
-      </View>
-
-      {/* Resend Section */}
-      <View style={styles.resendSection}>
-        {canResend ? (
-          <TouchableOpacity
-            style={styles.resendButton}
-            onPress={handleResendOTP}
-            activeOpacity={0.8}
-          >
-            <RotateCcw size={18} color={Colors.primary} />
-            <Text style={styles.resendText}>Gửi lại mã</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.countdownContainer}>
-            <Text style={styles.countdownText}>
-              Gửi lại mã sau {countdown}s
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Cancel Button */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={handleCancel}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.cancelText}>Hủy giao dịch</Text>
+      {/* Header gọn gàng */}
+      <View style={styles.navBar}>
+        <TouchableOpacity onPress={handleCancel} style={styles.closeBtn}>
+          <X size={24} color="#424242" />
         </TouchableOpacity>
+        <Text style={styles.navTitle}>Xác nhận OTP</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <View style={styles.content}>
+        <View style={styles.iconCircle}>
+          <Smartphone size={32} color={Colors.primary} />
+        </View>
+        
+        <Text style={styles.instruction}>
+          Mã xác thực đã được gửi đến số điện thoại
+        </Text>
+        <Text style={styles.phoneNumber}>09x xxx x678</Text>
+
+        <View style={styles.otpContainer}>
+          <OTPInput
+            value={otp}
+            onChange={setOtp}
+            onComplete={handleOTPComplete}
+            disabled={isLoading}
+            error={!!error}
+          />
+          
+          {error && (
+            <View style={styles.errorBox}>
+              <AlertCircle size={16} color={Colors.error} />
+              <Text style={styles.errorMsg}>{error}</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.resendWrapper}>
+          {canResend ? (
+            <TouchableOpacity onPress={() => {/* logic gửi lại */}} style={styles.resendActive}>
+              <RotateCcw size={16} color={Colors.primary} />
+              <Text style={styles.resendActiveText}>Gửi lại mã</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.resendWait}>Gửi lại mã sau <Text style={styles.timer}>{countdown}s</Text></Text>
+          )}
+        </View>
+
+        {/* Thông tin giao dịch nhỏ để nhắc nhớ */}
+        <View style={styles.miniReceipt}>
+          <Text style={styles.miniReceiptText}>
+            Đang thực hiện {pendingType === 'deposit' ? 'Nạp' : 'Rút'}: <Text style={styles.boldAmount}>{pendingAmount.toLocaleString('vi-VN')}đ</Text>
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.footerNote}>
+        <ShieldCheck size={14} color="#9E9E9E" />
+        <Text style={styles.footerNoteText}>Bảo mật bởi hệ thống xác thực 2 lớp</Text>
       </View>
     </View>
   );
@@ -323,195 +219,180 @@ export default function OTPVerifyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-    paddingHorizontal: 24,
+    backgroundColor: '#FFF',
   },
-  header: {
+  navBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    height: 56,
   },
-  shieldContainer: {
+  closeBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#212121',
+  },
+  content: {
+    alignItems: 'center',
+    paddingHorizontal: 30,
+    paddingTop: 40,
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F1F8E9',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 20,
   },
-  shieldGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800' as const,
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+  instruction: {
+    fontSize: 15,
+    color: '#757575',
     textAlign: 'center',
+    lineHeight: 22,
   },
-  phoneContainer: {
+  phoneNumber: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#212121',
+    marginTop: 4,
+    marginBottom: 30,
+  },
+  otpContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 8,
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
+    marginTop: 15,
   },
-  phoneText: {
-    fontSize: 15,
-    fontWeight: '700' as const,
-    color: Colors.primary,
-  },
-  transactionInfo: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 30,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  transactionLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 8,
-  },
-  transactionAmount: {
-    fontSize: 32,
-    fontWeight: '800' as const,
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  transactionBank: {
+  errorMsg: {
+    color: Colors.error,
     fontSize: 13,
-    color: Colors.textLight,
+    fontWeight: '500',
   },
-  otpSection: {
-    marginBottom: 24,
+  resendWrapper: {
+    marginTop: 10,
   },
-  errorContainer: {
+  resendWait: {
+    fontSize: 14,
+    color: '#9E9E9E',
+  },
+  timer: {
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  resendActive: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 16,
+    gap: 6,
   },
-  errorText: {
-    fontSize: 14,
-    color: Colors.error,
-    fontWeight: '500' as const,
+  resendActiveText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 15,
   },
-  devHint: {
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  devHintText: {
-    fontSize: 12,
-    color: Colors.textLight,
+  miniReceipt: {
+    marginTop: 50,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     backgroundColor: '#F5F5F5',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
     borderRadius: 12,
   },
-  resendSection: {
-    alignItems: 'center',
-    marginTop: 8,
+  miniReceiptText: {
+    fontSize: 13,
+    color: '#616161',
   },
-  resendButton: {
+  boldAmount: {
+    fontWeight: '700',
+    color: '#1B5E20',
+  },
+  footerNote: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
+    gap: 5,
   },
-  resendText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.primary,
+  footerNoteText: {
+    fontSize: 12,
+    color: '#BDBDBD',
   },
-  countdownContainer: {
-    paddingVertical: 10,
-  },
-  countdownText: {
-    fontSize: 14,
-    color: Colors.textLight,
-  },
-  footer: {
-    marginTop: 'auto',
-  },
-  cancelButton: {
-    alignItems: 'center',
-    paddingVertical: 14,
-  },
-  cancelText: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.error,
-  },
-  // Success styles
+  // SUCCESS STYLES
   successContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
+    backgroundColor: '#F5F7F8',
     justifyContent: 'center',
     padding: 24,
   },
-  successContent: {
+  successCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    padding: 30,
     alignItems: 'center',
-  },
-  successIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    shadowColor: Colors.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
     elevation: 5,
   },
+  successIconWrapper: {
+    marginBottom: 20,
+  },
   successTitle: {
-    fontSize: 24,
-    fontWeight: '800' as const,
-    color: Colors.text,
-    marginBottom: 12,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#212121',
   },
-  successAmount: {
-    fontSize: 36,
-    fontWeight: '800' as const,
-    color: Colors.success,
-    marginBottom: 12,
+  successAmountText: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#4CAF50',
+    marginVertical: 15,
   },
-  successDescription: {
+  receiptDetails: {
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    paddingTop: 20,
+    marginBottom: 30,
+    gap: 12,
+  },
+  receiptRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  receiptLabel: {
     fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 20,
+    color: '#9E9E9E',
   },
-  backButton: {
+  receiptValue: {
+    fontSize: 14,
+    color: '#424242',
+    fontWeight: '600',
+  },
+  doneButton: {
+    width: '100%',
+    height: 54,
     backgroundColor: Colors.primary,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  backButtonText: {
-    fontSize: 15,
-    fontWeight: '700' as const,
-    color: Colors.white,
+  doneButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

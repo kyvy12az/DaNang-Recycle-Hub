@@ -6,22 +6,43 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
-import { BookOpen, ChevronRight, Lightbulb, Leaf, Recycle, Award, TrendingUp } from 'lucide-react-native';
+import { 
+  BookOpen, 
+  ChevronRight, 
+  Lightbulb, 
+  Leaf, 
+  Recycle, 
+  Award, 
+  TrendingUp, 
+  Search,
+  Droplets,
+  Zap,
+  Wind
+} from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { mockEducationTips } from '@/mocks/data';
 import EcoLoader from '@/components/EcoLoader';
 
 const { width } = Dimensions.get('window');
 
+const CATEGORIES = [
+  { id: 'all', name: 'Tất cả', icon: Leaf, color: '#4CAF50' },
+  { id: 'recycle', name: 'Tái chế', icon: Recycle, color: '#2196F3' },
+  { id: 'save', name: 'Tiết kiệm', icon: Zap, color: '#FFB300' },
+  { id: 'water', name: 'Nguồn nước', icon: Droplets, color: '#00BCD4' },
+];
+
 export default function EducationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState('all');
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 1000);
@@ -29,24 +50,38 @@ export default function EducationScreen() {
   }, []);
 
   if (isLoading) {
-    return <EcoLoader message="Đang tải bài viết..." size="large" />;
+    return <EcoLoader message="Đang tải kiến thức xanh..." size="large" />;
   }
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      
+      {/* Header đồng nhất với phong cách App */}
       <LinearGradient
-        colors={['#1B5E20', '#2E7D32', '#43A047']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + 12 }]}
+        colors={['#1B5E20', '#2E7D32']}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
-        <View style={styles.headerRow}>
-          <View style={styles.headerIconContainer}>
-            <BookOpen size={24} color={Colors.white} />
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerSubtitle}>Chào mừng bạn đến với</Text>
+            <Text style={styles.headerTitle}>Thư viện Xanh</Text>
           </View>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Kiến thức xanh</Text>
-            <Text style={styles.headerSubtitle}>Học cách bảo vệ môi trường mỗi ngày</Text>
+          <TouchableOpacity style={styles.searchButton}>
+            <Search size={22} color={Colors.white} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Stats Row - Cải tiến giao diện nhẹ nhàng hơn */}
+        <View style={styles.statsRow}>
+          <View style={styles.miniStat}>
+            <Award size={16} color="#FFD54F" />
+            <Text style={styles.miniStatText}>150 Điểm</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.miniStat}>
+            <TrendingUp size={16} color="#81C784" />
+            <Text style={styles.miniStatText}>12 Ngày Streak</Text>
           </View>
         </View>
       </LinearGradient>
@@ -56,120 +91,96 @@ export default function EducationScreen() {
         contentContainerStyle={styles.bodyContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <LinearGradient
-              colors={['#66BB6A', '#4CAF50']}
-              style={styles.statGradient}
-            >
-              <Leaf size={24} color={Colors.white} />
-              <Text style={styles.statNumber}>24</Text>
-              <Text style={styles.statLabel}>Bài viết</Text>
-            </LinearGradient>
-          </View>
-          
-          <View style={styles.statCard}>
-            <LinearGradient
-              colors={['#42A5F5', '#2196F3']}
-              style={styles.statGradient}
-            >
-              <Award size={24} color={Colors.white} />
-              <Text style={styles.statNumber}>150</Text>
-              <Text style={styles.statLabel}>Điểm xanh</Text>
-            </LinearGradient>
-          </View>
-          
-          <View style={styles.statCard}>
-            <LinearGradient
-              colors={['#FFA726', '#FF9800']}
-              style={styles.statGradient}
-            >
-              <TrendingUp size={24} color={Colors.white} />
-              <Text style={styles.statNumber}>12</Text>
-              <Text style={styles.statLabel}>Streak</Text>
-            </LinearGradient>
-          </View>
-        </View>
-
-        {/* Featured Card */}
-        <View style={styles.featuredCard}>
+        {/* Widget: Bạn có biết? */}
+        <TouchableOpacity activeOpacity={0.9} style={styles.featuredWidget}>
           <LinearGradient
-            colors={['#E8F5E9', '#F1F8E9', '#E0F7FA']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            colors={['#FFF', '#F1F8E9']}
             style={styles.featuredGradient}
           >
-            <View style={styles.featuredIconContainer}>
-              <LinearGradient
-                colors={['#FFD54F', '#FFC107']}
-                style={styles.featuredIconGradient}
-              >
-                <Lightbulb size={28} color={Colors.white} />
-              </LinearGradient>
+            <View style={styles.featuredHeader}>
+              <View style={styles.lightbulbCircle}>
+                <Lightbulb size={20} color="#F57C00" fill="#FFF9C4" />
+              </View>
+              <Text style={styles.featuredTag}>MẸO HAY HÔM NAY</Text>
             </View>
-            <View style={styles.featuredContent}>
-              <Text style={styles.featuredTitle}>💡 Bạn biết không?</Text>
-              <Text style={styles.featuredText}>
-                1 chai nhựa mất <Text style={styles.featuredHighlight}>450 năm</Text> để phân hủy trong tự nhiên. Nhưng khi tái chế, nó chỉ cần <Text style={styles.featuredHighlight}>2 tháng</Text> để trở thành sản phẩm mới!
-              </Text>
-            </View>
-            <View style={styles.featuredDecoration}>
-              <Recycle size={40} color="rgba(76, 175, 80, 0.1)" />
+            <Text style={styles.featuredText}>
+              <Text style={{fontWeight: '800'}}>Tái chế 1 lon nhôm</Text> tiết kiệm đủ năng lượng để chạy TV trong <Text style={styles.featuredHighlight}>3 giờ liên tục</Text>. Hãy bắt đầu gom ngay!
+            </Text>
+            <View style={styles.decorationIcon}>
+              <Recycle size={60} color="rgba(76, 175, 80, 0.05)" />
             </View>
           </LinearGradient>
-        </View>
+        </TouchableOpacity>
+
+        {/* Categories Scroller */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          contentContainerStyle={styles.categoriesContainer}
+        >
+          {CATEGORIES.map((cat) => (
+            <TouchableOpacity 
+              key={cat.id} 
+              onPress={() => setActiveTab(cat.id)}
+              style={[
+                styles.categoryItem, 
+                activeTab === cat.id && { backgroundColor: cat.color }
+              ]}
+            >
+              <cat.icon size={18} color={activeTab === cat.id ? '#FFF' : cat.color} />
+              <Text style={[
+                styles.categoryName,
+                activeTab === cat.id && { color: '#FFF' }
+              ]}>{cat.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>📚 Bài viết nổi bật</Text>
-          <Text style={styles.sectionCount}>{mockEducationTips.length} bài</Text>
+          <Text style={styles.sectionTitle}>Khám phá bài viết</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAll}>Xem tất cả</Text>
+          </TouchableOpacity>
         </View>
 
+        {/* List bài viết - Cải tiến Card */}
         {mockEducationTips.map((tip, index) => (
           <TouchableOpacity
             key={tip.id}
-            style={styles.tipCard}
+            style={styles.articleCard}
             onPress={() => router.push({ pathname: '/education-detail' as any, params: { id: tip.id } })}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <View style={styles.tipImageContainer}>
+            <View style={styles.articleImageWrapper}>
               <Image
                 source={{ uri: tip.imageUrl }}
-                style={styles.tipImage}
+                style={styles.articleImage}
                 contentFit="cover"
               />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.6)']}
-                style={styles.tipImageOverlay}
-              />
-              <View style={styles.tipNumber}>
-                <Text style={styles.tipNumberText}>{index + 1}</Text>
+              <View style={styles.categoryTag}>
+                <Text style={styles.categoryTagText}>{tip.category}</Text>
               </View>
             </View>
-            <View style={styles.tipContent}>
-              <View style={styles.tipHeader}>
-                <View style={[
-                  styles.tipCategoryBadge,
-                  tip.category === 'Tái chế' && styles.categoryRecycle,
-                  tip.category === 'Tiết kiệm' && styles.categorySave,
-                  tip.category === 'Môi trường' && styles.categoryEnvironment,
-                ]}>
-                  <Text style={styles.tipCategoryText}>{tip.category}</Text>
+            
+            <View style={styles.articleInfo}>
+              <Text style={styles.articleTitle} numberOfLines={2}>{tip.title}</Text>
+              <Text style={styles.articleSummary} numberOfLines={2}>{tip.summary}</Text>
+              
+              <View style={styles.articleFooter}>
+                <View style={styles.authorRow}>
+                  <Leaf size={14} color={Colors.primary} />
+                  <Text style={styles.authorText}>Green Guide</Text>
                 </View>
-              </View>
-              <Text style={styles.tipTitle} numberOfLines={2}>{tip.title}</Text>
-              <Text style={styles.tipSummary} numberOfLines={2}>{tip.summary}</Text>
-              <View style={styles.tipFooter}>
-                <View style={styles.readMore}>
-                  <Text style={styles.readMoreText}>Đọc thêm</Text>
-                  <ChevronRight size={16} color={Colors.primary} strokeWidth={3} />
+                <View style={styles.readMoreBtn}>
+                  <Text style={styles.readMoreLabel}>Chi tiết</Text>
+                  <ChevronRight size={14} color={Colors.primary} />
                 </View>
               </View>
             </View>
           </TouchableOpacity>
         ))}
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -178,268 +189,231 @@ export default function EducationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F8FAF9', // Màu nền hơi xám xanh cực kỳ dịu mắt
   },
   header: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 25,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
-  headerRow: {
+  headerTop: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 14,
-  },
-  headerIconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTextContainer: {
-    flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '800' as const,
+    fontSize: 26,
+    fontWeight: '900',
     color: Colors.white,
-    letterSpacing: 0.3,
   },
   headerSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
-    marginTop: 4,
-    fontWeight: '500' as const,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+  },
+  searchButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  miniStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  miniStatText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 12,
   },
   body: {
     flex: 1,
   },
   bodyContent: {
-    padding: 16,
+    padding: 20,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden' as const,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+  featuredWidget: {
+    marginBottom: 25,
+    borderRadius: 24,
+    backgroundColor: '#FFF',
+    // Shadow
+    shadowColor: '#2E7D32',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  statGradient: {
-    padding: 16,
-    alignItems: 'center',
-    gap: 6,
-  },
-  statNumber: {
-    fontSize: 22,
-    fontWeight: '800' as const,
-    color: Colors.white,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-    color: 'rgba(255,255,255,0.9)',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  featuredCard: {
-    borderRadius: 20,
-    overflow: 'hidden' as const,
-    marginBottom: 24,
-    elevation: 3,
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowRadius: 15,
+    elevation: 5,
+    overflow: 'hidden',
   },
   featuredGradient: {
     padding: 20,
-    position: 'relative' as const,
   },
-  featuredIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    overflow: 'hidden' as const,
-    marginBottom: 14,
-    elevation: 4,
-    shadowColor: '#FFC107',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-  },
-  featuredIconGradient: {
-    width: '100%',
-    height: '100%',
+  featuredHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featuredContent: {
     gap: 10,
+    marginBottom: 12,
   },
-  featuredTitle: {
-    fontSize: 20,
-    fontWeight: '800' as const,
-    color: '#1B5E20',
-    letterSpacing: 0.3,
+  lightbulbCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#FFFBE6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFE082',
+  },
+  featuredTag: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#F57C00',
+    letterSpacing: 1,
   },
   featuredText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#37474F',
     lineHeight: 22,
-    fontWeight: '500' as const,
   },
   featuredHighlight: {
-    fontWeight: '800' as const,
-    color: '#FF6B6B',
+    color: Colors.primary,
+    fontWeight: '800',
   },
-  featuredDecoration: {
-    position: 'absolute' as const,
-    right: 20,
-    bottom: 20,
-    opacity: 0.5,
+  decorationIcon: {
+    position: 'absolute',
+    right: -10,
+    bottom: -10,
+  },
+  categoriesContainer: {
+    gap: 10,
+    marginBottom: 25,
+    paddingRight: 20,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 15,
+    backgroundColor: '#FFF',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E0E6E2',
+  },
+  categoryName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#455A64',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 15,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800' as const,
-    color: Colors.text,
-    letterSpacing: 0.3,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1B2E24',
   },
-  sectionCount: {
+  seeAll: {
     fontSize: 13,
-    fontWeight: '600' as const,
-    color: Colors.textSecondary,
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    color: Colors.primary,
+    fontWeight: '700',
   },
-  tipCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    overflow: 'hidden' as const,
-    marginBottom: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+  articleCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    marginBottom: 18,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
+    borderColor: '#F0F2F0',
   },
-  tipImageContainer: {
-    position: 'relative' as const,
-  },
-  tipImage: {
+  articleImageWrapper: {
     width: '100%',
-    height: 180,
+    height: 160,
+    position: 'relative',
   },
-  tipImageOverlay: {
-    position: 'absolute' as const,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
+  articleImage: {
+    width: '100%',
+    height: '100%',
   },
-  tipNumber: {
-    position: 'absolute' as const,
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FF6B6B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: Colors.white,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  tipNumberText: {
-    fontSize: 14,
-    fontWeight: '800' as const,
-    color: Colors.white,
-  },
-  tipContent: {
-    padding: 18,
-  },
-  tipHeader: {
-    marginBottom: 10,
-  },
-  tipCategoryBadge: {
-    alignSelf: 'flex-start' as const,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 10,
+  categoryTag: {
+    position: 'absolute',
+    top: 15,
+    left: 15,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderWidth: 1.5,
-    borderColor: '#C8E6C9',
+    borderRadius: 10,
   },
-  categoryRecycle: {
-    backgroundColor: '#E8F5E9',
-    borderColor: '#81C784',
-  },
-  categorySave: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#64B5F6',
-  },
-  categoryEnvironment: {
-    backgroundColor: '#FFF3E0',
-    borderColor: '#FFB74D',
-  },
-  tipCategoryText: {
+  categoryTagText: {
     fontSize: 11,
-    fontWeight: '700' as const,
-    color: '#2E7D32',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    color: Colors.primary,
+    textTransform: 'uppercase',
   },
-  tipTitle: {
+  articleInfo: {
+    padding: 18,
+  },
+  articleTitle: {
     fontSize: 17,
-    fontWeight: '800' as const,
-    color: Colors.text,
-    marginBottom: 8,
-    lineHeight: 24,
+    fontWeight: '800',
+    color: '#263238',
+    marginBottom: 6,
+    lineHeight: 23,
   },
-  tipSummary: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 21,
-    fontWeight: '500' as const,
+  articleSummary: {
+    fontSize: 13,
+    color: '#607D8B',
+    lineHeight: 19,
+    marginBottom: 15,
   },
-  tipFooter: {
-    marginTop: 14,
-    paddingTop: 14,
+  articleFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.06)',
+    borderTopColor: '#F0F4F2',
   },
-  readMore: {
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  authorText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  readMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  readMoreText: {
-    fontSize: 14,
-    fontWeight: '700' as const,
+  readMoreLabel: {
+    fontSize: 12,
+    fontWeight: '800',
     color: Colors.primary,
-    letterSpacing: 0.2,
   },
 });

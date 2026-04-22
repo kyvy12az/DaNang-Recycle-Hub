@@ -20,7 +20,9 @@ import {
   HandHelping,
   Scale,
   Star,
+  ArrowLeft,
 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Colors from '@/constants/colors';
 import { useWalletStore } from '@/stores/walletStore';
@@ -65,6 +67,7 @@ const mapListingFromAPI = (item: any): WasteListing => ({
 
 export default function BuyerDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const [listing, setListing] = useState<WasteListing | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -181,7 +184,14 @@ export default function BuyerDetailScreen() {
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
-        <Stack.Screen options={{ title: 'Chi tiết bài đăng' }} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backButton, styles.centerBackButton, { top: insets.top + 8 }]}
+          activeOpacity={0.7}
+        >
+          <ArrowLeft size={22} color={Colors.white} />
+        </TouchableOpacity>
         <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.loadingText}>Đang tải...</Text>
       </View>
@@ -192,7 +202,14 @@ export default function BuyerDetailScreen() {
   if (error || !listing) {
     return (
       <View style={styles.centerContainer}>
-        <Stack.Screen options={{ title: 'Chi tiết bài đăng' }} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backButton, styles.centerBackButton, { top: insets.top + 8 }]}
+          activeOpacity={0.7}
+        >
+          <ArrowLeft size={22} color={Colors.white} />
+        </TouchableOpacity>
         <Text style={styles.emptyText}>{error || 'Không tìm thấy bài đăng'}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
           <Text style={styles.retryText}>Quay lại</Text>
@@ -204,7 +221,20 @@ export default function BuyerDetailScreen() {
   // --- Main content ---
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: listing.sellerName }} />
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <View style={[styles.customHeader, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          activeOpacity={0.7}
+        >
+          <ArrowLeft size={24} color={Colors.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Chi tiết bài đăng</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false}>
         <Image
           source={{ uri: listing.imageUrl }}
@@ -341,11 +371,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  customHeader: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '800' as const,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  headerSpacer: {
+    width: 40,
+    height: 40,
+  },
   centerContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+  },
+  centerBackButton: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+    backgroundColor: Colors.primary,
   },
   loadingText: {
     fontSize: 14,

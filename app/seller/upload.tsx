@@ -11,9 +11,10 @@ import {
 import { useRouter, Stack } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Camera, ChevronDown, Plus, Minus, Image as ImageIcon, X } from 'lucide-react-native';
+import { Camera, ChevronDown, Plus, Minus, Image as ImageIcon, X, ArrowLeft } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { wasteTypes, pickupTimeOptions } from '@/mocks/data';
 import { WasteItem, WasteType } from '@/types';
@@ -23,6 +24,7 @@ import { useSellerStore } from '@/stores/sellerStore';
 
 export default function SellerUploadScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     recognizedItems,
     capturedImageUri,
@@ -57,7 +59,7 @@ export default function SellerUploadScreen() {
       clearAll();
       setStep('capture');
       resultFade.setValue(0);
-      return () => {};
+      return () => { };
     }, [clearAll, resultFade])
   );
 
@@ -364,7 +366,20 @@ export default function SellerUploadScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Đăng rác tái chế' }} />
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <View style={[styles.customHeader, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          activeOpacity={0.7}
+        >
+          <ArrowLeft size={24} color={Colors.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Đăng rác tái chế</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -379,39 +394,52 @@ export default function SellerUploadScreen() {
                 contentFit="cover"
               />
               <View style={styles.placeholderOverlay}>
-                <Camera size={48} color={Colors.white} />
-                <Text style={styles.placeholderText}>Chụp ảnh rác tái chế</Text>
+                <View style={styles.heroBadge}>
+                  <Text style={styles.heroBadgeText}>AI Phân Loại</Text>
+                </View>
+                <Camera size={44} color={Colors.white} />
+                <Text style={styles.placeholderText}>Đăng rác tái chế thông minh</Text>
+                <Text style={styles.placeholderSubtext}>
+                  Chụp một tấm ảnh rõ nét, hệ thống sẽ gợi ý loại rác và giá trị ước tính ngay.
+                </Text>
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.captureButton}
-              onPress={handleTakePhoto}
-              activeOpacity={0.8}
-              testID="capture-button"
-            >
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight]}
-                style={styles.captureGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+            <View style={styles.actionCard}>
+              <TouchableOpacity
+                style={styles.captureButton}
+                onPress={handleTakePhoto}
+                activeOpacity={0.85}
+                testID="capture-button"
               >
-                <Camera size={22} color={Colors.white} />
-                <Text style={styles.captureButtonText}>Chụp ảnh rác</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={[Colors.primary, Colors.primaryLight]}
+                  style={styles.captureGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Camera size={22} color={Colors.white} />
+                  <Text style={styles.captureButtonText}>Chụp ảnh bằng camera</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.galleryButton}
-              onPress={handlePickImage}
-              activeOpacity={0.8}
-            >
-              <ImageIcon size={20} color={Colors.primary} />
-              <Text style={styles.galleryButtonText}>Chọn từ thư viện</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.galleryButton}
+                onPress={handlePickImage}
+                activeOpacity={0.85}
+              >
+                <ImageIcon size={20} color={Colors.primary} />
+                <Text style={styles.galleryButtonText}>Chọn từ thư viện</Text>
+              </TouchableOpacity>
+
+              <View style={styles.quickTips}>
+                <Text style={styles.quickTipsText}>- Đặt vật thể giữa khung hình</Text>
+                <Text style={styles.quickTipsText}>- Ảnh đủ sáng sẽ nhận diện tốt hơn</Text>
+              </View>
+            </View>
 
             <Text style={styles.hintText}>
-              AI sẽ tự động nhận diện và phân loại rác từ ảnh của bạn
+              AI sẽ tự động nhận diện và phân loại rác từ ảnh bạn cung cấp
             </Text>
           </View>
         )}
@@ -502,63 +530,63 @@ export default function SellerUploadScreen() {
               const classification = getVisibleClassification(item, index);
 
               return (
-              <View key={item.id} style={styles.itemCard}>
-                <View style={styles.itemHeaderRow}>
-                  <View style={[styles.itemColorDot, { backgroundColor: item.wasteType.color }]} />
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemName}>{item.wasteType.name}</Text>
-                    <Text style={styles.itemPrice}>
-                      {formatPrice(item.wasteType.pricePerKg)}/kg
-                    </Text>
-                  </View>
-                  <View style={styles.quantityControl}>
+                <View key={item.id} style={styles.itemCard}>
+                  <View style={styles.itemHeaderRow}>
+                    <View style={[styles.itemColorDot, { backgroundColor: item.wasteType.color }]} />
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemName}>{item.wasteType.name}</Text>
+                      <Text style={styles.itemPrice}>
+                        {formatPrice(item.wasteType.pricePerKg)}/kg
+                      </Text>
+                    </View>
+                    <View style={styles.quantityControl}>
+                      <TouchableOpacity
+                        style={styles.qtyButton}
+                        onPress={() => handleUpdateQuantity(item.id, -0.5)}
+                      >
+                        <Minus size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                      <Text style={styles.qtyText}>{item.quantity} kg</Text>
+                      <TouchableOpacity
+                        style={styles.qtyButton}
+                        onPress={() => handleUpdateQuantity(item.id, 0.5)}
+                      >
+                        <Plus size={16} color={Colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.itemTotal}>{formatPrice(item.estimatedPrice)}</Text>
                     <TouchableOpacity
-                      style={styles.qtyButton}
-                      onPress={() => handleUpdateQuantity(item.id, -0.5)}
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveItem(item.id)}
                     >
-                      <Minus size={16} color={Colors.primary} />
-                    </TouchableOpacity>
-                    <Text style={styles.qtyText}>{item.quantity} kg</Text>
-                    <TouchableOpacity
-                      style={styles.qtyButton}
-                      onPress={() => handleUpdateQuantity(item.id, 0.5)}
-                    >
-                      <Plus size={16} color={Colors.primary} />
+                      <X size={16} color={Colors.error} />
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.itemTotal}>{formatPrice(item.estimatedPrice)}</Text>
-                  <TouchableOpacity
-                    style={styles.removeButton}
-                    onPress={() => handleRemoveItem(item.id)}
-                  >
-                    <X size={16} color={Colors.error} />
-                  </TouchableOpacity>
-                </View>
 
-                <View style={styles.classificationMeta}>
-                  <View style={[styles.statusBadge, { backgroundColor: `${getStatusAccent(classification.status)}14`, borderColor: `${getStatusAccent(classification.status)}33` }]}>
-                    <Text style={[styles.statusBadgeText, { color: getStatusAccent(classification.status) }]}>
-                      {getStatusText(classification.status)}
-                    </Text>
-                  </View>
-                  <View style={styles.metaGrid}>
-                    <View style={styles.metaPill}>
-                      <Text style={styles.metaLabel}>Loại rác</Text>
-                      <Text style={styles.metaValue}>{classification.wasteType.name || item.wasteType.name}</Text>
+                  <View style={styles.classificationMeta}>
+                    <View style={[styles.statusBadge, { backgroundColor: `${getStatusAccent(classification.status)}14`, borderColor: `${getStatusAccent(classification.status)}33` }]}>
+                      <Text style={[styles.statusBadgeText, { color: getStatusAccent(classification.status) }]}>
+                        {getStatusText(classification.status)}
+                      </Text>
                     </View>
-                    <View style={styles.metaPill}>
-                      <Text style={styles.metaLabel}>Nhóm</Text>
-                      <Text style={styles.metaValue}>{getGroupText(classification.group)}</Text>
+                    <View style={styles.metaGrid}>
+                      <View style={styles.metaPill}>
+                        <Text style={styles.metaLabel}>Loại rác</Text>
+                        <Text style={styles.metaValue}>{classification.wasteType.name || item.wasteType.name}</Text>
+                      </View>
+                      <View style={styles.metaPill}>
+                        <Text style={styles.metaLabel}>Nhóm</Text>
+                        <Text style={styles.metaValue}>{getGroupText(classification.group)}</Text>
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.guidanceBox}>
-                    <Text style={styles.classificationGuidanceLabel}>Hướng dẫn xử lý</Text>
-                    <Text style={styles.classificationGuidance}>
-                      {classification.guidance || getGuidanceByGroup(mapCategoryToGroup(item.wasteType.category))}
-                    </Text>
+                    <View style={styles.guidanceBox}>
+                      <Text style={styles.classificationGuidanceLabel}>Hướng dẫn xử lý</Text>
+                      <Text style={styles.classificationGuidance}>
+                        {classification.guidance || getGuidanceByGroup(mapCategoryToGroup(item.wasteType.category))}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
               );
             })}
 
@@ -705,6 +733,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  customHeader: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '800' as const,
+  },
+  headerSpacer: {
+    width: 40,
+    height: 40,
+  },
   scroll: {
     flex: 1,
   },
@@ -714,12 +767,12 @@ const styles = StyleSheet.create({
   },
   captureSection: {
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
   },
   placeholderImage: {
     width: '100%',
-    height: 240,
-    borderRadius: 20,
+    height: 260,
+    borderRadius: 24,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -729,30 +782,66 @@ const styles = StyleSheet.create({
   },
   placeholderOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(11, 61, 41, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
+    paddingHorizontal: 24,
+  },
+  heroBadge: {
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  heroBadgeText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: '700' as const,
+    letterSpacing: 0.4,
   },
   placeholderText: {
-    fontSize: 16,
-    fontWeight: '600' as const,
+    fontSize: 21,
+    fontWeight: '800' as const,
     color: Colors.white,
+    textAlign: 'center',
+  },
+  placeholderSubtext: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.92)',
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  actionCard: {
+    width: '100%',
+    borderRadius: 18,
+    backgroundColor: Colors.white,
+    padding: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#E6EEE8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
   captureButton: {
     width: '100%',
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
   },
   captureGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 15,
     gap: 10,
   },
   captureButtonText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700' as const,
     color: Colors.white,
   },
@@ -761,22 +850,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.white,
-    paddingVertical: 14,
-    borderRadius: 16,
+    paddingVertical: 13,
+    borderRadius: 14,
     gap: 10,
     width: '100%',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#D6E4DB',
   },
   galleryButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600' as const,
     color: Colors.primary,
   },
+  quickTips: {
+    backgroundColor: '#F3FBF4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D8EDD9',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 4,
+  },
+  quickTipsText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600' as const,
+  },
   hintText: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.textSecondary,
     textAlign: 'center',
+    maxWidth: '92%',
   },
   resultSection: {
     gap: 14,
