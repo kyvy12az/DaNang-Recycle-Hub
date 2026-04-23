@@ -108,11 +108,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const response = await axios.post(
           `${API_BASE_URL}/api/login`,
           { email, password },
-          { headers: { 'bypass-tunnel-reminder': 'true' } }
+          {
+            headers: { 'bypass-tunnel-reminder': 'true' },
+            timeout: 10000 // Thêm timeout để xử lý khi Server không phản hồi
+          }
         );
         return response.data;
       } catch (error: any) {
-        throw new Error(error.response?.data?.message || 'Đăng nhập thất bại');
+        // Cực kỳ quan trọng: Throw lỗi để mutateAsync nhận diện thất bại
+        const msg = error.response?.data?.message || error.message || 'Không thể kết nối đến máy chủ';
+        throw new Error(msg);
       }
     },
     onSuccess: async (data) => {
@@ -120,10 +125,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const userToSave = normalizeUser(data.user, data.user.provider || 'email');
         setUser(userToSave);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userToSave));
-        if (data.token) {
-          await saveToken(data.token);
-        }
-        console.log('Đăng nhập thành công và đã lưu User vào State');
+        if (data.token) await saveToken(data.token);
       }
     },
   });
@@ -138,21 +140,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         );
         return response.data;
       } catch (error: any) {
-        console.log('LỖI PHẢI HỒI TỪ BE:', JSON.stringify(error.response?.data));
         throw new Error(error.response?.data?.message || 'Đăng ký thất bại');
       }
     },
     onSuccess: async (data) => {
       if (data && data.user) {
         const userToSave = normalizeUser(data.user, data.user.provider || 'email');
-
         setUser(userToSave);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userToSave));
-
-        if (data.token) {
-          await saveToken(data.token);
-        }
-        console.log('Đăng ký thành công và đã lưu User vào State');
+        if (data.token) await saveToken(data.token);
       }
     },
   });
@@ -167,7 +163,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         );
         return response.data;
       } catch (error: any) {
-        throw new Error(error.response?.data?.message || 'Đăng nhập Google thất bại');
+        throw new Error(error.response?.data?.message || 'Lỗi đăng nhập Google');
       }
     },
     onSuccess: async (data) => {
@@ -175,10 +171,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const userToSave = normalizeUser(data.user, data.user.provider || 'google');
         setUser(userToSave);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userToSave));
-        if (data.token) {
-          await saveToken(data.token);
-        }
-        console.log('Đăng nhập Google thành công và đã lưu User vào State')
+        if (data.token) await saveToken(data.token);
       }
     },
   });
@@ -212,12 +205,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const updateAvatarUrl = useCallback(async (avatarUrl: string) => {
     if (!user) return;
-    
+
     const updatedUser: AuthUser = {
       ...user,
       avatar: avatarUrl,
     };
-    
+
     setUser(updatedUser);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
   }, [user]);
@@ -264,21 +257,21 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     user,
     isLoading,
     isAuthenticated: !!user,
-    login: loginMutation.mutate,
+    login: loginMutation.mutateAsync,
     loginError: loginMutation.error?.message ?? null,
     isLoggingIn: loginMutation.isPending,
-    register: registerMutation.mutate,
+    register: registerMutation.mutateAsync,
     registerError: registerMutation.error?.message ?? null,
     isRegistering: registerMutation.isPending,
-    loginWithGoogle: googleLoginMutation.mutate,
+    loginWithGoogle: googleLoginMutation.mutateAsync,
     isGoogleLogging: googleLoginMutation.isPending,
     googleLoginError: googleLoginMutation.error?.message ?? null,
-    socialLogin: socialLoginMutation.mutate,
+    socialLogin: socialLoginMutation.mutateAsync,
     isSocialLogging: socialLoginMutation.isPending,
     socialLoginError: socialLoginMutation.error?.message ?? null,
     logout,
     updateAvatarUrl,
-    updateUser,  
+    updateUser,
     getAuthToken,
   };
 });
