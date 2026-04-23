@@ -6,7 +6,7 @@ exports.createListing = async (req, res) => {
     const { items, totalPrice, totalWeight, greenPoints, note, pickupTime, imageUrl } = req.body;
 
     if (!items || items.length === 0) {
-      return res.status(400).json({ message: "Vui lòng thêm ít nhất một loại rác" });
+      return res.status(400).json({ message: "Vui lòng thêm ít nhất một loại rác thải" });
     }
     if (!pickupTime) {
       return res.status(400).json({ message: "Vui lòng chọn thời gian thu gom" });
