@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,16 +7,11 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { RefreshCw, AlertCircle, Check, Scan, Brain } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import Colors from '@/constants/colors';
-import {
-  loadTrashModel,
-  predictTrash,
-  getSubjectSegmentationPreview,
-  isConfidenceAcceptable,
-  TrashPrediction,
-} from '@/utils/trashModel';
+import { TrashPrediction } from '@/utils/trashModel';
 import { wasteTypes } from '@/mocks/data';
 import { WasteType } from '@/types';
 
@@ -30,6 +25,84 @@ interface AITrashRecognizerProps {
   onRetry: () => void;
 }
 
+// Cấu hình nhãn tiếng Việt và Metadata tương ứng với 10 nhãn từ Backend
+const LABEL_MAP: Record<string, any> = {
+  'battery': { vi: 'Pin/Ắc quy', group: 'hazardous', cat: 'hazardous', price: 0, guidance: 'Gom riêng, đưa đến điểm thu gom pin chuyên dụng.' },
+  'biological': { vi: 'Thực phẩm', group: 'organic', cat: 'organic', price: 0, guidance: 'Ủ phân compost hoặc làm thức ăn gia súc.' },
+  'cardboard': { vi: 'Bìa Carton', group: 'recyclable', cat: 'paper', price: 3000, guidance: 'Gấp gọn, giữ khô ráo.' },
+  'clothes': { vi: 'Quần áo', group: 'non-recyclable', cat: 'residual', price: 0, guidance: 'Tái sử dụng hoặc bỏ thùng rác sinh hoạt.' },
+  'glass': { vi: 'Thủy tinh', group: 'recyclable', cat: 'glass', price: 1500, guidance: 'Rửa sạch, để riêng tránh rơi vỡ.' },
+  'metal': { vi: 'Kim loại', group: 'recyclable', cat: 'metal', price: 8000, guidance: 'Thu gom bán ve chai hoặc đơn vị tái chế.' },
+  'paper': { vi: 'Giấy', group: 'recyclable', cat: 'paper', price: 2500, guidance: 'Loại bỏ ghim bấm, giữ sạch.' },
+  'plastic': { vi: 'Nhựa', group: 'recyclable', cat: 'plastic', price: 4000, guidance: 'Ép bẹp để tiết kiệm diện tích.' },
+  'shoes': { vi: 'Giày dép', group: 'non-recyclable', cat: 'residual', price: 0, guidance: 'Bỏ vào thùng rác sinh hoạt.' },
+  'trash': { vi: 'Rác còn lại', group: 'non-recyclable', cat: 'residual', price: 0, guidance: 'Bỏ vào túi rác mang đi chôn lấp hoặc đốt.' },
+};
+
+type ApiClassificationResponse = {
+  success?: boolean;
+  label?: string;
+  source?: string;
+  provider?: string;
+  confidence?: number | string;
+  data?: {
+    label?: string;
+    source?: string;
+    provider?: string;
+    confidence?: number | string;
+  };
+};
+
+const LABEL_ALIASES: Record<string, string> = {
+  battery: 'battery',
+  pin: 'battery',
+  biological: 'biological',
+  organic: 'biological',
+  cardboard: 'cardboard',
+  carton: 'cardboard',
+  clothes: 'clothes',
+  textile: 'clothes',
+  glass: 'glass',
+  metal: 'metal',
+  paper: 'paper',
+  plastic: 'plastic',
+  shoes: 'shoes',
+  footwear: 'shoes',
+  trash: 'trash',
+  residual: 'trash',
+  waste: 'trash',
+};
+
+function normalizeText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function normalizeLabel(label?: string) {
+  const normalized = normalizeText(label || '');
+  if (!normalized) return 'trash';
+  return LABEL_ALIASES[normalized] || normalized;
+}
+
+function resolveSourceLabel(response: ApiClassificationResponse) {
+  const source = `${response.source || ''} ${response.provider || ''}`.toLowerCase();
+  if (source.includes('gemini')) return 'Gemini AI';
+  if (source.includes('azure')) return 'Azure Custom Vision';
+  return response.source || response.provider || 'Unknown';
+}
+
+function normalizeConfidence(value: number | string | undefined, sourceLabel: string) {
+  const parsed = typeof value === 'string' ? Number(value) : value;
+  if (typeof parsed === 'number' && Number.isFinite(parsed)) {
+    return parsed > 1 ? parsed / 100 : Math.min(1, Math.max(0, parsed));
+  }
+
+  return sourceLabel === 'Gemini AI' ? 0.85 : 0.8;
+}
+
 export default function AITrashRecognizer({
   imageUri,
   onRecognitionComplete,
@@ -38,354 +111,231 @@ export default function AITrashRecognizer({
   const [step, setStep] = useState<'idle' | 'loading' | 'scanning' | 'result' | 'error'>('idle');
   const [predictions, setPredictions] = useState<TrashPrediction[]>([]);
   const [error, setError] = useState<string>('');
-  const [modelLoaded, setModelLoaded] = useState(false);
-  const [segmentationPreviewUri, setSegmentationPreviewUri] = useState<string | null>(null);
-  const [segmentationUsed, setSegmentationUsed] = useState(false);
+  const [sourceLabel, setSourceLabel] = useState<string>('Unknown');
 
-  const scanProgress = useState(new Animated.Value(0))[0];
-  const resultFade = useState(new Animated.Value(0))[0];
+  const scanProgress = useRef(new Animated.Value(0)).current;
+  const resultFade = useRef(new Animated.Value(0)).current;
 
-  // Load model khi component mount
-  useEffect(() => {
-    let isMounted = true;
-
-    const initModel = async () => {
-      try {
-        const loaded = await loadTrashModel();
-        if (isMounted) {
-          setModelLoaded(loaded);
-        }
-      } catch (err) {
-        console.error('Model init error:', err);
-        if (isMounted) {
-          setModelLoaded(false);
-        }
-      }
-    };
-
-    void initModel();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Xử lý nhận diện khi có ảnh
   const handleRecognize = useCallback(async () => {
     if (!imageUri) return;
 
     setStep('scanning');
     setError('');
 
-    // Animation scanning
-    Animated.timing(scanProgress, {
-      toValue: 1,
-      duration: 3000,
-      useNativeDriver: false,
-    }).start();
+    const scanLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanProgress, { toValue: 1, duration: 1500, useNativeDriver: false }),
+        Animated.timing(scanProgress, { toValue: 0, duration: 1500, useNativeDriver: false }),
+      ])
+    );
+    scanLoop.start();
 
     try {
-      const segmentationPreview = await getSubjectSegmentationPreview(imageUri);
-      setSegmentationPreviewUri(segmentationPreview.uri);
-      setSegmentationUsed(segmentationPreview.used);
+      const formData = new FormData();
+      formData.append('image', {
+        uri: imageUri,
+        name: 'trash.jpg',
+        type: 'image/jpeg',
+      } as any);
 
-      // Chạy AI prediction
-      const results = await predictTrash(imageUri);
-      setPredictions(results);
-      const currentTopPrediction = results[0];
-
-      // Chuyển đổi prediction thành WasteItems
-      const wasteItems = results
-        .filter((p) => p.isSellable && isConfidenceAcceptable(p.confidence, 0.5))
-        .map((p) => {
-          const matchedType = mapPredictionToWasteType(p);
-
-          return {
-            wasteType: matchedType,
-            quantity: p.estimatedWeight || 1,
-            confidence: p.confidence,
-          };
-        });
-
-      setStep('result');
-
-      // Fade in kết quả
-      Animated.timing(resultFade, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }).start();
-
-      // Gọi callback với kết quả
-      onRecognitionComplete(results, wasteItems, {
-        group: currentTopPrediction?.group,
-        guidance: currentTopPrediction?.guidance,
-        status: currentTopPrediction?.status,
-        confidence: currentTopPrediction?.confidence,
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/ai/classify`, {
+        method: 'POST',
+        body: formData,
       });
 
-    } catch (err) {
-      console.error('Recognition error:', err);
-      setError(err instanceof Error && err.message ? err.message : 'Không thể nhận diện rác. Vui lòng thử lại.');
-      setStep('error');
-    }
-  }, [imageUri, onRecognitionComplete, scanProgress, resultFade]);
+      const result = (await response.json()) as ApiClassificationResponse;
 
-  const getStatusText = (status?: TrashPrediction['status']) => {
-    switch (status) {
-      case 'success':
-        return 'Đã phân loại tốt';
-      case 'low-confidence':
-        return 'Độ tin cậy trung bình';
-      case 'fallback':
-        return 'Đã dùng AI dự phòng';
-      case 'needs-review':
-        return 'Cần kiểm tra lại';
-      default:
-        return 'Đang chờ phân loại';
-    }
-  };
-
-  const getGroupText = (group?: TrashPrediction['group']) => {
-    switch (group) {
-      case 'recyclable':
-        return 'Tái chế';
-      case 'organic':
-        return 'Hữu cơ';
-      case 'hazardous':
-        return 'Nguy hại';
-      case 'non-recyclable':
-        return 'Không tái chế';
-      default:
-        return 'Chưa xác định';
-    }
-  };
-
-  // Kiểm tra confidence đủ cao không
-  const topPrediction = predictions[0];
-  const isConfidenceLow = topPrediction && !isConfidenceAcceptable(topPrediction.confidence, 0.7);
-
-  const scanWidth = scanProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
-
-  // Map model output classes to categories available in current wasteTypes list.
-  const mapPredictionToWasteType = (prediction: TrashPrediction): WasteType => {
-    const className = prediction.className.toLowerCase();
-    const category = prediction.category.toLowerCase();
-
-    const directTypeByClass: Record<string, string> = {
-      shoes: 'Giày dép cũ',
-      battery: 'Pin đã qua sử dụng',
-      biological: 'Rác hữu cơ',
-    };
-
-    const exactTypeName = directTypeByClass[className];
-    if (exactTypeName) {
-      const exactMatch = wasteTypes.find((wt) => wt.name === exactTypeName);
-      if (exactMatch) {
-        return exactMatch;
+      if (!response.ok || !result.success) {
+        throw new Error((result as any)?.error || `Lỗi từ máy chủ (${response.status})`);
       }
+
+      const resolvedSourceLabel = resolveSourceLabel(result);
+      setSourceLabel(resolvedSourceLabel);
+
+      const normalizedLabel = normalizeLabel(result.label || result.data?.label);
+      const label = LABEL_MAP[normalizedLabel] ? normalizedLabel : 'trash';
+      const meta = LABEL_MAP[label] || LABEL_MAP['trash'];
+      const confidenceNum = normalizeConfidence(result.confidence ?? result.data?.confidence, resolvedSourceLabel);
+      const status = resolvedSourceLabel === 'Gemini AI'
+        ? 'fallback'
+        : confidenceNum >= 0.8
+          ? 'success'
+          : 'low-confidence';
+
+      const finalPrediction: TrashPrediction = {
+        className: label,
+        classNameVi: meta.vi,
+        confidence: confidenceNum,
+        group: meta.group,
+        status,
+        guidance: meta.guidance,
+        category: meta.cat,
+        pricePerKg: meta.price,
+        color: Colors.primary,
+        isSellable: meta.price > 0,
+        labelIndex: 0
+      };
+
+      setPredictions([finalPrediction]);
+
+      const matchedType = wasteTypes.find(wt => wt.category === meta.cat) || wasteTypes[0];
+      const wasteItems = meta.group === 'recyclable' ? [{
+        wasteType: matchedType,
+        quantity: 1,
+        confidence: confidenceNum
+      }] : [];
+
+      setStep('result');
+      Animated.timing(resultFade, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+
+      onRecognitionComplete([finalPrediction], wasteItems, {
+        group: meta.group,
+        guidance: meta.guidance,
+        status,
+        confidence: confidenceNum
+      });
+
+    } catch (err: any) {
+      console.error('AI Recognition Error:', err);
+      setError(err.message || 'Không thể kết nối với hệ thống nhận diện.');
+      setStep('error');
+    } finally {
+      scanLoop.stop();
     }
+  }, [imageUri, onRecognitionComplete, resultFade, scanProgress]);
 
-    const mappedCategoryByClass: Record<string, string> = {
-      battery: 'hazardous',
-      biological: 'organic',
-      cardboard: 'paper',
-      glass: 'glass',
-      metal: 'metal',
-      paper: 'paper',
-      plastic: 'plastic',
-      trash: 'residual',
-      clothes: 'textile',
-      shoes: 'textile',
-    };
-
-    const mappedCategory =
-      mappedCategoryByClass[className] ||
-      mappedCategoryByClass[category] ||
-      category;
-
-    const matched = wasteTypes.find((wt) => wt.category === mappedCategory);
-    return matched || wasteTypes[0];
-  };
-
-  if (!imageUri) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.noImageText}>Chưa có ảnh nào được chọn</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (imageUri && step === 'idle') {
+      handleRecognize();
+    }
+  }, [imageUri, step, handleRecognize]);
 
   return (
     <View style={styles.container}>
-      {/* Preview ảnh */}
-      <View style={styles.imageContainer}>
-        <Image source={{ uri: imageUri }} style={styles.image} contentFit="cover" />
+      {imageUri ? (
+        <View style={styles.imageContainer}>
+          <Image source={{ uri: imageUri }} style={styles.image} contentFit="cover" />
 
-        {step === 'scanning' && (
-          <View style={styles.scanOverlay}>
-            {segmentationUsed && segmentationPreviewUri && (
-              <Image source={{ uri: segmentationPreviewUri }} style={styles.segmentPreview} contentFit="contain" />
-            )}
-            <Scan size={64} color={Colors.primaryLight} />
-            <Animated.View style={[styles.scanLine, { width: scanWidth }]} />
+          {/* Hiệu ứng Scanning hiện đại */}
+          {step === 'scanning' && (
+            <View style={StyleSheet.absoluteFill}>
+              {/* 4 Góc khung hình AI */}
+              <View style={styles.cornerTopLeft} />
+              <View style={styles.cornerTopRight} />
+              <View style={styles.cornerBottomLeft} />
+              <View style={styles.cornerBottomRight} />
+
+              {/* Tia Laser quét */}
+              <Animated.View
+                style={[
+                  styles.laserLine,
+                  {
+                    top: scanProgress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['10%', '90%'],
+                    }),
+                  },
+                ]}
+              >
+                <LinearGradient
+                  colors={['transparent', Colors.primary, 'transparent']}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={styles.laserGradient}
+                />
+              </Animated.View>
+
+              <View style={styles.scanStatusOverlay}>
+                <ActivityIndicator size="small" color={Colors.white} />
+                <Text style={styles.scanStatusText}>Đang nhận diện vật thể...</Text>
+              </View>
+            </View>
+          )}
+
+          {step === 'result' && (
+            <View style={styles.successOverlay}>
+              <Animated.View style={{ opacity: resultFade }}>
+                <View style={styles.checkCircle}>
+                  <Check size={24} color={Colors.white} />
+                </View>
+              </Animated.View>
+            </View>
+          )}
+        </View>
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Scan size={48} color={Colors.textLight} />
+          <Text style={styles.noImageText}>Chưa có dữ liệu hình ảnh</Text>
+        </View>
+      )}
+
+      <View style={styles.controls}>
+        {/* Header Status */}
+        <View style={styles.headerInfo}>
+          <View style={styles.aiBadge}>
+            <Brain size={12} color={Colors.primary} />
+            <Text style={styles.aiBadgeText}>AI ENGINE ACTIVE</Text>
+          </View>
+          <Text style={styles.modelText}>Hybrid Mode: Azure & Gemini</Text>
+        </View>
+
+        {step === 'result' && predictions[0] && (
+          <Animated.View style={[styles.resultCard, { opacity: resultFade }]}>
+            <View style={styles.resultMainRow}>
+              <View>
+                <Text style={styles.predictionLabel}>Kết quả phân tích:</Text>
+                <Text style={styles.predictionValue}>{predictions[0].classNameVi}</Text>
+              </View>
+              <View style={[styles.confidenceBadge, { backgroundColor: predictions[0].confidence > 0.7 ? '#E8F5E9' : '#FFF3E0' }]}>
+                <Text style={[styles.confidenceText, { color: predictions[0].confidence > 0.7 ? '#2E7D32' : '#EF6C00' }]}>
+                  {(predictions[0].confidence * 100).toFixed(0)}%
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.infoGrid}>
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Phân loại</Text>
+                <Text style={styles.infoValue}>
+                  {predictions[0].group === 'recyclable' ? '♻️ Tái chế' :
+                    predictions[0].group === 'organic' ? '🍎 Hữu cơ' : '🗑️ Rác thải'}
+                </Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Xử lý</Text>
+                <Text style={styles.infoValue} numberOfLines={1}>{predictions[0].guidance}</Text>
+              </View>
+            </View>
+
+            <View style={styles.buttonGroup}>
+              <TouchableOpacity style={styles.secondaryButton} onPress={onRetry}>
+                <RefreshCw size={18} color={Colors.text} />
+                <Text style={styles.secondaryButtonText}>Chụp lại</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => onRecognitionComplete(predictions, [], {})}
+              >
+                <Check size={18} color={Colors.white} />
+                <Text style={styles.primaryButtonText}>Xác nhận</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
+
+        {step === 'error' && (
+          <View style={styles.errorBox}>
+            <AlertCircle size={24} color={Colors.error} />
+            <Text style={styles.errorTitle}>Không thể nhận diện</Text>
+            <Text style={styles.errorDesc}>{error}</Text>
+            <TouchableOpacity style={styles.retryAction} onPress={onRetry}>
+              <Text style={styles.retryActionText}>Thử lại ngay</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
-
-      {/* Controls */}
-      {step === 'idle' && (
-        <View style={styles.controls}>
-          <View style={styles.modelStatus}>
-            <Brain size={20} color={modelLoaded ? Colors.success : Colors.warning} />
-            <Text style={[styles.modelStatusText, { color: modelLoaded ? Colors.success : Colors.warning }]}>
-              {modelLoaded ? 'AI Model sẵn sàng' : 'Sử dụng AI dự phòng'}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.recognizeButton}
-            onPress={handleRecognize}
-            activeOpacity={0.8}
-          >
-            <Brain size={22} color={Colors.white} />
-            <Text style={styles.recognizeButtonText}>Nhận diện bằng AI</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.hintText}>
-            AI sẽ tự động phân loại và ước tính khối lượng rác
-          </Text>
-        </View>
-      )}
-
-      {step === 'scanning' && (
-        <View style={styles.scanningContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.scanningText}>🤖 AI đang phân tích...</Text>
-          <View style={styles.progressBar}>
-            <Animated.View style={[styles.progressFill, { width: scanWidth }]} />
-          </View>
-          <Text style={styles.scanSubtext}>Nhận diện loại rác, ước lượng khối lượng</Text>
-        </View>
-      )}
-
-      {step === 'result' && (
-        <Animated.View style={[styles.resultContainer, { opacity: resultFade }]}>
-          <View style={styles.resultHeader}>
-            <View style={styles.aiIcon}>
-              <Check size={20} color={Colors.white} />
-            </View>
-            <Text style={styles.resultTitle}>Kết quả nhận diện</Text>
-          </View>
-
-          {isConfidenceLow && (
-            <View style={styles.warningBox}>
-              <AlertCircle size={18} color={Colors.warning} />
-              <Text style={styles.warningText}>
-                Độ tin cậy thấp ({(topPrediction.confidence * 100).toFixed(0)}%).
-                Vui lòng chụp lại ảnh rõ hơn.
-              </Text>
-            </View>
-          )}
-
-          {topPrediction?.guidance && (
-            <View style={styles.warningBox}>
-              <Brain size={18} color={Colors.primary} />
-              <Text style={styles.warningText}>{topPrediction.guidance}</Text>
-            </View>
-          )}
-
-          {topPrediction && (
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLine}>Tình trạng phân loại: {getStatusText(topPrediction.status)}</Text>
-              <Text style={styles.summaryLine}>Loại rác: {topPrediction.classNameVi} ({topPrediction.className})</Text>
-              <Text style={styles.summaryLine}>Nhóm phân loại: {getGroupText(topPrediction.group)}</Text>
-              <Text style={styles.summaryLine}>Hướng dẫn xử lý: {topPrediction.guidance}</Text>
-            </View>
-          )}
-
-          {predictions.slice(0, 3).map((pred, _index) => (
-            <View key={_index} style={styles.predictionItem}>
-              <View style={[styles.predictionRank, _index === 0 && styles.predictionRankFirst]}>
-                <Text style={styles.predictionRankText}>{_index + 1}</Text>
-              </View>
-              <View style={styles.predictionInfo}>
-                <Text style={styles.predictionName}>{pred.classNameVi}</Text>
-                <Text style={styles.predictionCategory}>{pred.category}</Text>
-                <Text style={styles.predictionCategory}>Nhóm: {pred.group}</Text>
-              </View>
-              <View style={styles.predictionStats}>
-                <Text style={[styles.confidenceText, { color: pred.confidence >= 0.7 ? Colors.success : pred.confidence >= 0.5 ? Colors.warning : Colors.error }]}>
-                  {(pred.confidence * 100).toFixed(0)}%
-                </Text>
-                {pred.estimatedWeight && (
-                  <Text style={styles.weightText}>~{pred.estimatedWeight}kg</Text>
-                )}
-              </View>
-            </View>
-          ))}
-
-          <View style={styles.actionButtons}>
-            {isConfidenceLow && (
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={onRetry}
-                activeOpacity={0.8}
-              >
-                <RefreshCw size={18} color={Colors.primary} />
-                <Text style={styles.retryButtonText}>Chụp lại</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[styles.confirmButton, isConfidenceLow && styles.confirmButtonSecondary]}
-              onPress={() => {
-                // Chuyển sang form xác nhận
-                const wasteItems = predictions
-                  .filter(p => p.isSellable && isConfidenceAcceptable(p.confidence, 0.5))
-                  .map((p) => {
-                    const matchedType = mapPredictionToWasteType(p);
-                    return {
-                      wasteType: matchedType,
-                      quantity: p.estimatedWeight || 1,
-                      confidence: p.confidence,
-                    };
-                  });
-                onRecognitionComplete(predictions, wasteItems, {
-                  group: topPrediction?.group,
-                  guidance: topPrediction?.guidance,
-                  status: topPrediction?.status,
-                  confidence: topPrediction?.confidence,
-                });
-              }}
-              activeOpacity={0.8}
-            >
-              <Check size={18} color={Colors.white} />
-              <Text style={styles.confirmButtonText}>
-                {isConfidenceLow ? 'Tiếp tục vẫn chấp nhận' : 'Xác nhận'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      )}
-
-      {step === 'error' && (
-        <View style={styles.errorContainer}>
-          <AlertCircle size={48} color={Colors.error} />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => void handleRecognize()}
-            activeOpacity={0.8}
-          >
-            <RefreshCw size={18} color={Colors.primary} />
-            <Text style={styles.retryButtonText}>Thử lại</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 }
@@ -644,4 +594,129 @@ const styles = StyleSheet.create({
     color: Colors.error,
     textAlign: 'center',
   },
+  cornerTopLeft: { position: 'absolute', top: 20, left: 20, width: 40, height: 40, borderLeftWidth: 4, borderTopWidth: 4, borderColor: Colors.primary, borderTopLeftRadius: 12 },
+  cornerTopRight: { position: 'absolute', top: 20, right: 20, width: 40, height: 40, borderRightWidth: 4, borderTopWidth: 4, borderColor: Colors.primary, borderTopRightRadius: 12 },
+  cornerBottomLeft: { position: 'absolute', bottom: 20, left: 20, width: 40, height: 40, borderLeftWidth: 4, borderBottomWidth: 4, borderColor: Colors.primary, borderBottomLeftRadius: 12 },
+  cornerBottomRight: { position: 'absolute', bottom: 20, right: 20, width: 40, height: 40, borderRightWidth: 4, borderBottomWidth: 4, borderColor: Colors.primary, borderBottomRightRadius: 12 },
+
+  laserLine: { position: 'absolute', left: '10%', right: '10%', height: 2, zIndex: 10 },
+  laserGradient: { height: '100%', width: '100%', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 10, elevation: 5 },
+
+  scanStatusOverlay: { position: 'absolute', bottom: 40, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  scanStatusText: { color: Colors.white, fontSize: 14, fontWeight: '500' },
+
+  // Card kết quả
+  resultCard: { backgroundColor: Colors.white, borderRadius: 24, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
+  resultMainRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  predictionLabel: { fontSize: 12, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 },
+  predictionValue: { fontSize: 24, fontWeight: 'bold', color: Colors.text, marginTop: 4 },
+  
+  confidenceBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+
+  infoGrid: { flexDirection: 'row', backgroundColor: '#F8F9FA', borderRadius: 16, padding: 15, marginBottom: 20 },
+  infoItem: { flex: 1 },
+  infoLabel: { fontSize: 11, color: Colors.textSecondary, marginBottom: 4 },
+  infoValue: { fontSize: 14, fontWeight: '600', color: Colors.text },
+  divider: { width: 1, backgroundColor: '#DDD', marginHorizontal: 15 },
+
+  buttonGroup: { flexDirection: 'row', gap: 12 },
+  primaryButton: { flex: 2, backgroundColor: Colors.primary, flexDirection: 'row', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  primaryButtonText: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
+  secondaryButton: { flex: 1, borderWidth: 1, borderColor: '#DDD', flexDirection: 'row', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  secondaryButtonText: { color: Colors.text, fontWeight: '600' },
+  
+  successOverlay: {
+  ...StyleSheet.absoluteFillObject,
+  backgroundColor: 'rgba(46, 125, 50, 0.2)', // Màu xanh lá trong suốt
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+checkCircle: {
+  width: 60,
+  height: 60,
+  borderRadius: 30,
+  backgroundColor: Colors.primary,
+  justifyContent: 'center',
+  alignItems: 'center',
+  shadowColor: Colors.primary,
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3,
+  shadowRadius: 8,
+},
+
+// Trạng thái trống
+emptyContainer: {
+  flex: 1,
+  height: 300,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: '#F5F5F5',
+  borderRadius: 20,
+  borderWidth: 2,
+  borderColor: '#E0E0E0',
+  borderStyle: 'dashed',
+},
+
+// Thông tin Header (AI Status)
+headerInfo: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 15,
+},
+modelText: {
+  fontSize: 12,
+  color: Colors.textSecondary,
+  fontStyle: 'italic',
+},
+
+// Thông báo lỗi (Error Box)
+errorBox: {
+  backgroundColor: '#FFEBEE',
+  padding: 20,
+  borderRadius: 20,
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#FFCDD2',
+},
+errorTitle: {
+  fontSize: 18,
+  fontWeight: 'bold',
+  color: '#C62828',
+  marginTop: 10,
+},
+errorDesc: {
+  fontSize: 14,
+  color: '#D32F2F',
+  textAlign: 'center',
+  marginTop: 8,
+  marginBottom: 15,
+},
+retryAction: {
+  paddingHorizontal: 20,
+  paddingVertical: 10,
+  backgroundColor: '#C62828',
+  borderRadius: 10,
+},
+retryActionText: {
+  color: Colors.white,
+  fontWeight: '600',
+  fontSize: 14,
+},
+
+// Style phụ trợ cho Badge
+aiBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  backgroundColor: '#E8F5E9',
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  borderRadius: 8,
+},
+aiBadgeText: {
+  fontSize: 11,
+  fontWeight: '800',
+  color: Colors.primary,
+},
 });

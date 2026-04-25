@@ -5,6 +5,7 @@ import { WasteItem, WasteType } from '@/types';
 
 export interface AIRecognitionResult {
   wasteType: WasteType;
+  labelVi?: string;
   confidence: number;
   estimatedWeight: number;
   group?: 'recyclable' | 'organic' | 'hazardous' | 'non-recyclable';

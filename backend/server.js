@@ -10,6 +10,7 @@ const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const adminAuthRoutes = require("./routes/adminAuthRoutes");
+const classifyRoutes = require("./routes/classifyRoutes");
 
 const app = express();
 
@@ -50,6 +51,7 @@ mongoose.connect(mongoURI)
 app.use("/api", authRoutes);
 app.use("/api/user", userRoutes); 
 app.use("/api/admin", adminAuthRoutes);
+app.use("/api/ai", classifyRoutes);
 
 // route kiểm tra trạng thái server (Health Check)
 app.get("/", (req, res) => {

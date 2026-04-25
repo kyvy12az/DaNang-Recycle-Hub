@@ -48,10 +48,8 @@ export default function SellerUploadScreen() {
 
   // Load ảnh từ store khi mount
   useEffect(() => {
-    if (capturedImageUri) {
-      setStep('recognizing');
-    }
-  }, [capturedImageUri]);
+    
+  }, []);
 
   // Always start with fresh state when reopening the selling screen.
   useFocusEffect(
@@ -120,74 +118,96 @@ export default function SellerUploadScreen() {
   }, [clearAll, setCapturedImage]);
 
   // Xử lý kết quả nhận diện AI
-  const handleRecognitionComplete = useCallback((predictions: TrashPrediction[], wasteItems: { wasteType: WasteType; quantity: number; confidence: number }[], analysis?: { group?: string; guidance?: string; status?: string; confidence?: number }) => {
-    // Chuyển đổi thành WasteItem
-    const items: WasteItem[] = wasteItems.map((item, index) => ({
-      id: `ai-${index}-${Date.now()}`,
-      wasteType: item.wasteType,
-      quantity: item.quantity,
-      estimatedPrice: item.wasteType.pricePerKg * item.quantity,
-    }));
+  const handleRecognitionComplete = useCallback(
+    (
+      preds: TrashPrediction[],
+      wasteItems: { wasteType: WasteType; quantity: number; confidence: number }[],
+      analysis?: { group?: string; guidance?: string; status?: string; confidence?: number }
+    ) => {
+      if (!preds || preds.length === 0) return;
 
-    setAIResults(
-      predictions.map((prediction) => ({
-        wasteType: mapPredictionToWasteType(prediction),
-        confidence: prediction.confidence,
-        estimatedWeight: prediction.estimatedWeight || 1,
-        group: prediction.group,
-        status: prediction.status,
-        guidance: prediction.guidance,
-      }))
-    );
+      const primaryPrediction = preds[0];
+      const predictedWasteType = wasteItems[0]?.wasteType || mapPredictionToWasteType(primaryPrediction);
+      const isRecyclable = (primaryPrediction.group || analysis?.group) === 'recyclable';
 
-    if (analysis?.guidance) {
-      console.log(`AI guidance: ${analysis.guidance}`);
-    }
+      // Chỉ lưu vào giỏ hàng nếu thuộc nhóm tái chế
+      const formattedItems: WasteItem[] = isRecyclable
+        ? wasteItems.map((item, index) => ({
+            id: `ai-${Date.now()}-${index}`,
+            wasteType: item.wasteType,
+            quantity: item.quantity,
+            estimatedPrice: item.wasteType.pricePerKg * item.quantity,
+          }))
+        : [];
 
-    setRecognizedItems(items);
-    setStep('result');
+      // Lưu vào Store
+      setRecognizedItems(formattedItems);
 
-    Animated.timing(resultFade, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-  }, [setRecognizedItems, setAIResults, resultFade]);
+      // Lưu kết quả phân tích chi tiết của AI (cho mục đích hiển thị/debug)
+      const aiResultData = {
+        wasteType: predictedWasteType,
+        labelVi: primaryPrediction.classNameVi,
+        confidence: analysis?.confidence || primaryPrediction.confidence,
+        estimatedWeight: wasteItems[0]?.quantity || 0,
+        group: (primaryPrediction.group || analysis?.group) as any,
+        status: (primaryPrediction.status || analysis?.status) as any,
+        guidance: analysis?.guidance || primaryPrediction.guidance,
+      };
+
+      setAIResults([aiResultData]);
+      setStep('result');
+      resultFade.setValue(0);
+      Animated.timing(resultFade, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+    },
+    [resultFade, setRecognizedItems, setAIResults]
+  );
 
   const mapPredictionToWasteType = useCallback((prediction: TrashPrediction): WasteType => {
-    const className = prediction.className.toLowerCase();
-    const category = prediction.category.toLowerCase();
-
-    const directTypeByClass: Record<string, string> = {
-      shoes: 'Giày dép cũ',
-      battery: 'Pin đã qua sử dụng',
-      biological: 'Rác hữu cơ',
-    };
-
-    const exactTypeName = directTypeByClass[className];
-    if (exactTypeName) {
-      const exactMatch = wasteTypes.find((wt) => wt.name === exactTypeName);
-      if (exactMatch) {
-        return exactMatch;
-      }
+    // Kiểm tra an toàn để tránh lỗi toLowerCase của undefined
+    if (!prediction || !prediction.className) {
+      console.warn("Dữ liệu AI không hợp lệ:", prediction);
+      return wasteTypes.find(wt => wt.category === 'residual') || wasteTypes[0];
     }
 
-    const mappedCategoryByClass: Record<string, string> = {
+    const className = prediction.className.toLowerCase();
+
+    // Bảng ánh xạ nhãn sang tên hiển thị đúng taxonomy 10 loại
+    const labelMapping: Record<string, string> = {
+      'battery': 'Pin/Ắc quy',
+      'biological': 'Thực phẩm',
+      'cardboard': 'Bìa Carton',
+      'clothes': 'Quần áo',
+      'glass': 'Thủy tinh',
+      'metal': 'Kim loại',
+      'paper': 'Giấy',
+      'plastic': 'Nhựa',
+      'shoes': 'Giày dép',
+      'trash': 'Rác còn lại'
+    };
+
+    const categoryMapping: Record<string, string> = {
       battery: 'hazardous',
       biological: 'organic',
       cardboard: 'paper',
+      clothes: 'residual',
       glass: 'glass',
       metal: 'metal',
       paper: 'paper',
       plastic: 'plastic',
+      shoes: 'residual',
       trash: 'residual',
-      clothes: 'textile',
-      shoes: 'textile',
     };
 
-    const mappedCategory = mappedCategoryByClass[className] || mappedCategoryByClass[category] || category;
-    const matched = wasteTypes.find((wt) => wt.category === mappedCategory);
-    return matched || wasteTypes[0];
+    const displayName = labelMapping[className];
+
+    // Tìm trong danh sách wasteTypes dựa trên tên hiển thị hoặc category tương ứng
+    const matched = wasteTypes.find((wt) => wt.name === displayName)
+      || wasteTypes.find((wt) => wt.category === categoryMapping[className]);
+
+    // Nếu không tìm thấy, mặc định trả về loại rác còn lại (residual)
+    return matched
+      ? { ...matched, name: displayName }
+      : { ...(wasteTypes.find(wt => wt.category === 'residual') || wasteTypes[0]), name: displayName || 'Rác còn lại' };
   }, []);
 
   // Chụp lại ảnh
@@ -268,8 +288,6 @@ export default function SellerUploadScreen() {
       case 'paper':
       case 'metal':
       case 'glass':
-      case 'textile':
-      case 'electronics':
         return 'recyclable';
       default:
         return 'non-recyclable';
@@ -279,13 +297,13 @@ export default function SellerUploadScreen() {
   const getGuidanceByGroup = (group: 'recyclable' | 'organic' | 'hazardous' | 'non-recyclable') => {
     switch (group) {
       case 'recyclable':
-        return 'Rửa sạch, để khô và tách riêng trước khi bàn giao thu gom.';
+        return 'Gấp gọn, giữ khô ráo và tách riêng trước khi bàn giao thu mua.';
       case 'organic':
-        return 'Nên tách riêng để ủ compost hoặc bỏ đúng thùng rác hữu cơ.';
+        return 'Ủ phân compost hoặc làm thức ăn gia súc.';
       case 'hazardous':
-        return 'Tách riêng tuyệt đối, không trộn với rác thường, đưa đến điểm thu gom chuyên dụng.';
+        return 'Gom riêng, đưa đến điểm thu gom pin chuyên dụng.';
       case 'non-recyclable':
-        return 'Không phù hợp thu mua tái chế, xử lý theo luồng rác còn lại.';
+        return 'Bỏ vào túi rác mang đi chôn lấp hoặc đốt.';
       default:
         return 'Phân loại riêng trước khi xử lý.';
     }
@@ -298,7 +316,7 @@ export default function SellerUploadScreen() {
       case 'low-confidence':
         return 'Độ tin cậy trung bình';
       case 'fallback':
-        return 'Đã dùng AI dự phòng';
+        return 'Đã dùng Gemini AI';
       case 'needs-review':
         return 'Cần kiểm tra lại';
       default:
@@ -315,7 +333,7 @@ export default function SellerUploadScreen() {
       case 'hazardous':
         return 'Nguy hại';
       case 'non-recyclable':
-        return 'Không tái chế';
+        return 'Rác khác';
       default:
         return 'Chưa xác định';
     }
@@ -358,9 +376,19 @@ export default function SellerUploadScreen() {
     return getClassificationByItem(item, index) || getFallbackClassification(item);
   };
 
+  const getDisplayWasteName = (
+    classification: { labelVi?: string; wasteType: WasteType },
+    fallbackItem: WasteType
+  ) => {
+    return classification.labelVi || classification.wasteType.name || fallbackItem.name;
+  };
+
   const summaryClassification =
     aiResults[0] ||
     (recognizedItems.length > 0 ? getVisibleClassification(recognizedItems[0], 0) : null);
+
+  const summaryGroup = summaryClassification?.group ?? 'non-recyclable';
+  const summaryGuidance = summaryClassification?.guidance || getGuidanceByGroup(summaryGroup);
 
   const showNoSellableNotice = aiResults.length > 0 && recognizedItems.length === 0;
 
@@ -497,19 +525,19 @@ export default function SellerUploadScreen() {
                     <View style={styles.summaryClassificationRow}>
                       <Text style={styles.summaryClassificationName}>Loại rác</Text>
                       <Text style={styles.summaryClassificationText}>
-                        {summaryClassification.wasteType.name || summaryClassification.wasteType.category}
+                        {getDisplayWasteName(summaryClassification, summaryClassification.wasteType)}
                       </Text>
                     </View>
                     <View style={styles.summaryClassificationRow}>
                       <Text style={styles.summaryClassificationName}>Nhóm phân loại</Text>
                       <Text style={styles.summaryClassificationText}>
-                        {getGroupText(summaryClassification.group)}
+                        {getGroupText(summaryGroup)}
                       </Text>
                     </View>
                     <View style={styles.summaryClassificationGuidanceBlock}>
                       <Text style={styles.summaryClassificationName}>Hướng dẫn xử lý</Text>
                       <Text style={styles.summaryClassificationGuidance}>
-                        {summaryClassification.guidance || getGuidanceByGroup(summaryClassification.group)}
+                        {summaryGuidance}
                       </Text>
                     </View>
                   </View>
@@ -534,7 +562,7 @@ export default function SellerUploadScreen() {
                   <View style={styles.itemHeaderRow}>
                     <View style={[styles.itemColorDot, { backgroundColor: item.wasteType.color }]} />
                     <View style={styles.itemInfo}>
-                      <Text style={styles.itemName}>{item.wasteType.name}</Text>
+                      <Text style={styles.itemName}>{classification.labelVi || item.wasteType.name}</Text>
                       <Text style={styles.itemPrice}>
                         {formatPrice(item.wasteType.pricePerKg)}/kg
                       </Text>
@@ -572,7 +600,7 @@ export default function SellerUploadScreen() {
                     <View style={styles.metaGrid}>
                       <View style={styles.metaPill}>
                         <Text style={styles.metaLabel}>Loại rác</Text>
-                        <Text style={styles.metaValue}>{classification.wasteType.name || item.wasteType.name}</Text>
+                        <Text style={styles.metaValue}>{classification.labelVi || classification.wasteType.name || item.wasteType.name}</Text>
                       </View>
                       <View style={styles.metaPill}>
                         <Text style={styles.metaLabel}>Nhóm</Text>
