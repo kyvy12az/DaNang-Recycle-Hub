@@ -48,6 +48,15 @@ mongoose.connect(mongoURI)
     console.error("MongoDB kết nối lỗi: ", err.message);
   });
 
+// --- Định nghĩa route kiểm tra trạng thái server --- dùng để ping mỗi lần server bị ngủ 
+app.get("/ping", (req, res) => {
+  res.status(200).json({
+    status: "success",
+    message: "Server is awake!",
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.use("/api", authRoutes);
 app.use("/api/user", userRoutes); 
 app.use("/api/admin", adminAuthRoutes);
