@@ -2,8 +2,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-AsyncStorage.clear();
-
 // Generate mock transactions for initial state
 function generateMockTransactions(): TransactionRecord[] {
   const now = new Date();
@@ -148,6 +146,7 @@ interface WalletState {
   deposit: (amount: number, bankName: string) => void;
   withdraw: (amount: number, bankName: string) => boolean;
   addFromSale: (orderId: string, amount: number, points: number, description: string) => void;
+  addGreenPoints: (points: number, description?: string) => void;
   deductForPurchase: (orderId: string, amount: number, description: string) => void;
   
   // Getters
@@ -258,6 +257,24 @@ export const useWalletStore = create<WalletState>()(
         
         set((state) => ({
           vndBalance: state.vndBalance + amount,
+          greenPoints: state.greenPoints + points,
+          transactions: [newTransaction, ...state.transactions],
+        }));
+      },
+
+      addGreenPoints: (points, description = 'Thưởng game phân loại rác') => {
+        if (points <= 0) return;
+
+        const newTransaction: TransactionRecord = {
+          id: `GAME${Date.now()}`,
+          type: 'bonus',
+          amount: points,
+          description,
+          status: 'completed',
+          timestamp: new Date().toISOString(),
+        };
+
+        set((state) => ({
           greenPoints: state.greenPoints + points,
           transactions: [newTransaction, ...state.transactions],
         }));

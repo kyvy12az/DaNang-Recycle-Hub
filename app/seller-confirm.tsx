@@ -13,12 +13,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MapPin, Clock, FileText, Truck, Check, ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import Colors from '@/constants/colors';
 import { WasteItem } from '@/types';
 import EcoLoader from '@/components/EcoLoader';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/utils/supabase';
 
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
+const LISTING_IMAGE_BUCKET = process.env.EXPO_PUBLIC_SUPABASE_LISTINGS_BUCKET || 'listing-images';
 
 export default function SellerConfirmScreen() {
   const router = useRouter();
@@ -65,6 +68,58 @@ export default function SellerConfirmScreen() {
       setIsSubmitting(true);
 
       const token = await getAuthToken();
+      const isRemoteImage = imageUri.startsWith('http://') || imageUri.startsWith('https://');
+
+      const uploadImageToBucket = async (bucket: string) => {
+        const fileExtension = imageUri.split('.').pop()?.split('?')[0] || 'jpg';
+        const fileName = `listing-${user?.id || 'anonymous'}-${Date.now()}.${fileExtension}`;
+
+        const base64 = await FileSystemLegacy.readAsStringAsync(imageUri, {
+          encoding: FileSystemLegacy.EncodingType.Base64,
+        });
+
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i += 1) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+
+        const { error: uploadError } = await supabase.storage
+          .from(bucket)
+          .upload(fileName, byteArray, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: `image/${fileExtension.toLowerCase() === 'jpg' ? 'jpeg' : fileExtension.toLowerCase()}`,
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+        return urlData.publicUrl;
+      };
+
+      let listingImageUrl = imageUri || null;
+      if (imageUri && !isRemoteImage) {
+        try {
+          listingImageUrl = await uploadImageToBucket(LISTING_IMAGE_BUCKET);
+        } catch (primaryUploadError) {
+          try {
+            listingImageUrl = await uploadImageToBucket('avatars');
+          } catch (fallbackUploadError: any) {
+              const fallbackMessage =
+                fallbackUploadError?.message ||
+                (primaryUploadError instanceof Error
+                  ? primaryUploadError.message
+                  : 'Upload ảnh lên Supabase thất bại');
+            throw new Error(
+                fallbackMessage
+            );
+          }
+        }
+      }
 
       await axios.post(
         `${API_BASE_URL}/api/listings`,
@@ -75,7 +130,7 @@ export default function SellerConfirmScreen() {
           greenPoints: totalPoints,
           note,
           pickupTime,
-          imageUrl: imageUri || null,
+          imageUrl: listingImageUrl,
         },
         {
           headers: {
