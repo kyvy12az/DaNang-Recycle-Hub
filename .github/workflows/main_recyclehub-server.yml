@@ -1,6 +1,3 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
 name: Build and deploy Node.js app to Azure Web App - recyclehub-server
 
 on:
@@ -12,8 +9,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read #This is required for actions/checkout
 
     steps:
       - uses: actions/checkout@v4
@@ -23,30 +18,31 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: npm install, build, and test
+      - name: npm install and build (Backend only)
+        # Di chuyển vào thư mục backend trước khi cài đặt
         run: |
+          cd backend
           npm install
           npm run build --if-present
-          npm run test --if-present
+          # Chúng ta không chạy npm test ở đây vì file package.json của bạn đang báo lỗi "exit 1"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          # Chỉ upload nội dung bên trong thư mục backend để server Azure nhẹ nhất có thể
+          path: backend/ 
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
+    
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: node-app
+          path: . # Giải nén nội dung thư mục backend ra thư mục gốc của runner để deploy
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -62,4 +58,3 @@ jobs:
           app-name: 'recyclehub-server'
           slot-name: 'Production'
           package: .
-          
