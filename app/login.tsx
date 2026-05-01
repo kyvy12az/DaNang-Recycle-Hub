@@ -37,7 +37,6 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [googleOauthLoading, setGoogleOauthLoading] = useState<boolean>(false);
   const [googleOauthError, setGoogleOauthError] = useState<string | null>(null);
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL?.trim() || '';
 
   const isValidGoogleClientId = (value?: string) =>
     typeof value === 'string' && /\.apps\.googleusercontent\.com$/.test(value.trim());
@@ -72,15 +71,6 @@ export default function LoginScreen() {
   const slideAnim = useRef(new Animated.Value(40)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const logoRotate = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Toast.show({
-      type: 'info',
-      text1: 'EXPO_PUBLIC_API_URL',
-      text2: apiUrl || 'Chưa cấu hình EXPO_PUBLIC_API_URL',
-      visibilityTime: 10000,
-    });
-  }, [apiUrl]);
 
   useEffect(() => {
     Animated.parallel([

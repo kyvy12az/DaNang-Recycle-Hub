@@ -14,14 +14,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { Award, Gift, Check, ChevronLeft, AlertCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { mockRewards, mockProfile } from '@/mocks/data';
+import { mockRewards } from '@/mocks/data';
 import { Reward } from '@/types';
 import EcoLoader from '@/components/EcoLoader';
+import { useWalletStore } from '@/stores/walletStore';
 
 export default function RewardsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [points] = useState<number>(mockProfile.greenPoints);
+  const points = useWalletStore((state) => state.greenPoints);
   const [redeemedIds, setRedeemedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 

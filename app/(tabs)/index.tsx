@@ -11,15 +11,17 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Recycle, ShoppingCart, Leaf, Waves, TrendingUp, Award } from 'lucide-react-native';
+import { Recycle, ShoppingCart, Leaf, Waves, TrendingUp, Award, Gamepad2, ChevronRight, Sparkles, Flame, Medal } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import Colors from '@/constants/colors';
+import { useWalletStore } from '@/stores/walletStore';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const greenPoints = useWalletStore((state) => state.greenPoints);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim1 = useRef(new Animated.Value(0.9)).current;
@@ -83,6 +85,14 @@ export default function HomeScreen() {
     ]).start(() => {
       router.push('/buyer-listings' as any);
     });
+  };
+
+  const handleGamePress = () => {
+    router.push('/game' as any);
+  };
+
+  const handleProgressPress = () => {
+    router.push('/game/progress' as any);
   };
 
   return (
@@ -223,6 +233,63 @@ export default function HomeScreen() {
         </View>
 
         <View style={{ height: 24 }} />
+
+        <View style={styles.gameCard}>
+          <LinearGradient
+            colors={['#0F766E', '#0EA5A4', '#14B8A6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gameGradient}
+          >
+            {/* Phần thông tin chung */}
+            <View style={styles.gameTopRow}>
+              <View style={styles.gameIconWrap}>
+                <Gamepad2 size={24} color={Colors.white} />
+              </View>
+              <View style={styles.gamePill}>
+                <Sparkles size={12} color={Colors.white} />
+                <Text style={styles.gamePillText}>Thử thách phân loại</Text>
+              </View>
+            </View>
+
+            <Text style={styles.gameTitle}>Trả lời quiz phân loại rác, nhận huy hiệu</Text>
+
+            <View style={styles.gameStatsRow}>
+              <View style={styles.gameStatBubble}>
+                <Flame size={16} color={Colors.white} />
+                <Text style={styles.gameStatText}>Streak ngày</Text>
+              </View>
+              <View style={styles.gameStatBubble}>
+                <Award size={16} color={Colors.white} />
+                <Text style={styles.gameStatText}>{greenPoints.toLocaleString()} điểm</Text>
+              </View>
+            </View>
+
+            <View style={styles.actionButtonsRow}>
+
+              {/* Nút vào Game */}
+              <TouchableOpacity
+                style={styles.btnActionPrimary}
+                onPress={handleGamePress} 
+                activeOpacity={0.7}
+              >
+                <Text style={styles.gameCtaText}>Vào game ngay</Text>
+                <ChevronRight size={18} color={Colors.white} />
+              </TouchableOpacity>
+
+              {/* Nút vào Huy hiệu */}
+              <TouchableOpacity
+                style={styles.btnActionSecondary}
+                onPress={handleProgressPress} 
+                activeOpacity={0.7}
+              >
+                <Medal size={18} color={Colors.white} />
+                <Text style={styles.gameCtaText}>Huy hiệu</Text>
+              </TouchableOpacity>
+
+            </View>
+          </LinearGradient>
+        </View>
       </ScrollView>
     </View>
   );
@@ -404,5 +471,113 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.9)',
     lineHeight: 20,
+  },
+  gameCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  gameGradient: {
+    padding: 20,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 15,
+    gap: 10, // Khoảng cách giữa 2 nút
+  },
+  btnActionPrimary: {
+    flex: 1.5, // Nút game to hơn một chút
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', // Nền trắng mờ
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  btnActionSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.15)', // Nền tối mờ để phân biệt
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    gap: 5,
+  },
+  gameCtaText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  gameTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  gameIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gamePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  gamePillText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '700' as const,
+  },
+  gameTitle: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '800' as const,
+    lineHeight: 24,
+  },
+  gameDescription: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 8,
+  },
+  gameStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+    flexWrap: 'wrap',
+  },
+  gameStatBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  gameStatText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '700' as const,
+  },
+  gameCtaRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
 });

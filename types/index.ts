@@ -108,3 +108,52 @@ export interface WalletTransaction {
   status: 'completed' | 'pending' | 'failed';
   relatedId?: string;
 }
+
+export type GameWasteGroup = 'recyclable' | 'hazardous' | 'organic' | 'non-recyclable';
+
+export interface GameAnswerOption {
+  value: GameWasteGroup;
+  label: string;
+  hint: string;
+}
+
+export interface GameQuestion {
+  id: string;
+  imageUrl: string;
+  wasteName: string;
+  options: GameAnswerOption[];
+  answer: GameWasteGroup;
+  explanation: string;
+}
+
+export interface GameBadge {
+  id: string;
+  name: string;
+  description: string;
+  pointsRequired: number;
+  rewardPoints: number;
+  accentColor: string;
+  unlocked: boolean;
+}
+
+export interface GameStreakTier {
+  days: number;
+  rewardPoints: number;
+}
+
+export interface GameSummary {
+  totalPoints: number;
+  dailyPoints: number;
+  dailyPlaysUsed: number;
+  dailyPlaysLimit: number;
+  streakDays: number;
+  unlockedBadgeIds: string[];
+  lastPlayedDate: string | null;
+}
+
+export interface GameSessionState {
+  currentQuestionId: string | null;
+  selectedAnswer: GameWasteGroup | null;
+  result: 'idle' | 'correct' | 'incorrect';
+  isLocked: boolean;
+}

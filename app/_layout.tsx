@@ -79,6 +79,7 @@ function RootLayoutNav() {
       <Stack.Screen name="buyer-listings" options={{ title: "Danh sách rác bán" }} />
       <Stack.Screen name="buyer-detail" options={{ title: "Chi tiết" }} />
       <Stack.Screen name="chat" options={{ title: "Nhắn tin" }} />
+      <Stack.Screen name="game" options={{ headerShown: false }} />
       <Stack.Screen name="rewards" options={{ title: "Đổi thưởng" }} />
       <Stack.Screen name="education-detail" options={{ title: "Chi tiết" }} />
       <Stack.Screen name="profile/history" options={{ title: "Lịch sử giao dịch", headerShown: false }} />
