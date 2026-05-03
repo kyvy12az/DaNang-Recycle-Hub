@@ -27,10 +27,11 @@ import axios from 'axios';
 import Colors from '@/constants/colors';
 import { useWalletStore } from '@/stores/walletStore';
 import { WasteListing } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 const logoImage = require('@/assets/images/logo.png');
 
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.6:5000').replace(/\/$/, '');
 
 // Dùng lại hàm map từ BuyerListingsScreen
 const mapListingFromAPI = (item: any): WasteListing => ({
@@ -76,6 +77,7 @@ export default function BuyerDetailScreen() {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const { vndBalance, deductForPurchase } = useWalletStore();
+  const { user } = useAuth();
 
   // Fetch dữ liệu thật từ API
   useEffect(() => {
@@ -320,7 +322,24 @@ export default function BuyerDetailScreen() {
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.chatButton}
-          onPress={() => router.push({ pathname: '/chat' as any, params: { name: listing.sellerName } })}
+          onPress={() => {
+            if (listing.sellerId === user?.id) {
+              router.push({
+                pathname: '/conversations' as any,
+                params: { listingId: listing.id },
+              });
+            } else {
+              router.push({
+                pathname: '/chat' as any,
+                params: {
+                  name: listing.sellerName,
+                  otherAvatar: listing.sellerAvatar,
+                  receiverId: listing.sellerId,
+                  listingId: listing.id,
+                },
+              });
+            }
+          }}
           activeOpacity={0.8}
         >
           <MessageCircle size={22} color={Colors.primary} />
