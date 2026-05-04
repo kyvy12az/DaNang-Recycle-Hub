@@ -11,6 +11,8 @@ const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const adminAuthRoutes = require("./routes/adminAuthRoutes");
 const classifyRoutes = require("./routes/classifyRoutes");
+const messageRoutes = require("./routes/messageRoutes");
+
 
 const app = express();
 
@@ -55,15 +57,81 @@ app.use("/api", authRoutes);
 app.use("/api/user", userRoutes); 
 app.use("/api/admin", adminAuthRoutes);
 app.use("/api/ai", classifyRoutes);
+app.use("/api/messages", messageRoutes);
 
 // route kiểm tra trạng thái server (Health Check)
 app.get("/", (req, res) => {
   res.send("Server is running...");
 });
 
-// cấu hình PORT từ biến môi trường, nếu không có thì mặc định là 5000
+// Socket.io
+
+const http = require("http");
+const { Server } = require("socket.io");
+const Message = require("./models/Message");
+const User = require("./models/User"); 
+
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: { origin: "*", methods: ["GET", "POST"] },
+  pingTimeout: 10000,  
+  pingInterval: 5000,
+});
+
+io.on("connection", (socket) => {
+  console.log("User kết nối:", socket.id);
+
+  let currentUserId = null;
+
+  socket.on("register", async (userId) => {
+    currentUserId = userId;
+    socket.join(userId);
+    await User.findByIdAndUpdate(userId, {
+      isOnline: true,
+      lastSeen: null,
+    });
+    console.log("User online:", userId);
+  });
+
+  socket.on("send_message", async (data) => {
+    try {
+      await Message.create({
+        senderId: data.senderId,
+        receiverId: data.receiverId,
+        listingId: data.listingId,
+        text: data.text,
+      });
+
+      io.to(data.receiverId).emit("receive_message", data);
+      io.to(data.senderId).emit("conversation_updated", data);
+
+    } catch (err) {
+      console.error("Lỗi lưu tin nhắn:", err.message);
+    }
+  });
+
+  socket.on("heartbeat", async (userId) => {
+  if (userId) {
+    await User.findByIdAndUpdate(userId, { lastSeen: new Date() });
+    }
+  });
+
+  socket.on("disconnect", async () => {
+    if (currentUserId) {
+      await User.findByIdAndUpdate(currentUserId, {
+        isOnline: false,
+        lastSeen: new Date(),
+      });
+      console.log("User offline:", currentUserId);
+    }
+  });
+});
+
+
+
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

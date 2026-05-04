@@ -30,7 +30,7 @@ import { WasteListing } from '@/types';
 import EcoLoader from '@/components/EcoLoader';
 
 const { width } = Dimensions.get('window');
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.6:5000').replace(/\/$/, '');
 
 // Logic MapListing giữ nguyên từ code cũ của bạn
 const mapListingFromAPI = (item: any): WasteListing => ({

@@ -4,8 +4,9 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet, Animated, Dimensions, Image, ActivityIndicator, StatusBar } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import Colors from "@/constants/colors"; 
+import Colors from "@/constants/colors";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { SocketProvider } from "@/contexts/SocketContext";
 import Toast, { BaseToast, ErrorToast, InfoToast } from 'react-native-toast-message';
 
 const toastConfig = {
@@ -108,7 +109,7 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
       });
     }, 2500);
 
-    return () => clearTimeout(timer); 
+    return () => clearTimeout(timer);
   }, [fadeOut, scaleLogo, onFinish]);
 
   return (
@@ -117,7 +118,7 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
       <View style={splashStyles.content}>
         <Animated.View style={[splashStyles.logoContainer, { transform: [{ scale: scaleLogo }] }]}>
           <Image
-            source={require("@/assets/images/logo.png")} 
+            source={require("@/assets/images/logo.png")}
             style={splashStyles.logoImage}
             resizeMode="contain"
           />
@@ -138,7 +139,7 @@ const splashStyles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 99999,
-    backgroundColor: Colors.primary, 
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -149,7 +150,7 @@ const splashStyles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoContainer: {
-    width: 150, 
+    width: 150,
     height: 150,
     justifyContent: 'center',
     alignItems: 'center',
@@ -172,13 +173,16 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <AuthGate>
-            <RootLayoutNav />
-          </AuthGate>
-          {showSplash && <AppSplash onFinish={() => setShowSplash(false)} />}
-          <Toast config={toastConfig} />
-        </GestureHandlerRootView>
+        {/* ✅ SocketProvider nằm trong AuthProvider để có user.id */}
+        <SocketProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <AuthGate>
+              <RootLayoutNav />
+            </AuthGate>
+            {showSplash && <AppSplash onFinish={() => setShowSplash(false)} />}
+            <Toast config={toastConfig} />
+          </GestureHandlerRootView>
+        </SocketProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

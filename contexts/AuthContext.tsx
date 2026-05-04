@@ -22,7 +22,7 @@ interface AuthUser {
 
 const STORAGE_KEY = 'auth_user';
 const TOKEN_KEY = 'user_token_secure';
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.6:5000').replace(/\/$/, '');
 
 type GoogleProfile = {
   name: string;
@@ -197,11 +197,24 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   });
 
   const logout = useCallback(async () => {
-    setUser(null);
-    await AsyncStorage.removeItem(STORAGE_KEY);
-    await clearStoredToken();
-    console.log('Đã đăng xuất và xóa User khỏi State');
-  }, []);
+    try {
+    const token = await getStoredToken();
+    if (user?.id && token) {
+      await axios.put(
+        `${API_BASE_URL}/api/user/status`,
+        { isOnline: false, lastSeen: new Date() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    }
+  } catch (err) {
+    console.error('Lỗi cập nhật trạng thái:', err);
+  }
+
+  setUser(null);
+  await AsyncStorage.removeItem(STORAGE_KEY);
+  await clearStoredToken();
+}, [user]);
+
 
   const updateAvatarUrl = useCallback(async (avatarUrl: string) => {
     if (!user) return;

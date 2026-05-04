@@ -21,7 +21,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/utils/supabase';
 
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
-const LISTING_IMAGE_BUCKET = process.env.EXPO_PUBLIC_SUPABASE_LISTINGS_BUCKET || 'listing-images';
 
 export default function SellerConfirmScreen() {
   const router = useRouter();
