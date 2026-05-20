@@ -111,6 +111,18 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("mark_read", async ({ senderId, readerId, listingId }) => {
+  try {
+    await Message.updateMany(
+      { senderId, receiverId: readerId, listingId, isRead: false },
+      { isRead: true }
+    );
+    io.to(senderId).emit("message_read");
+  } catch (err) {
+    console.error("Lỗi mark_read:", err.message);
+  }
+});
+
   socket.on("heartbeat", async (userId) => {
   if (userId) {
     await User.findByIdAndUpdate(userId, { lastSeen: new Date() });
