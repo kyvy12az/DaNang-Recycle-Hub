@@ -75,6 +75,8 @@ export interface ChatMessage {
   timestamp: string;
   isMe: boolean;
   isRead?: boolean;
+  mediaUrl?: string;              
+  mediaType?: 'image' | 'video';
 }
 
 export interface EducationTip {

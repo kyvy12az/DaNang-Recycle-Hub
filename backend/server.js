@@ -101,6 +101,8 @@ io.on("connection", (socket) => {
         receiverId: data.receiverId,
         listingId: data.listingId,
         text: data.text,
+        mediaUrl: data.mediaUrl,   
+        mediaType: data.mediaType,
       });
 
       io.to(data.receiverId).emit("receive_message", data);

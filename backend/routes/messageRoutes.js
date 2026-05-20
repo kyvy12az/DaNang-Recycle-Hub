@@ -47,13 +47,17 @@ router.get("/listing/:listingId", authController.authMiddleware, async (req, res
             isRead: false,
           });
 
+          const isMe = msg.senderId.toString() === myId.toString();
+          let content = '';
+          if (msg.mediaType === 'image') content = 'Hình ảnh';
+          else if (msg.mediaType === 'video') content = 'Video';
+          else content = msg.text || '';
+
           conversations.push({
             userId: otherId,
             name: otherUser.name,
             avatar: otherUser.avatar,
-            lastMessage: msg.senderId.toString() === myId.toString()
-              ? `Bạn: ${msg.text}`
-              : msg.text,
+            lastMessage: isMe ? `Bạn: ${content}` : content,
             lastTime: msg.createdAt,
             unreadCount,
           });
