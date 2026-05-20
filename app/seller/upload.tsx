@@ -7,20 +7,30 @@ import {
   TouchableOpacity,
   Animated,
   Alert,
+  TextInput,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Camera, ChevronDown, Plus, Minus, Image as ImageIcon, X, ArrowLeft } from 'lucide-react-native';
+import { Camera, ChevronDown, Plus, Minus, Image as ImageIcon, X, Calendar, Clock as ClockIcon, Search } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
+import { MapPin as MapPinIcon, Map as MapIcon, Navigation, Recycle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { wasteTypes, pickupTimeOptions } from '@/mocks/data';
 import { WasteItem, WasteType } from '@/types';
 import AITrashRecognizer from '@/components/AITrashRecognizer';
 import { TrashPrediction } from '@/utils/trashModel';
 import { useSellerStore } from '@/stores/sellerStore';
+import { useAuth } from '@/contexts/AuthContext';
+import EcoLoader from '@/components/EcoLoader';
+import BackButton from '@/components/BackButton';
+
+const GOONG_MAP_KEY = process.env.EXPO_PUBLIC_GOONG_API_KEY;
+const GOONG_API_KEY = process.env.EXPO_PUBLIC_GOONG_REST_KEY;
 
 export default function SellerUploadScreen() {
   const router = useRouter();
@@ -37,12 +47,26 @@ export default function SellerUploadScreen() {
     clearAll,
   } = useSellerStore();
 
-  const [step, setStep] = useState<'capture' | 'recognizing' | 'result'>('capture');
+  const [step, setStep] = useState<'capture' | 'recognizing' | 'result' | 'not_waste'>('capture');
   const [note] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>(pickupTimeOptions[0]);
   const [showTimePicker, setShowTimePicker] = useState<boolean>(false);
-  const [showWasteTypePicker, setShowWasteTypePicker] = useState(false);
-  const [selectedWasteType, setSelectedWasteType] = useState<WasteType | null>(null);
+  const [useCustomTime, setUseCustomTime] = useState<boolean>(false);
+  const [customPickupDate, setCustomPickupDate] = useState<Date>(new Date());
+  const [customTimeHour, setCustomTimeHour] = useState<number>(new Date().getHours());
+  const [customTimeMinute, setCustomTimeMinute] = useState<number>(new Date().getMinutes());
+  const [customPickupDateOnly, setCustomPickupDateOnly] = useState<Date>(new Date());
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+  const [showHourPicker, setShowHourPicker] = useState<boolean>(false);
+  const [showMinutePicker, setShowMinutePicker] = useState<boolean>(false);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [showAddressMapPreview, setShowAddressMapPreview] = useState(false);
+  const [manualQuantityInputs, setManualQuantityInputs] = useState<Record<string, string>>({});
+  const { user, updateUser } = useAuth();
+  const [selectedAddress, setSelectedAddress] = useState<string>(user?.address || 'Chưa cập nhật địa chỉ');
+  const [userCoords, setUserCoords] = useState<{ lat: number, lng: number } | null>(null);
+  const [greenPoints, setGreenPoints] = useState<any[]>([]);
+  const [isUpdatingAddress, setIsUpdatingAddress] = useState(false);
 
   const resultFade = useState(new Animated.Value(0))[0];
 
@@ -127,6 +151,15 @@ export default function SellerUploadScreen() {
       if (!preds || preds.length === 0) return;
 
       const primaryPrediction = preds[0];
+      
+      // Check if it's not waste
+      if (primaryPrediction.className?.toLowerCase() === 'not_waste' || analysis?.group === 'not_waste') {
+        setStep('not_waste');
+        resultFade.setValue(0);
+        Animated.timing(resultFade, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+        return;
+      }
+
       const predictedWasteType = wasteItems[0]?.wasteType || mapPredictionToWasteType(primaryPrediction);
       const isRecyclable = (primaryPrediction.group || analysis?.group) === 'recyclable';
 
@@ -210,6 +243,99 @@ export default function SellerUploadScreen() {
       : { ...(wasteTypes.find(wt => wt.category === 'residual') || wasteTypes[0]), name: displayName || 'Rác còn lại' };
   }, []);
 
+  const handleOpenMap = async () => {
+    setShowMapModal(true);
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status === 'granted') {
+      let location = await Location.getCurrentPositionAsync({});
+      const coords = { lat: location.coords.latitude, lng: location.coords.longitude };
+      setUserCoords(coords);
+      fetchNearbyPoints(coords.lat, coords.lng);
+    }
+  };
+
+  const fetchNearbyPoints = async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(`https://rsapi.goong.io/place/autocomplete?input=${encodeURIComponent('rác thải')}&location=${lat},${lng}&radius=5000&api_key=${GOONG_API_KEY}`);
+      const data = await res.json();
+      if (data.status === 'OK') {
+        const points = await Promise.all(data.predictions.slice(0, 5).map(async (p: any) => {
+          const detailRes = await fetch(`https://rsapi.goong.io/place/detail?place_id=${p.place_id}&api_key=${GOONG_API_KEY}`);
+          const detailData = await detailRes.json();
+          return detailData.status === 'OK' ? {
+            id: p.place_id,
+            name: detailData.result.name,
+            address: detailData.result.formatted_address,
+            lat: detailData.result.geometry.location.lat,
+            lng: detailData.result.geometry.location.lng
+          } : null;
+        }));
+        setGreenPoints(points.filter(p => p !== null));
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleSelectPoint = async (point: any) => {
+    try {
+      setIsUpdatingAddress(true);
+      setSelectedAddress(point.address);
+      setShowMapModal(false);
+      Alert.alert('Thành công', 'Đã chọn địa chỉ thu gom.');
+    } catch (error) {
+      Alert.alert('Lỗi', 'Không thể chọn địa chỉ.');
+    } finally {
+      setIsUpdatingAddress(false);
+    }
+  };
+
+  const mapHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      <script src="https://cdn.jsdelivr.net/npm/@goongmaps/goong-js@1.0.9/dist/goong-js.js"></script>
+      <link href="https://cdn.jsdelivr.net/npm/@goongmaps/goong-js@1.0.9/dist/goong-js.css" rel="stylesheet" />
+      <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .marker { width: 30px; height: 30px; border-radius: 50%; background: #2E7D32; border: 2px solid white; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .user-marker { width: 18px; height: 18px; background: #4285F4; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(66,133,244,0.5); }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        goongjs.accessToken = '${GOONG_MAP_KEY}';
+        const map = new goongjs.Map({
+          container: 'map',
+          style: 'https://tiles.goong.io/assets/goong_map_web.json',
+          center: [108.2022, 16.0544],
+          zoom: 13
+        });
+
+        window.__goongMap = {
+          init: (lat, lng, points) => {
+            map.setCenter([lng, lat]);
+            map.setZoom(14);
+            const el = document.createElement('div'); el.className = 'user-marker';
+            new goongjs.Marker(el).setLngLat([lng, lat]).addTo(map);
+            points.forEach(p => {
+              const mel = document.createElement('div');
+              mel.className = 'marker';
+              mel.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 19H4.815a1.83 1.83 0 0 1-1.57-.881 1.785 1.785 0 0 1-.004-1.784L7.196 9.5"/><path d="M11 19h8.203a1.83 1.83 0 0 0 1.556-.89 1.784 1.784 0 0 0 0-1.775l-1.226-2.12"/><path d="m14 16-3 3 3 3"/><path d="M8.293 13.596 7.196 9.5 3.1 10.598"/><path d="m9.344 5.811 1.093-1.892A1.83 1.83 0 0 1 11.985 3a1.784 1.784 0 0 1 1.546.888l3.943 6.843"/><path d="m13.378 9.633 4.096 1.098 1.097-4.096"/></svg>';
+              mel.onclick = () => {
+                window.ReactNativeWebView.postMessage(JSON.stringify({type: 'POINT_CLICK', id: p.id}));
+              };
+              new goongjs.Marker(mel).setLngLat([p.lng, p.lat]).addTo(map);
+            });
+          }
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
   // Chụp lại ảnh
   const handleRetryCapture = useCallback(() => {
     clearAll();
@@ -223,23 +349,28 @@ export default function SellerUploadScreen() {
     if (item) {
       const newQty = Math.max(0.5, item.quantity + delta);
       updateItemQuantity(itemId, newQty);
+      // Clear manual input when using +/- buttons
+      setManualQuantityInputs(prev => ({ ...prev, [itemId]: '' }));
     }
   }, [recognizedItems, updateItemQuantity]);
 
-  // Thêm loại rác mới
-  const handleAddWasteType = useCallback(() => {
-    if (selectedWasteType) {
-      const newItem: WasteItem = {
-        id: `manual-${Date.now()}`,
-        wasteType: selectedWasteType,
-        quantity: 1,
-        estimatedPrice: selectedWasteType.pricePerKg,
-      };
-      setRecognizedItems([...recognizedItems, newItem]);
-      setSelectedWasteType(null);
-      setShowWasteTypePicker(false);
+  // Xử lý input thủ công số lượng
+  const handleManualQuantityChange = useCallback((itemId: string, value: string) => {
+    // Update the input field display
+    setManualQuantityInputs(prev => ({ ...prev, [itemId]: value }));
+    
+    // Parse and validate the numeric value
+    if (value.trim() === '') {
+      return; // Allow empty input while editing
     }
-  }, [selectedWasteType, recognizedItems, setRecognizedItems]);
+    
+    const numValue = parseFloat(value);
+    
+    // Validate: must be positive number and reasonable limit (e.g., 1000 kg)
+    if (!isNaN(numValue) && numValue > 0 && numValue <= 1000) {
+      updateItemQuantity(itemId, numValue);
+    }
+  }, [updateItemQuantity]);
 
   // Xóa item
   const handleRemoveItem = useCallback((itemId: string) => {
@@ -253,24 +384,43 @@ export default function SellerUploadScreen() {
 
   // Xác nhận và đi đến trang xác nhận
   const handleConfirm = useCallback(() => {
-    if (recognizedItems.length === 0) {
-      Alert.alert('Thông báo', 'Vui lòng thêm ít nhất một loại rác');
+    // Filter to only recyclable items
+    const recyclableItems = recognizedItems.filter(item => {
+      const isRecyclable = ['plastic', 'paper', 'metal', 'glass', 'electronics'].includes(item.wasteType.category);
+      return isRecyclable;
+    });
+
+    if (recyclableItems.length === 0) {
+      Alert.alert('Thông báo', 'Vui lòng chọn ít nhất một loại rác tái chế để bán.');
       return;
     }
+
+    // Determine pickup time to send
+    const pickupTimeToSend = useCustomTime 
+      ? customPickupDate.toLocaleString('vi-VN', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : selectedTime;
 
     router.push({
       pathname: '/seller-confirm',
       params: {
-        items: JSON.stringify(recognizedItems),
-        totalPrice: totalPrice.toString(),
-        totalWeight: totalWeight.toString(),
-        totalPoints: totalPoints.toString(),
-        pickupTime: selectedTime,
+        items: JSON.stringify(recyclableItems),
+        totalPrice: recyclableItems.reduce((sum, item) => sum + item.estimatedPrice, 0).toString(),
+        totalWeight: recyclableItems.reduce((sum, item) => sum + item.quantity, 0).toString(),
+        totalPoints: Math.round(recyclableItems.reduce((sum, item) => sum + item.quantity, 0) * 10).toString(),
+        pickupTime: pickupTimeToSend,
         note: note,
+        address: selectedAddress,
         imageUri: capturedImageUri || '',
       },
     });
-  }, [recognizedItems, totalPrice, totalWeight, totalPoints, selectedTime, note, capturedImageUri, router]);
+  }, [recognizedItems, selectedTime, useCustomTime, customPickupDate, note, selectedAddress, capturedImageUri, router]);
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('vi-VN') + 'đ';
@@ -397,13 +547,7 @@ export default function SellerUploadScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={[styles.customHeader, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={24} color={Colors.white} />
-        </TouchableOpacity>
+        <BackButton color={Colors.white} size={24} />
         <Text style={styles.headerTitle}>Đăng rác tái chế</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -574,7 +718,16 @@ export default function SellerUploadScreen() {
                       >
                         <Minus size={16} color={Colors.primary} />
                       </TouchableOpacity>
-                      <Text style={styles.qtyText}>{item.quantity} kg</Text>
+                      <TextInput
+                        style={styles.qtyInput}
+                        value={manualQuantityInputs[item.id] || item.quantity.toString()}
+                        onChangeText={(value) => handleManualQuantityChange(item.id, value)}
+                        placeholder="0"
+                        placeholderTextColor={Colors.textLight}
+                        keyboardType="decimal-pad"
+                        maxLength={6}
+                      />
+                      <Text style={styles.qtyUnit}>kg</Text>
                       <TouchableOpacity
                         style={styles.qtyButton}
                         onPress={() => handleUpdateQuantity(item.id, 0.5)}
@@ -618,84 +771,248 @@ export default function SellerUploadScreen() {
               );
             })}
 
-            {/* Thêm loại rác mới */}
-            <View style={styles.addSection}>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => setShowWasteTypePicker(!showWasteTypePicker)}
-              >
-                <Plus size={18} color={Colors.primary} />
-                <Text style={styles.addButtonText}>Thêm loại rác khác</Text>
-              </TouchableOpacity>
+            {/* Address section with map preview */}
+            <View style={styles.addressSection}>
+              <View style={styles.addressHeader}>
+                <Text style={styles.fieldLabel}>Địa chỉ thu gom</Text>
+                <TouchableOpacity onPress={handleOpenMap}>
+                  <Text style={styles.editAddressText}>Thay đổi</Text>
+                </TouchableOpacity>
+              </View>
 
-              {showWasteTypePicker && (
-                <View style={styles.wasteTypePicker}>
-                  <ScrollView style={styles.wasteTypeList} nestedScrollEnabled>
-                    {wasteTypes.map((type) => (
-                      <TouchableOpacity
-                        key={type.id}
-                        style={[
-                          styles.wasteTypeOption,
-                          selectedWasteType?.id === type.id && styles.wasteTypeOptionSelected,
-                        ]}
-                        onPress={() => setSelectedWasteType(type)}
-                      >
-                        <View style={[styles.wasteTypeDot, { backgroundColor: type.color }]} />
-                        <View style={styles.wasteTypeInfo}>
-                          <Text style={styles.wasteTypeName}>{type.name}</Text>
-                          <Text style={styles.wasteTypePrice}>{formatPrice(type.pricePerKg)}/kg</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                  {selectedWasteType && (
-                    <TouchableOpacity
-                      style={styles.confirmAddButton}
-                      onPress={handleAddWasteType}
-                    >
-                      <Text style={styles.confirmAddButtonText}>Thêm {selectedWasteType.name}</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
+              {/* Map preview */}
+              {userCoords && (
+                <TouchableOpacity 
+                  style={styles.mapPreviewContainer}
+                  onPress={handleOpenMap}
+                  activeOpacity={0.7}
+                >
+                  <WebView
+                    style={styles.mapPreviewWebView}
+                    source={{
+                      html: `
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <meta charset="utf-8">
+                          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                          <script src="https://cdn.jsdelivr.net/npm/@goongmaps/goong-js@1.0.9/dist/goong-js.js"></script>
+                          <link href="https://cdn.jsdelivr.net/npm/@goongmaps/goong-js@1.0.9/dist/goong-js.css" rel="stylesheet" />
+                          <style>
+                            body { margin: 0; padding: 0; }
+                            #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+                            .marker { width: 30px; height: 30px; border-radius: 50%; background: #2E7D32; border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+                          </style>
+                        </head>
+                        <body>
+                          <div id="map"></div>
+                          <script>
+                            goongjs.accessToken = '${GOONG_MAP_KEY}';
+                            const map = new goongjs.Map({
+                              container: 'map',
+                              style: 'https://tiles.goong.io/assets/goong_map_web.json',
+                              center: [${userCoords?.lng || 108.2022}, ${userCoords?.lat || 16.0544}],
+                              zoom: 15,
+                              interactive: false
+                            });
+                            const el = document.createElement('div');
+                            el.className = 'marker';
+                            new goongjs.Marker(el).setLngLat([${userCoords?.lng || 108.2022}, ${userCoords?.lat || 16.0544}]).addTo(map);
+                          </script>
+                        </body>
+                        </html>
+                      `,
+                    }}
+                    scrollEnabled={false}
+                    pointerEvents="none"
+                  />
+                  <View style={styles.mapPreviewOverlay}>
+                    <View style={styles.mapPreviewLabel}>
+                      <MapIcon size={16} color={Colors.white} />
+                      <Text style={styles.mapPreviewLabelText}>Nhấn để thay đổi</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
               )}
+
+              {/* Address text */}
+              <TouchableOpacity 
+                style={styles.addressDisplay}
+                onPress={handleOpenMap}
+                activeOpacity={0.7}
+              >
+                <MapPinIcon size={18} color={Colors.primary} />
+                <Text style={styles.addressText} numberOfLines={2}>
+                  {selectedAddress}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* Thời gian thu gom */}
             <View style={styles.timeSection}>
               <Text style={styles.fieldLabel}>Thời gian thu gom</Text>
-              <TouchableOpacity
-                style={styles.timeDropdown}
-                onPress={() => setShowTimePicker(!showTimePicker)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.timeDropdownText}>{selectedTime}</Text>
-                <ChevronDown size={18} color={Colors.textSecondary} />
-              </TouchableOpacity>
-              {showTimePicker && (
-                <View style={styles.timeOptions}>
-                  {pickupTimeOptions.map((time) => (
-                    <TouchableOpacity
-                      key={time}
-                      style={[
-                        styles.timeOption,
-                        time === selectedTime && styles.timeOptionSelected,
-                      ]}
-                      onPress={() => {
-                        setSelectedTime(time);
-                        setShowTimePicker(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.timeOptionText,
-                          time === selectedTime && styles.timeOptionTextSelected,
-                        ]}
-                      >
-                        {time}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+              
+              {/* Toggle between preset and custom time */}
+              <View style={styles.timeToggle}>
+                <TouchableOpacity
+                  style={[styles.timeToggleOption, !useCustomTime && styles.timeToggleOptionActive]}
+                  onPress={() => setUseCustomTime(false)}
+                >
+                  <Text style={[styles.timeToggleText, !useCustomTime && styles.timeToggleTextActive]}>
+                    Thời gian có sẵn
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.timeToggleOption, useCustomTime && styles.timeToggleOptionActive]}
+                  onPress={() => setUseCustomTime(true)}
+                >
+                  <Text style={[styles.timeToggleText, useCustomTime && styles.timeToggleTextActive]}>
+                    Tùy chỉnh thời gian
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {!useCustomTime ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.timeDropdown}
+                    onPress={() => setShowTimePicker(!showTimePicker)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.timeDropdownText}>{selectedTime}</Text>
+                    <ChevronDown size={18} color={Colors.textSecondary} />
+                  </TouchableOpacity>
+                  {showTimePicker && (
+                    <View style={styles.timeOptions}>
+                      {pickupTimeOptions.map((time) => (
+                        <TouchableOpacity
+                          key={time}
+                          style={[
+                            styles.timeOption,
+                            time === selectedTime && styles.timeOptionSelected,
+                          ]}
+                          onPress={() => {
+                            setSelectedTime(time);
+                            setShowTimePicker(false);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.timeOptionText,
+                              time === selectedTime && styles.timeOptionTextSelected,
+                            ]}
+                          >
+                            {time}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.customTimeButton}
+                    onPress={() => setShowDatePicker(!showDatePicker)}
+                    activeOpacity={0.8}
+                  >
+                    <Calendar size={18} color={Colors.primary} />
+                    <Text style={styles.customTimeButtonText}>
+                      {new Date(customPickupDateOnly.getFullYear(), customPickupDateOnly.getMonth(), customPickupDateOnly.getDate(), customTimeHour, customTimeMinute).toLocaleString('vi-VN', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  {/* Custom Date & Time Picker */}
+                  {showDatePicker && (
+                    <View style={styles.customTimePickerContainer}>
+                      {/* Date Selector */}
+                      <View style={styles.timePickerSection}>
+                        <Text style={styles.timePickerLabel}>Ngày</Text>
+                        <TouchableOpacity style={styles.dateButton}>
+                          <Text style={styles.dateButtonText}>
+                            {customPickupDateOnly.toLocaleDateString('vi-VN', {
+                              weekday: 'short',
+                              month: '2-digit',
+                              day: '2-digit',
+                              year: 'numeric'
+                            })}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Hour Selector */}
+                      <View style={styles.timePickerSection}>
+                        <Text style={styles.timePickerLabel}>Giờ</Text>
+                        <View style={styles.hourMinuteContainer}>
+                          <TouchableOpacity 
+                            style={styles.timePickerButton}
+                            onPress={() => setCustomTimeHour(h => h === 0 ? 23 : h - 1)}
+                          >
+                            <Text style={styles.timePickerButtonText}>−</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.timePickerValue}>
+                            {String(customTimeHour).padStart(2, '0')}
+                          </Text>
+                          <TouchableOpacity 
+                            style={styles.timePickerButton}
+                            onPress={() => setCustomTimeHour(h => h === 23 ? 0 : h + 1)}
+                          >
+                            <Text style={styles.timePickerButtonText}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Minute Selector */}
+                      <View style={styles.timePickerSection}>
+                        <Text style={styles.timePickerLabel}>Phút</Text>
+                        <View style={styles.hourMinuteContainer}>
+                          <TouchableOpacity 
+                            style={styles.timePickerButton}
+                            onPress={() => setCustomTimeMinute(m => m === 0 ? 59 : m - 1)}
+                          >
+                            <Text style={styles.timePickerButtonText}>−</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.timePickerValue}>
+                            {String(customTimeMinute).padStart(2, '0')}
+                          </Text>
+                          <TouchableOpacity 
+                            style={styles.timePickerButton}
+                            onPress={() => setCustomTimeMinute(m => m === 59 ? 0 : m + 1)}
+                          >
+                            <Text style={styles.timePickerButtonText}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Action Buttons */}
+                      <View style={styles.timePickerActions}>
+                        <TouchableOpacity
+                          style={[styles.timePickerActionButton, styles.cancelBtn]}
+                          onPress={() => setShowDatePicker(false)}
+                        >
+                          <Text style={styles.cancelBtnText}>Hủy</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.timePickerActionButton, styles.confirmBtn]}
+                          onPress={() => {
+                            const newDate = new Date(customPickupDateOnly.getFullYear(), customPickupDateOnly.getMonth(), customPickupDateOnly.getDate(), customTimeHour, customTimeMinute);
+                            setCustomPickupDate(newDate);
+                            setShowDatePicker(false);
+                          }}
+                        >
+                          <Text style={styles.confirmBtnText}>Xác nhận</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                </>
               )}
             </View>
 
@@ -734,14 +1051,25 @@ export default function SellerUploadScreen() {
               </LinearGradient>
             </View>
 
+            {/* Check for recyclable items */}
+            {recognizedItems.filter(item => ['plastic', 'paper', 'metal', 'glass', 'electronics'].includes(item.wasteType.category)).length === 0 && (
+              <View style={styles.warningBox}>
+                <Text style={styles.warningText}>⚠️ Vui lòng chọn ít nhất một loại rác tái chế để có thể bán</Text>
+              </View>
+            )}
+
             <TouchableOpacity
-              style={styles.confirmButton}
+              style={[
+                styles.confirmButton,
+                recognizedItems.filter(item => ['plastic', 'paper', 'metal', 'glass', 'electronics'].includes(item.wasteType.category)).length === 0 && styles.confirmButtonDisabled
+              ]}
               onPress={handleConfirm}
               activeOpacity={0.8}
               testID="confirm-button"
+              disabled={recognizedItems.filter(item => ['plastic', 'paper', 'metal', 'glass', 'electronics'].includes(item.wasteType.category)).length === 0}
             >
               <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight]}
+                colors={recognizedItems.filter(item => ['plastic', 'paper', 'metal', 'glass', 'electronics'].includes(item.wasteType.category)).length === 0 ? ['#CCCCCC', '#999999'] : [Colors.primary, Colors.primaryLight]}
                 style={styles.confirmGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
@@ -751,7 +1079,124 @@ export default function SellerUploadScreen() {
             </TouchableOpacity>
           </Animated.View>
         )}
+
+        {step === 'not_waste' && (
+          <Animated.View style={[styles.resultSection, { opacity: resultFade }]}>
+            {/* Preview ảnh nhỏ */}
+            {capturedImageUri && (
+              <View style={styles.imagePreviewContainer}>
+                <Image source={{ uri: capturedImageUri }} style={styles.smallImagePreview} contentFit="cover" />
+                <TouchableOpacity
+                  style={styles.retakeButton}
+                  onPress={handleRetryCapture}
+                >
+                  <Camera size={16} color={Colors.white} />
+                  <Text style={styles.retakeButtonText}>Chụp lại</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Not Waste Alert */}
+            <View style={styles.notWasteContainer}>
+              <LinearGradient
+                colors={['#FEF2F2', '#FFE5E5']}
+                style={styles.notWasteGradient}
+              >
+                <View style={styles.notWasteIconWrapper}>
+                  <Text style={styles.notWasteIcon}>⚠️</Text>
+                </View>
+                <Text style={styles.notWasteTitle}>Đây không phải là rác</Text>
+                <Text style={styles.notWasteDescription}>
+                  AI đã phân tích rằng vật thể trong ảnh không phải là chất thải có thể tái chế.
+                </Text>
+                <Text style={styles.notWasteHint}>
+                  Vui lòng chụp ảnh loại rác khác hoặc quay lại màn hình chính.
+                </Text>
+
+                <View style={styles.notWasteActions}>
+                  <TouchableOpacity
+                    style={[styles.notWasteButton, styles.notWasteRetakeBtn]}
+                    onPress={handleRetryCapture}
+                  >
+                    <Camera size={18} color={Colors.white} />
+                    <Text style={styles.notWasteRetakeText}>Chụp lại</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.notWasteButton, styles.notWasteBackBtn]}
+                    onPress={() => {
+                      clearAll();
+                      setStep('capture');
+                    }}
+                  >
+                    <ArrowLeft size={18} color={Colors.primary} />
+                    <Text style={styles.notWasteBackText}>Quay lại</Text>
+                  </TouchableOpacity>
+                </View>
+              </LinearGradient>
+            </View>
+          </Animated.View>
+        )}
       </ScrollView>
+
+      {/* Map Picker Modal */}
+      {showMapModal && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'white', zIndex: 9999 }]}>
+          <View style={[styles.modalHeader, { paddingTop: insets.top + 10 }]}>
+            <TouchableOpacity onPress={() => setShowMapModal(false)} style={styles.modalCloseBtn}>
+              <ArrowLeft size={24} color={Colors.text} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Chọn điểm thu gom gần nhất</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <WebView
+              ref={(ref) => {
+                if (ref && userCoords && greenPoints.length > 0) {
+                  const script = `window.__goongMap.init(${userCoords.lat}, ${userCoords.lng}, ${JSON.stringify(greenPoints)})`;
+                  ref.injectJavaScript(`${script}; true;`);
+                }
+              }}
+              source={{ html: mapHTML }}
+              onMessage={(e) => {
+                const data = JSON.parse(e.nativeEvent.data);
+                if (data.type === 'POINT_CLICK') {
+                  const point = greenPoints.find(p => p.id === data.id);
+                  if (point) handleSelectPoint(point);
+                }
+              }}
+              javaScriptEnabled={true}
+            />
+          </View>
+
+          <View style={styles.pointsListContainer}>
+            <Text style={styles.pointsListTitle}>Gợi ý các trạm gần bạn:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pointsListScroll}>
+              {greenPoints.map((p) => (
+                <TouchableOpacity key={p.id} style={styles.pointCard} onPress={() => handleSelectPoint(p)}>
+                  <View style={styles.pointIcon}>
+                    <View style={{ backgroundColor: Colors.primary + '15', padding: 8, borderRadius: 10 }}>
+                      <Navigation size={18} color={Colors.primary} />
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.pointName} numberOfLines={1}>{p.name}</Text>
+                    <Text style={styles.pointAddress} numberOfLines={1}>{p.address}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              {greenPoints.length === 0 && <Text style={styles.emptyPoints}>Đang tìm các trạm gần đây...</Text>}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {isUpdatingAddress && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 10000 }]}>
+          <EcoLoader message="Đang cập nhật địa chỉ..." />
+        </View>
+      )}
     </View>
   );
 }
@@ -1096,6 +1541,25 @@ const styles = StyleSheet.create({
     minWidth: 40,
     textAlign: 'center',
   },
+  qtyInput: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    minWidth: 50,
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#F8FFF8',
+  },
+  qtyUnit: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+    marginLeft: 2,
+  },
   itemTotal: {
     fontSize: 14,
     fontWeight: '700' as const,
@@ -1184,59 +1648,6 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: Colors.primary,
   },
-  wasteTypePicker: {
-    marginTop: 12,
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  wasteTypeList: {
-    maxHeight: 200,
-  },
-  wasteTypeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: 10,
-  },
-  wasteTypeOptionSelected: {
-    backgroundColor: '#E8F5E9',
-  },
-  wasteTypeDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  wasteTypeInfo: {
-    flex: 1,
-  },
-  wasteTypeName: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: Colors.text,
-  },
-  wasteTypePrice: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  confirmAddButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  confirmAddButtonText: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: Colors.white,
-  },
   timeSection: {
     gap: 8,
   },
@@ -1244,6 +1655,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600' as const,
     color: Colors.text,
+  },
+  timeToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  timeToggleOption: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeToggleOptionActive: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  timeToggleText: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: Colors.textSecondary,
+  },
+  timeToggleTextActive: {
+    color: Colors.primary,
+    fontWeight: '600' as const,
   },
   timeDropdown: {
     flexDirection: 'row',
@@ -1258,6 +1698,22 @@ const styles = StyleSheet.create({
   timeDropdownText: {
     fontSize: 14,
     color: Colors.text,
+  },
+  customTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  customTimeButtonText: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '600' as const,
+    flex: 1,
   },
   timeOptions: {
     backgroundColor: Colors.white,
@@ -1327,6 +1783,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 4,
   },
+  confirmButtonDisabled: {
+    opacity: 0.6,
+  },
   confirmGradient: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1336,5 +1795,320 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700' as const,
     color: Colors.white,
+  },
+  warningBox: {
+    backgroundColor: '#FEE',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.error,
+  },
+  warningText: {
+    fontSize: 14,
+    color: Colors.error,
+    fontWeight: '500' as const,
+  },
+  // Address Section Styles
+  addressSection: {
+    marginBottom: 20,
+  },
+  addressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  editAddressText: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '700' as const,
+  },
+  addressDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    padding: 14,
+    borderRadius: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  addressText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '600' as const,
+  },
+  mapPreviewContainer: {
+    height: 140,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: '#F5F5F5',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  mapPreviewWebView: {
+    flex: 1,
+  },
+  mapPreviewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 12,
+  },
+  mapPreviewLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  mapPreviewLabelText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '600' as const,
+  },
+  // Map Modal Styles
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalCloseBtn: {
+    padding: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  pointsListContainer: {
+    padding: 20,
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    marginTop: -25,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  pointsListTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginBottom: 15,
+  },
+  pointsListScroll: {
+    paddingBottom: 10,
+    gap: 12,
+  },
+  pointCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F9F5',
+    padding: 12,
+    borderRadius: 16,
+    width: 280,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E8F5E9',
+  },
+  pointIcon: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pointName: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  pointAddress: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  emptyPoints: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+    paddingVertical: 10,
+  },
+  // Not Waste Styles
+  notWasteContainer: {
+    marginTop: 20,
+  },
+  notWasteGradient: {
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+  },
+  notWasteIconWrapper: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  notWasteIcon: {
+    fontSize: 40,
+  },
+  notWasteTitle: {
+    fontSize: 22,
+    fontWeight: '800' as const,
+    color: '#DC2626',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  notWasteDescription: {
+    fontSize: 15,
+    color: '#7F1D1D',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 12,
+    fontWeight: '500' as const,
+  },
+  notWasteHint: {
+    fontSize: 13,
+    color: '#991B1B',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+    fontStyle: 'italic' as const,
+  },
+  notWasteActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  notWasteButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 8,
+  },
+  notWasteRetakeBtn: {
+    backgroundColor: Colors.primary,
+  },
+  notWasteRetakeText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '700' as const,
+  },
+  notWasteBackBtn: {
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  notWasteBackText: {
+    color: Colors.primary,
+    fontSize: 15,
+    fontWeight: '700' as const,
+  },
+  // Custom Time Picker Styles
+  customTimePickerContainer: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    gap: 16,
+  },
+  timePickerSection: {
+    gap: 8,
+  },
+  timePickerLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: Colors.textSecondary,
+  },
+  dateButton: {
+    backgroundColor: '#F7FAF7',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E6F0E6',
+    alignItems: 'center',
+  },
+  dateButtonText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.text,
+  },
+  hourMinuteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  timePickerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePickerButtonText: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: Colors.white,
+  },
+  timePickerValue: {
+    fontSize: 28,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    minWidth: 60,
+    textAlign: 'center',
+  },
+  timePickerActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  timePickerActionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: '#F5F5F5',
+  },
+  cancelBtnText: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '600' as const,
+  },
+  confirmBtn: {
+    backgroundColor: Colors.primary,
+  },
+  confirmBtnText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '600' as const,
   },
 });

@@ -37,6 +37,7 @@ const LABEL_MAP: Record<string, any> = {
   'plastic': { vi: 'Nhựa', group: 'recyclable', cat: 'plastic', price: 4000, guidance: 'Ép bẹp để tiết kiệm diện tích.' },
   'shoes': { vi: 'Giày dép', group: 'non-recyclable', cat: 'residual', price: 0, guidance: 'Bỏ vào thùng rác sinh hoạt.' },
   'trash': { vi: 'Rác còn lại', group: 'non-recyclable', cat: 'residual', price: 0, guidance: 'Bỏ vào túi rác mang đi chôn lấp hoặc đốt.' },
+  'not_waste': { vi: 'Không phải rác', group: 'not_waste', cat: 'not_waste', price: 0, guidance: 'Đây không phải là chất thải có thể tái chế.' },
 };
 
 type ApiClassificationResponse = {
@@ -71,6 +72,9 @@ const LABEL_ALIASES: Record<string, string> = {
   trash: 'trash',
   residual: 'trash',
   waste: 'trash',
+  not_waste: 'not_waste',
+  notwaste: 'not_waste',
+  not: 'not_waste',
 };
 
 function normalizeText(value: string) {
@@ -178,9 +182,9 @@ export default function AITrashRecognizer({
 
       setPredictions([finalPrediction]);
 
-      const matchedType = wasteTypes.find(wt => wt.category === meta.cat) || wasteTypes[0];
-      const wasteItems = meta.group === 'recyclable' ? [{
-        wasteType: matchedType,
+      // For not_waste, don't match to any wasteType
+      const wasteItems = (meta.group !== 'not_waste' && meta.group === 'recyclable') ? [{
+        wasteType: wasteTypes.find(wt => wt.category === meta.cat) || wasteTypes[0],
         quantity: 1,
         confidence: confidenceNum
       }] : [];

@@ -17,7 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import {
-  ChevronLeft,
   AlertCircle,
   ArrowRight,
   ShieldCheck,
@@ -25,6 +24,7 @@ import {
 import Colors from '@/constants/colors';
 import { useWalletStore, MOCK_BANKS, Bank, VietQRBank } from '@/stores/walletStore';
 import EcoLoader from '@/components/EcoLoader';
+import BackButton from '@/components/BackButton';
 
 const MIN_DEPOSIT = 10000;
 const MAX_DEPOSIT = 10000000;
@@ -167,9 +167,7 @@ export default function DepositScreen() {
       {/* Header FinTech Style */}
       <LinearGradient colors={['#1B5E20', '#2E7D32']} style={[styles.topHeader, { paddingTop: insets.top }]}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ChevronLeft size={28} color={Colors.white} />
-          </TouchableOpacity>
+          <BackButton color={Colors.white} size={28} />
           <Text style={styles.headerTitle}>Nạp tiền vào ví</Text>
           <View style={{ width: 40 }} />
         </View>

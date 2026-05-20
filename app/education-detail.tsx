@@ -11,20 +11,22 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  Heart, 
-  Share2, 
-  Bookmark, 
-  Clock, 
-  Leaf, 
-  TrendingUp, 
-  ChevronLeft,
+import {
+  Heart,
+  Share2,
+  Bookmark,
+  Clock,
+  Leaf,
+  TrendingUp,
   ArrowRight,
-  Info
+  Info,
+  Droplet,
+  MessageSquare
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { mockEducationTips } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import BackButton from '@/components/BackButton';
 
 const { width } = Dimensions.get('window');
 
@@ -33,9 +35,10 @@ export default function EducationDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tip = mockEducationTips.find(t => t.id === id);
-  
+
   const [isLiked, setIsLiked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [likeCount, setLikeCount] = useState(42);
 
   if (!tip) {
     return (
@@ -45,25 +48,25 @@ export default function EducationDetailScreen() {
     );
   }
 
+  const handleLikePress = () => {
+    setIsLiked(!isLiked);
+    setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
+  };
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Custom Header Navigation */}
-      <View style={[styles.headerNav, { top: insets.top + 10 }]}>
-        <TouchableOpacity 
-          style={styles.navCircle} 
-          onPress={() => router.back()}
-        >
-          <ChevronLeft size={24} color={Colors.white} />
-        </TouchableOpacity>
-        
+      {/* Floating Glass Header Navigation */}
+      <View style={[styles.headerNav, { paddingTop: insets.top + 6 }]}>
+        <BackButton color={Colors.white} size={24} />
+
         <View style={styles.navRight}>
           <TouchableOpacity style={styles.navCircle} onPress={() => setIsBookmarked(!isBookmarked)}>
-            <Bookmark 
-              size={20} 
-              color={isBookmarked ? '#FFB300' : Colors.white} 
-              fill={isBookmarked ? '#FFB300' : 'none'} 
+            <Bookmark
+              size={20}
+              color={isBookmarked ? '#FFC107' : Colors.white}
+              fill={isBookmarked ? '#FFC107' : 'none'}
             />
           </TouchableOpacity>
           <TouchableOpacity style={styles.navCircle}>
@@ -73,7 +76,7 @@ export default function EducationDetailScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-        {/* Hero Image Section */}
+        {/* Hero Image Section with Enhanced Gradient Layer */}
         <View style={styles.heroWrapper}>
           <Image
             source={{ uri: tip.imageUrl }}
@@ -81,7 +84,7 @@ export default function EducationDetailScreen() {
             contentFit="cover"
           />
           <LinearGradient
-            colors={['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.6)']}
+            colors={['rgba(0,0,0,0.45)', 'transparent', 'rgba(0,0,0,0.75)']}
             style={styles.heroOverlay}
           />
           <View style={styles.heroTagContainer}>
@@ -91,84 +94,103 @@ export default function EducationDetailScreen() {
           </View>
         </View>
 
-        {/* Content Body */}
+        {/* Bottom Sheet Styled Main Content Block */}
         <View style={styles.mainContent}>
           <View style={styles.dragHandle} />
-          
+
           <Text style={styles.titleText}>{tip.title}</Text>
 
           <View style={styles.infoBar}>
             <View style={styles.infoItem}>
-              <Clock size={16} color={Colors.textSecondary} />
+              <Clock size={15} color="#78909C" />
               <Text style={styles.infoLabel}>5 phút đọc</Text>
             </View>
             <View style={styles.dot} />
             <View style={styles.infoItem}>
-              <TrendingUp size={16} color={Colors.primary} />
-              <Text style={[styles.infoLabel, { color: Colors.primary, fontWeight: '800' }]}>+10 Điểm xanh</Text>
+              <TrendingUp size={15} color="#2E7D32" />
+              <Text style={styles.pointLabel}>+10 Điểm xanh</Text>
             </View>
           </View>
 
-          {/* Sapo / Summary */}
+          {/* Elegant Sapo / Quote Box */}
           <View style={styles.sapoBox}>
-            <Info size={18} color={Colors.primary} />
+            <View style={styles.sapoIconContainer}>
+              <Info size={18} color="#2E7D32" />
+            </View>
             <Text style={styles.sapoText}>{tip.summary}</Text>
           </View>
 
-          {/* Article Body */}
+          {/* Styled Premium Typography for Article Body */}
           <View style={styles.articleBody}>
             <Text style={styles.contentText}>{tip.content}</Text>
           </View>
 
-          {/* Interactive Impact Card */}
-          <View style={styles.impactCard}>
-            <Text style={styles.impactTitle}>Tác động dự kiến</Text>
-            <View style={styles.impactGrid}>
-              <View style={styles.impactItem}>
-                <View style={[styles.impactIcon, { backgroundColor: '#E3F2FD' }]}>
-                  <Leaf size={20} color="#2196F3" />
-                </View>
-                <Text style={styles.impactValue}>2.5kg</Text>
-                <Text style={styles.impactSub}>Giảm CO₂</Text>
+          {/* Redesigned Ecological Impact Cards Grid */}
+          <Text style={styles.sectionHeading}>Tác động sinh thái dự kiến</Text>
+          <View style={styles.impactGrid}>
+            <View style={[styles.impactCardItem, { borderColor: '#E3F2FD' }]}>
+              <View style={[styles.impactIconCircle, { backgroundColor: '#E3F2FD' }]}>
+                <Leaf size={18} color="#2196F3" fill="#2196F3" />
               </View>
-              <View style={styles.impactItem}>
-                <View style={[styles.impactIcon, { backgroundColor: '#E8F5E9' }]}>
-                  <TrendingUp size={20} color="#4CAF50" />
-                </View>
-                <Text style={styles.impactValue}>15L</Text>
-                <Text style={styles.impactSub}>Tiết kiệm nước</Text>
+              <View style={styles.impactInfoDetails}>
+                <Text style={styles.impactMainValue}>2.5 kg</Text>
+                <Text style={styles.impactSubLabel}>Giảm phát thải CO₂</Text>
+              </View>
+            </View>
+
+            <View style={[styles.impactCardItem, { borderColor: '#E8F5E9' }]}>
+              <View style={[styles.impactIconCircle, { backgroundColor: '#E8F5E9' }]}>
+                <Droplet size={18} color="#4CAF50" fill="#4CAF50" />
+              </View>
+              <View style={styles.impactInfoDetails}>
+                <Text style={styles.impactMainValue}>15 Lít</Text>
+                <Text style={styles.impactSubLabel}>Tiết kiệm nước sạch</Text>
               </View>
             </View>
           </View>
 
-          {/* Call to Action Box */}
+          {/* Action-Oriented Call to Action Banner */}
           <LinearGradient
-            colors={['#1B5E20', '#2E7D32']}
+            colors={['#1B5E20', '#388E3C']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.ctaBox}
           >
             <View style={styles.ctaHeader}>
-              <Text style={styles.ctaTitle}>Thực hành ngay!</Text>
-              <Text style={styles.ctaDesc}>Bạn đã sẵn sàng áp dụng mẹo này vào cuộc sống chưa?</Text>
+              <Text style={styles.ctaTitle}>Biến lý thuyết thành hành động!</Text>
+              <Text style={styles.ctaDesc}>Đóng góp một phần nhỏ của bạn vào chiến dịch thu gom tuần này tại Đà Nẵng.</Text>
             </View>
-            <TouchableOpacity style={styles.ctaButton} activeOpacity={0.8}>
-              <Text style={styles.ctaButtonText}>Bắt đầu hành động</Text>
-              <ArrowRight size={18} color={Colors.primary} />
+            <TouchableOpacity style={styles.ctaButton} activeOpacity={0.9}>
+              <Text style={styles.ctaButtonText}>Bắt đầu thực hành ngay</Text>
+              <ArrowRight size={18} color="#1B5E20" />
             </TouchableOpacity>
           </LinearGradient>
 
-          <View style={styles.footerActions}>
-            <TouchableOpacity 
-              style={[styles.likeButton, isLiked && styles.likedActive]} 
-              onPress={() => setIsLiked(!isLiked)}
+          {/* Interactive Footer Engagement Panel */}
+          <View style={styles.dividerLine} />
+          <View style={styles.footerActionRow}>
+            <TouchableOpacity
+              style={[styles.interactionButton, isLiked && styles.activeLikeButton]}
+              onPress={handleLikePress}
+              activeOpacity={0.8}
             >
-              <Heart size={20} color={isLiked ? '#FFF' : '#FF5252'} fill={isLiked ? '#FFF' : 'none'} />
-              <Text style={[styles.likeText, isLiked && { color: '#FFF' }]}>Truyền cảm hứng</Text>
+              <Heart size={18} color={isLiked ? '#FFF' : '#37474F'} fill={isLiked ? '#FFF' : 'none'} />
+              <Text style={[styles.interactionText, isLiked && styles.activeButtonText]}>
+                Cảm hứng ({likeCount})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.interactionButton} 
+              activeOpacity={0.8}
+              onPress={() => router.push(`/education-discussion?id=${id}`)}
+            >
+              <MessageSquare size={18} color="#37474F" />
+              <Text style={styles.interactionText}>Thảo luận (8)</Text>
             </TouchableOpacity>
           </View>
         </View>
-        <View style={{ height: insets.bottom + 20 }} />
+        <View style={{ height: insets.bottom + 30 }} />
       </ScrollView>
     </View>
   );
@@ -177,25 +199,25 @@ export default function EducationDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FAFAFA',
   },
   headerNav: {
     position: 'absolute',
-    left: 20,
-    right: 20,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     zIndex: 10,
   },
   navCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
-      ios: { backdropFilter: 'blur(10px)' },
+      ios: { backdropFilter: 'blur(12px)' },
     }),
   },
   navRight: {
@@ -203,7 +225,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   heroWrapper: {
-    height: 380,
+    height: 360,
     width: '100%',
   },
   heroImage: {
@@ -215,51 +237,56 @@ const styles = StyleSheet.create({
   },
   heroTagContainer: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 45,
     left: 20,
   },
   categoryBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   categoryRecycle: { backgroundColor: '#2196F3' },
   categorySave: { backgroundColor: '#FFB300' },
   categoryEnvironment: { backgroundColor: '#4CAF50' },
   categoryText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   mainContent: {
     backgroundColor: '#FFF',
-    marginTop: -30,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 15,
+    marginTop: -35,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 4,
   },
   dragHandle: {
-    width: 40,
+    width: 36,
     height: 4,
     backgroundColor: '#E0E0E0',
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   titleText: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#1A1A1A',
-    lineHeight: 34,
-    marginBottom: 15,
+    fontSize: 23,
+    fontWeight: '800',
+    color: '#1A237E',
+    lineHeight: 31,
+    marginBottom: 12,
   },
   infoBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 25,
+    marginBottom: 20,
   },
   infoItem: {
     flexDirection: 'row',
@@ -268,143 +295,156 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 13,
-    color: '#757575',
-    fontWeight: '600',
+    color: '#78909C',
+    fontWeight: '500',
+  },
+  pointLabel: {
+    fontSize: 13,
+    color: '#2E7D32',
+    fontWeight: '700',
   },
   dot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#D1D1D1',
-    marginHorizontal: 12,
+    backgroundColor: '#CFD8DC',
+    marginHorizontal: 10,
   },
   sapoBox: {
     flexDirection: 'row',
     backgroundColor: '#F1F8E9',
-    padding: 18,
-    borderRadius: 20,
+    padding: 16,
+    borderRadius: 16,
     gap: 12,
-    marginBottom: 25,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
+    marginBottom: 20,
+  },
+  sapoIconContainer: {
+    paddingTop: 2,
   },
   sapoText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: '#2E7D32',
-    lineHeight: 22,
-    fontWeight: '600',
-    fontStyle: 'italic',
+    lineHeight: 21,
+    fontWeight: '500',
   },
   articleBody: {
-    marginBottom: 30,
+    marginBottom: 25,
   },
   contentText: {
-    fontSize: 17,
+    fontSize: 15.5,
     color: '#37474F',
-    lineHeight: 28,
+    lineHeight: 26,
     textAlign: 'justify',
   },
-  impactCard: {
-    backgroundColor: '#F8FAF9',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 25,
-    borderWidth: 1,
-    borderColor: '#E8F0ED',
-  },
-  impactTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+  sectionHeading: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#263238',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   impactGrid: {
     flexDirection: 'row',
-    gap: 15,
+    gap: 12,
+    marginBottom: 24,
   },
-  impactItem: {
+  impactCardItem: {
     flex: 1,
-    backgroundColor: '#FFF',
-    padding: 15,
-    borderRadius: 18,
+    flexDirection: 'row',
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    backgroundColor: '#FAFAFA',
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
   },
-  impactIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  impactIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  impactValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#1B5E20',
+  impactInfoDetails: {
+    flex: 1,
   },
-  impactSub: {
-    fontSize: 11,
+  impactMainValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#212121',
+  },
+  impactSubLabel: {
+    fontSize: 10.5,
     color: '#78909C',
-    fontWeight: '600',
+    fontWeight: '500',
+    marginTop: 1,
   },
   ctaBox: {
     padding: 24,
-    borderRadius: 24,
-    marginBottom: 30,
+    borderRadius: 20,
+    marginBottom: 24,
   },
   ctaHeader: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   ctaTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#FFF',
-    marginBottom: 5,
+    marginBottom: 6,
   },
   ctaDesc: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    lineHeight: 20,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 18,
   },
   ctaButton: {
     backgroundColor: '#FFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 15,
-    borderRadius: 16,
-    gap: 10,
+    paddingVertical: 13,
+    borderRadius: 12,
+    gap: 8,
   },
   ctaButtonText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.primary,
-  },
-  footerActions: {
-    alignItems: 'center',
-  },
-  likeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 25,
-    paddingVertical: 12,
-    borderRadius: 30,
-    borderWidth: 1.5,
-    borderColor: '#FF5252',
-  },
-  likedActive: {
-    backgroundColor: '#FF5252',
-  },
-  likeText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FF5252',
+    color: '#1B5E20',
+  },
+  dividerLine: {
+    height: 1,
+    backgroundColor: '#ECEFF1',
+    marginBottom: 16,
+  },
+  footerActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  interactionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CFD8DC',
+    backgroundColor: '#FFF',
+  },
+  activeLikeButton: {
+    backgroundColor: '#FF5252',
+    borderColor: '#FF5252',
+  },
+  interactionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#37474F',
+  },
+  activeButtonText: {
+    color: '#FFF',
   },
   emptyContainer: {
     flex: 1,
@@ -412,6 +452,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: Colors.textSecondary,
+    color: '#78909C',
   },
 });

@@ -20,7 +20,6 @@ import {
   HandHelping,
   Scale,
   Star,
-  ArrowLeft,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
@@ -28,6 +27,9 @@ import Colors from '@/constants/colors';
 import { useWalletStore } from '@/stores/walletStore';
 import { WasteListing } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import ScreenHeader from '@/components/ScreenHeader';
+import ToastDisplay from '@/components/ToastDisplay';
+import { useToast } from '@/hooks/useToast';
 
 const logoImage = require('@/assets/images/logo.png');
 
@@ -78,6 +80,7 @@ export default function BuyerDetailScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const { vndBalance, deductForPurchase } = useWalletStore();
   const { user } = useAuth();
+  const { toasts, success, error: errorToast } = useToast();
 
   // Fetch dữ liệu thật từ API
   useEffect(() => {
@@ -156,26 +159,51 @@ export default function BuyerDetailScreen() {
 
     Alert.alert(
       'Xác nhận nhận đơn',
-      `Bạn sẽ mua ${listing.totalWeight}kg rác với giá ${listing.totalPrice.toLocaleString()}₫ từ ${listing.sellerName}. Tiền sẽ được trừ từ ví của bạn.`,
+      `Bạn sẽ mua ${listing.totalWeight}kg rác với giá ${listing.totalPrice.toLocaleString()}₫ từ ${listing.sellerName}. Tiền sẽ được tạm giữ từ ví của bạn.`,
       [
         { text: 'Hủy', style: 'cancel' },
         {
           text: 'Xác nhận',
-          onPress: () => {
+          onPress: async () => {
             setIsAccepting(true);
-            setTimeout(() => {
+            try {
+              // 1. Giả lập gọi API cập nhật trạng thái đơn hàng trên Server
+              await new Promise(resolve => setTimeout(resolve, 1500));
+
+              // 2. Gọi hàm trừ tiền kiểm tra an toàn (Tránh crash nếu store viết sai tên hàm)
+              if (typeof deductForPurchase === 'function') {
+                deductForPurchase(
+                  listing.id,
+                  listing.totalPrice,
+                  `Mua ${listing.totalWeight}kg rác từ ${listing.sellerName}`
+                );
+              } else {
+                console.warn(
+                  "Cảnh báo: Hàm 'deductForPurchase' không tồn tại trong walletStore. Hãy kiểm tra lại tên hàm trong store!"
+                );
+                // Bạn có thể tạm thời gọi một hàm khác của store nếu biết tên, ví dụ: 
+                // useWalletStore.getState().deductBalance?.(listing.totalPrice);
+              }
+
+              // 3. Hiển thị thông báo Toast mượt mà cho người dùng
+              success('Nhận đơn thành công! Đang chuyển đến bản đồ thu gom...');
+
+              // 4. Luồng tiếp theo: Chuyển hướng sang trang theo dõi hành trình thu gom rác thực tế
+              setTimeout(() => {
+                router.push({
+                  pathname: '/buyer-order-tracking' as any,
+                  params: {
+                    orderId: `ORDER_${listing.id}`,
+                    listingId: listing.id,
+                  },
+                });
+              }, 400);
+
+            } catch (err) {
               setIsAccepting(false);
-              deductForPurchase(
-                listing.id,
-                listing.totalPrice,
-                `Mua ${listing.totalWeight}kg rác từ ${listing.sellerName}`
-              );
-              Alert.alert(
-                'Nhận đơn thành công!',
-                `Đã trừ ${listing.totalPrice.toLocaleString()}₫ từ ví. Hãy đến địa chỉ ${listing.address} để thu gom.`,
-                [{ text: 'OK', onPress: () => router.back() }]
-              );
-            }, 1500);
+              errorToast('Có lỗi xảy ra trong quá trình nhận đơn. Vui lòng thử lại.');
+              console.error('Error accepting order:', err);
+            }
           },
         },
       ]
@@ -187,13 +215,11 @@ export default function BuyerDetailScreen() {
     return (
       <View style={styles.centerContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, styles.centerBackButton, { top: insets.top + 8 }]}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={22} color={Colors.white} />
-        </TouchableOpacity>
+        <ScreenHeader
+          title="Chi tiết bài đăng"
+          backgroundColor="transparent"
+          titleColor={Colors.white}
+        />
         <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.loadingText}>Đang tải...</Text>
       </View>
@@ -205,13 +231,11 @@ export default function BuyerDetailScreen() {
     return (
       <View style={styles.centerContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backButton, styles.centerBackButton, { top: insets.top + 8 }]}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={22} color={Colors.white} />
-        </TouchableOpacity>
+        <ScreenHeader
+          title="Chi tiết bài đăng"
+          backgroundColor="transparent"
+          titleColor={Colors.white}
+        />
         <Text style={styles.emptyText}>{error || 'Không tìm thấy bài đăng'}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
           <Text style={styles.retryText}>Quay lại</Text>
@@ -224,18 +248,13 @@ export default function BuyerDetailScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
+      <ToastDisplay toasts={toasts} onDismiss={() => { }} />
 
-      <View style={[styles.customHeader, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={24} color={Colors.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi tiết bài đăng</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader
+        title="Chi tiết bài đăng"
+        backgroundColor={Colors.primary}
+        titleColor={Colors.white}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <Image
@@ -391,20 +410,28 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   customHeader: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
     backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: 'rgba(0,0,0,0.3)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   headerTitle: {
     color: Colors.white,
@@ -429,6 +456,11 @@ const styles = StyleSheet.create({
     left: 16,
     zIndex: 10,
     backgroundColor: Colors.primary,
+    shadowColor: 'rgba(0,0,0,0.3)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   loadingText: {
     fontSize: 14,
@@ -496,8 +528,13 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   priceCard: {
-    borderRadius: 16,
+    borderRadius: 24,
     overflow: 'hidden' as const,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
   },
   priceGradient: {
     padding: 16,
@@ -568,9 +605,14 @@ const styles = StyleSheet.create({
   },
   noteCard: {
     backgroundColor: '#FFF8E1',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 14,
     gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   noteLabel: {
     fontSize: 12,
@@ -583,8 +625,13 @@ const styles = StyleSheet.create({
   },
   infoSection: {
     backgroundColor: Colors.white,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   infoRow: {
     flexDirection: 'row',
@@ -622,12 +669,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: Colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   chatButtonText: {
     fontSize: 14,
@@ -636,8 +688,13 @@ const styles = StyleSheet.create({
   },
   acceptButton: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: 20,
     overflow: 'hidden' as const,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   acceptGradient: {
     flexDirection: 'row',

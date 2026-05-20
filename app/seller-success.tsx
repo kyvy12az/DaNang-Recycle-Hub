@@ -14,16 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Check, Home, Leaf, Wallet } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useWalletStore } from '@/stores/walletStore';
+import { useSellerStore } from '@/stores/sellerStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Mock data - in real app, this would come from route params
-const MOCK_SALE_DATA = {
-  amount: 68000,
-  points: 70,
-  weight: 8,
-  orderId: '#RC20260223',
-};
 
 export default function SellerSuccessScreen() {
   const router = useRouter();
@@ -31,15 +24,31 @@ export default function SellerSuccessScreen() {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const addFromSale = useWalletStore((state) => state.addFromSale);
+  const { lastCreatedListing } = useSellerStore();
+
+  // Use real listing data if available, otherwise use mock data
+  const saleData = lastCreatedListing ? {
+    amount: lastCreatedListing.totalPrice,
+    points: lastCreatedListing.greenPoints || Math.round(lastCreatedListing.totalWeight * 10),
+    weight: lastCreatedListing.totalWeight,
+    orderId: lastCreatedListing.id,
+  } : {
+    amount: 0,
+    points: 0,
+    weight: 0,
+    orderId: 'Không có dữ liệu',
+  };
 
   useEffect(() => {
     // Add to wallet when success screen loads
-    addFromSale(
-      MOCK_SALE_DATA.orderId,
-      MOCK_SALE_DATA.amount,
-      MOCK_SALE_DATA.points,
-      `Bán ${MOCK_SALE_DATA.weight}kg rác tái chế`
-    );
+    if (saleData.amount > 0) {
+      addFromSale(
+        saleData.orderId,
+        saleData.amount,
+        saleData.points,
+        `Bán ${saleData.weight}kg rác tái chế`
+      );
+    }
 
     Animated.sequence([
       Animated.spring(scaleAnim, {
@@ -54,7 +63,7 @@ export default function SellerSuccessScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [lastCreatedListing]);
 
   return (
     <LinearGradient
@@ -86,14 +95,14 @@ export default function SellerSuccessScreen() {
             <View style={styles.infoCard}>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Mã đơn</Text>
-                <Text style={styles.infoValue}>{MOCK_SALE_DATA.orderId}</Text>
+                <Text style={styles.infoValue}>{saleData.orderId}</Text>
               </View>
               <View style={styles.infoDivider} />
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Tiền nhận được</Text>
                 <View style={styles.moneyRow}>
-                  <Wallet size={16} color={Colors.success} />
-                  <Text style={styles.moneyValue}>+{MOCK_SALE_DATA.amount.toLocaleString()}₫</Text>
+                  <Wallet size={16} color={Colors.primary} />
+                  <Text style={styles.moneyValue}>+{saleData.amount.toLocaleString()}₫</Text>
                 </View>
               </View>
               <View style={styles.infoDivider} />
@@ -101,7 +110,7 @@ export default function SellerSuccessScreen() {
                 <Text style={styles.infoLabel}>Điểm xanh</Text>
                 <View style={styles.pointsRow}>
                   <Leaf size={16} color={Colors.greenPoint} />
-                  <Text style={styles.pointsValue}>+{MOCK_SALE_DATA.points} điểm</Text>
+                  <Text style={styles.pointsValue}>+{saleData.points} điểm</Text>
                 </View>
               </View>
             </View>
@@ -233,7 +242,7 @@ const styles = StyleSheet.create({
   moneyValue: {
     fontSize: 15,
     fontWeight: '700' as const,
-    color: Colors.success,
+    color: Colors.primary,
   },
   thankText: {
     fontSize: 15,

@@ -308,6 +308,157 @@ export const pickupTimeOptions = [
   'Chiều mai (14:00 - 17:00)',
 ];
 
+// Discussion Comments Mockdata
+export interface DiscussionComment {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  content: string;
+  timestamp: string;
+  likesCount: number;
+  isLiked?: boolean;
+  replies?: DiscussionComment[];
+}
+
+export const mockEducationDiscussions: Record<string, DiscussionComment[]> = {
+  'e1': [
+    {
+      id: 'c1',
+      userId: 'u1',
+      userName: 'Chị Hoa',
+      userAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
+      content: 'Cách phân loại này rất hữu ích! Nhưng em thắc mắc rác tái chế lẫn rác hữu cơ thì sao ạ? Như cốc giấy dính mỡ thì phân loại thế nào?',
+      timestamp: '2 giờ trước',
+      likesCount: 12,
+      replies: [
+        {
+          id: 'r1',
+          userId: 'u2',
+          userName: 'Anh Minh',
+          userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
+          content: 'Nếu dính mỡ thì nên vứt vào rác hữu cơ em ơi. Vì rác tái chế phải sạch để có giá trị tái chế cao hơn.',
+          timestamp: '1 giờ trước',
+          likesCount: 8,
+        }
+      ]
+    },
+    {
+      id: 'c2',
+      userId: 'u3',
+      userName: 'Thầy Tâm',
+      userAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
+      content: 'Bài viết rất chi tiết và dễ hiểu. Tôi sẽ dạy cho học sinh của mình. Cảm ơn tác giả bài viết!',
+      timestamp: '3 giờ trước',
+      likesCount: 25,
+      replies: []
+    },
+    {
+      id: 'c3',
+      userId: 'u4',
+      userName: 'Bạn An',
+      userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
+      content: 'Mình vừa thực hiện theo hướng dẫn này từ 1 tháng trước, đã thu được 2kg rác tái chế. Giá bán cũng cao hơn lắm!',
+      timestamp: '5 giờ trước',
+      likesCount: 18,
+      replies: [
+        {
+          id: 'r2',
+          userId: 'u5',
+          userName: 'Chi Chi',
+          userAvatar: 'https://images.unsplash.com/photo-1517841905240-e3986f0b50a8?w=100',
+          content: 'Wow, tuyệt quá! Mình cũng sẽ bắt đầu từ ngày mai. Cảm ơn bạn chia sẻ kinh nghiệm!',
+          timestamp: '4 giờ trước',
+          likesCount: 5,
+        }
+      ]
+    },
+    {
+      id: 'c4',
+      userId: 'u6',
+      userName: 'Trưởng BQL chung cư',
+      userAvatar: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=100',
+      content: 'Tuyệt vời! Chúng tôi đang chuẩn bị lắp đặt 4 thùng rác phân loại tại tòa nhà. Bài viết này sẽ giúp cư dân hiểu rõ hơn.',
+      timestamp: '6 giờ trước',
+      likesCount: 32,
+      replies: []
+    },
+  ],
+  'e2': [
+    {
+      id: 'c5',
+      userId: 'u7',
+      userName: 'Anh Sơn',
+      userAvatar: 'https://images.unsplash.com/photo-1537368310025-700d6d9b0e32?w=100',
+      content: 'Con số 8 triệu tấn thực sự kinh khủng! Có cách nào để giảm thiểu được không ạ?',
+      timestamp: '1 ngày trước',
+      likesCount: 14,
+      replies: [
+        {
+          id: 'r3',
+          userId: 'u8',
+          userName: 'Chuyên gia ENV',
+          userAvatar: 'https://images.unsplash.com/photo-1552058544-f53b5baf8c1f?w=100',
+          content: 'Cách tốt nhất là từng cá nhân bắt đầu từ việc giảm sử dụng nhựa. Mua sắm thông minh, sử dụng bồn chứa thay vì túi nhựa, v.v',
+          timestamp: '1 ngày trước',
+          likesCount: 22,
+        }
+      ]
+    },
+    {
+      id: 'c6',
+      userId: 'u9',
+      userName: 'Cô Lan',
+      userAvatar: 'https://images.unsplash.com/photo-1543003588-d2d5ffd47da1?w=100',
+      content: 'Năm nay mình đã tham gia 3 chiến dịch dọn dẹp bãi biển ở Đà Nẵng. Lượng rác nhựa thực sự rất nhiều! 😞',
+      timestamp: '1 ngày trước',
+      likesCount: 28,
+      replies: []
+    },
+  ],
+  'e3': [
+    {
+      id: 'c7',
+      userId: 'u10',
+      userName: 'Bạn Liên',
+      userAvatar: 'https://images.unsplash.com/photo-1519631128182-7716edda18e6?w=100',
+      content: 'Mẹo số 2 về bình nước rất hay! Mình vừa mua bình thép không gỉ, sử dụng được hơn 1 năm rồi. Rất tiết kiệm!',
+      timestamp: '12 giờ trước',
+      likesCount: 19,
+      replies: [
+        {
+          id: 'r4',
+          userId: 'u11',
+          userName: 'Bạn Khoa',
+          userAvatar: 'https://images.unsplash.com/photo-1530268729831-4be0ea6deae4?w=100',
+          content: 'Giá bình thép có đắt không bạn? Mình đang cân nhắc mua một cái.',
+          timestamp: '11 giờ trước',
+          likesCount: 8,
+        },
+        {
+          id: 'r5',
+          userId: 'u10',
+          userName: 'Bạn Liên',
+          userAvatar: 'https://images.unsplash.com/photo-1519631128182-7716edda18e6?w=100',
+          content: 'Khoảng 200-400k tuỳ hãng bạn. Nhưng tính ra tiết kiệm được rất nhiều so với mua nước mỏ từng lần!',
+          timestamp: '10 giờ trước',
+          likesCount: 12,
+        }
+      ]
+    },
+    {
+      id: 'c8',
+      userId: 'u12',
+      userName: 'Ông Tín',
+      userAvatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=100',
+      content: 'Tôi 65 tuổi rồi nhưng vẫn áp dụng những mẹo này. Cảm giác tốt khi biết mình đang góp phần bảo vệ môi trường!',
+      timestamp: '8 giờ trước',
+      likesCount: 45,
+      replies: []
+    },
+  ]
+};
+
 export const danangDistricts = [
   'Hải Châu',
   'Thanh Khê',

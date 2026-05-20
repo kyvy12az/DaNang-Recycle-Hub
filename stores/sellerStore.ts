@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { WasteItem, WasteType } from '@/types';
+import { WasteItem, WasteType, WasteListing } from '@/types';
 
 export interface AIRecognitionResult {
   wasteType: WasteType;
@@ -24,6 +24,10 @@ interface SellerState {
   isLoading: boolean;
   error: string | null;
   confidenceThreshold: number;
+  // Danh sách bán rác của người dùng
+  myListings: WasteListing[];
+  // Thông tin đơn hàng cuối cùng
+  lastCreatedListing: WasteListing | null;
 
   // Actions
   setCapturedImage: (uri: string | null) => void;
@@ -34,6 +38,9 @@ interface SellerState {
   setAIResults: (results: AIRecognitionResult[]) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setMyListings: (listings: WasteListing[]) => void;
+  addListing: (listing: WasteListing) => void;
+  setLastCreatedListing: (listing: WasteListing | null) => void;
   clearAll: () => void;
 }
 
@@ -46,6 +53,8 @@ export const useSellerStore = create<SellerState>()(
       isLoading: false,
       error: null,
       confidenceThreshold: 0.7,
+      myListings: [],
+      lastCreatedListing: null,
 
       setCapturedImage: (uri) => set({ capturedImageUri: uri }),
 
@@ -79,6 +88,15 @@ export const useSellerStore = create<SellerState>()(
       setLoading: (loading) => set({ isLoading: loading }),
 
       setError: (error) => set({ error }),
+
+      setMyListings: (listings) => set({ myListings: listings }),
+
+      addListing: (listing) =>
+        set((state) => ({
+          myListings: [listing, ...state.myListings],
+        })),
+
+      setLastCreatedListing: (listing) => set({ lastCreatedListing: listing }),
 
       clearAll: () =>
         set({

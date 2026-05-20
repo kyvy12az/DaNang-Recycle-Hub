@@ -20,7 +20,7 @@ import EcoLoader from '@/components/EcoLoader';
 const GOONG_MAP_KEY = process.env.EXPO_PUBLIC_GOONG_API_KEY;
 const GOONG_API_KEY = process.env.EXPO_PUBLIC_GOONG_REST_KEY;
 
-const VIETNAM_REGION = { latitude: 15.8668, longitude: 107.3502, zoom: 4.7 };
+const VIETNAM_REGION = { latitude: 15.8668, longitude: 107.3502, zoom: 5 };
 const MAP_THEME = {
   primary: '#2E7D32',
   primaryLight: '#4CAF50',
@@ -31,40 +31,17 @@ const MAP_THEME = {
 };
 
 const decodePolyline = (encoded: string): [number, number][] => {
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
+  let index = 0, lat = 0, lng = 0;
   const coordinates: [number, number][] = [];
-
   while (index < encoded.length) {
-    let shift = 0;
-    let result = 0;
-    let byte = 0;
-
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-
-    const dLat = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
-    lat += dLat;
-
-    shift = 0;
-    result = 0;
-
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-
-    const dLng = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
-    lng += dLng;
-
+    let shift = 0, result = 0, byte = 0;
+    do { byte = encoded.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lat += ((result & 1) !== 0 ? ~(result >> 1) : result >> 1);
+    shift = 0; result = 0;
+    do { byte = encoded.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lng += ((result & 1) !== 0 ? ~(result >> 1) : result >> 1);
     coordinates.push([lng / 1e5, lat / 1e5]);
   }
-
   return coordinates;
 };
 
@@ -77,76 +54,63 @@ export default function MapScreen() {
   const [points, setPoints] = useState<any[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<any | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  
-  // State mới cho thông tin di chuyển thực tế
   const [routeInfo, setRouteInfo] = useState<{ distance: string, duration: string } | null>(null);
 
   useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      let lat = VIETNAM_REGION.latitude;
-      let lng = VIETNAM_REGION.longitude;
-
-      if (status === 'granted') {
-        let location = await Location.getCurrentPositionAsync({});
-        lat = location.coords.latitude;
-        lng = location.coords.longitude;
-        setUserCoords({ lat, lng });
-      }
-
-      await fetchGreenPoints(lat, lng);
-      setIsLoading(false);
-    })();
+    initLocation();
   }, []);
 
+  const initLocation = async () => {
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      setIsLoading(false);
+      return;
+    }
+    let location = await Location.getCurrentPositionAsync({});
+    const { latitude, longitude } = location.coords;
+    setUserCoords({ lat: latitude, lng: longitude });
+    await fetchGreenPoints(latitude, longitude);
+    setIsLoading(false);
+  };
+
   const fetchGreenPoints = async (lat: number, lng: number) => {
-    const keywords = ['rác thải', 'tái chế', 'Thùng rác công cộng', 'Điểm thu gom rác thải công cộng'];
+    const keywords = ['rác thải', 'tái chế', 'thùng rác'];
     try {
       const searchPromises = keywords.map(async (key) => {
-        const encodedKey = encodeURIComponent(key);
-        const url = `https://rsapi.goong.io/place/autocomplete?input=${encodedKey}&location=${lat},${lng}&radius=10000&api_key=${GOONG_API_KEY}`;
+        const url = `https://rsapi.goong.io/place/autocomplete?input=${encodeURIComponent(key)}&location=${lat},${lng}&radius=5000&api_key=${GOONG_API_KEY}`;
         const res = await fetch(url);
         const data = await res.json();
         return data.status === 'OK' ? data.predictions : [];
       });
 
-      const allResults = await Promise.all(searchPromises);
-      const flatResults = allResults.flat();
-      const uniquePredictions = Array.from(new Map(flatResults.map(item => [item.place_id, item])).values());
+      const results = await Promise.all(searchPromises);
+      const uniqueItems = Array.from(new Map(results.flat().map(item => [item.place_id, item])).values());
 
-      if (uniquePredictions.length > 0) {
-        const detailedPoints = await Promise.all(
-          uniquePredictions.slice(0, 15).map(async (item: any) => {
-            try {
-              const detailUrl = `https://rsapi.goong.io/place/detail?place_id=${item.place_id}&api_key=${GOONG_API_KEY}`;
-              const detailRes = await fetch(detailUrl);
-              const detailData = await detailRes.json();
-              if (detailData.status === 'OK') {
-                const loc = detailData.result.geometry.location;
-                return {
-                  id: item.place_id,
-                  name: detailData.result.name || item.description,
-                  address: detailData.result.formatted_address,
-                  latitude: loc.lat,
-                  longitude: loc.lng,
-                  type: 'Điểm thu gom',
-                  acceptedWaste: 'Giấy, Nhựa, Kim loại'
-                };
-              }
-            } catch (e) { return null; }
-            return null;
-          })
-        );
-        const finalPoints = detailedPoints.filter(p => p !== null);
-        setPoints(finalPoints);
-        runMapScript(`window.__goongMap.updateMarkers(${JSON.stringify(finalPoints)})`);
-      }
-    } catch (error) {
-      console.error("Lỗi tìm kiếm:", error);
-    }
+      const detailedPoints = await Promise.all(
+        uniqueItems.slice(0, 10).map(async (item: any) => {
+          const res = await fetch(`https://rsapi.goong.io/place/detail?place_id=${item.place_id}&api_key=${GOONG_API_KEY}`);
+          const data = await res.json();
+          if (data.status === 'OK') {
+            return {
+              id: item.place_id,
+              name: data.result.name,
+              address: data.result.formatted_address,
+              latitude: data.result.geometry.location.lat,
+              longitude: data.result.geometry.location.lng,
+              type: 'Điểm thu gom tái chế',
+              acceptedWaste: 'Nhựa, Giấy, Pin, Kim loại'
+            };
+          }
+          return null;
+        })
+      );
+
+      const finalData = detailedPoints.filter(p => p !== null);
+      setPoints(finalData);
+      runMapScript(`window.__goongMap.updateMarkers(${JSON.stringify(finalData)})`);
+    } catch (e) { console.error(e); }
   };
 
-  // HÀM MỚI: Lấy khoảng cách & thời gian thực tế (Distance Matrix)
   const fetchRealDistance = async (destLat: number, destLng: number) => {
     if (!userCoords) return;
     try {
@@ -155,17 +119,11 @@ export default function MapScreen() {
       const data = await res.json();
       if (data.rows?.[0]?.elements?.[0]?.status === 'OK') {
         const element = data.rows[0].elements[0];
-        setRouteInfo({
-          distance: element.distance.text,
-          duration: element.duration.text
-        });
+        setRouteInfo({ distance: element.distance.text, duration: element.duration.text });
       }
-    } catch (error) {
-      console.error("Lỗi Distance Matrix:", error);
-    }
+    } catch (e) { console.error(e); }
   };
 
-  // HÀM MỚI: Vẽ lộ trình lên bản đồ (Directions API)
   const handleDrawRoute = async () => {
     if (!userCoords || !selectedPoint) return;
     setModalVisible(false);
@@ -174,19 +132,10 @@ export default function MapScreen() {
       const res = await fetch(url);
       const data = await res.json();
       if (data.routes?.length > 0) {
-        const polyline = data.routes[0].overview_polyline.points;
-        const coordinates = decodePolyline(polyline);
-        if (!coordinates.length) {
-          Alert.alert('Lỗi', 'Không giải mã được lộ trình.');
-          return;
-        }
-        runMapScript(`window.__goongMap.drawRoute(${JSON.stringify(coordinates)})`);
-      } else {
-        Alert.alert('Lỗi', 'Không tìm thấy lộ trình phù hợp.');
+        const coords = decodePolyline(data.routes[0].overview_polyline.points);
+        runMapScript(`window.__goongMap.drawRoute(${JSON.stringify(coords)})`);
       }
-    } catch (error) {
-      Alert.alert("Lỗi", "Không thể hiển thị chỉ đường.");
-    }
+    } catch (e) { Alert.alert("Lỗi", "Không thể tìm đường đi."); }
   };
 
   const runMapScript = (script: string) => webViewRef.current?.injectJavaScript(`${script}; true;`);
@@ -197,7 +146,7 @@ export default function MapScreen() {
       const point = points.find(p => p.id === data.id);
       if (point) {
         setSelectedPoint(point);
-        setRouteInfo(null); // Xóa info cũ khi mở point mới
+        setRouteInfo(null);
         setModalVisible(true);
         fetchRealDistance(point.latitude, point.longitude);
       }
@@ -205,18 +154,13 @@ export default function MapScreen() {
   };
 
   const handleLocateMe = async () => {
-    try {
-      setIsLocating(true);
-      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude, longitude } = location.coords;
-      setUserCoords({ lat: latitude, lng: longitude });
-      runMapScript(`window.__goongMap.locateMe(${longitude}, ${latitude})`);
-      await fetchGreenPoints(latitude, longitude);
-    } catch (error) {
-      Alert.alert('Lỗi', 'Không xác định được vị trí.');
-    } finally {
-      setIsLocating(false);
-    }
+    setIsLocating(true);
+    let location = await Location.getCurrentPositionAsync({});
+    const { latitude, longitude } = location.coords;
+    setUserCoords({ lat: latitude, lng: longitude });
+    runMapScript(`window.__goongMap.locateMe(${longitude}, ${latitude})`);
+    await fetchGreenPoints(latitude, longitude);
+    setIsLocating(false);
   };
 
   const goongMapHTML = `
@@ -230,7 +174,8 @@ export default function MapScreen() {
       <style>
         body { margin: 0; padding: 0; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-        .marker { width: 32px; height: 32px; border-radius: 50%; background: ${MAP_THEME.primaryLight}; border: 3px solid white; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .marker { width: 32px; height: 32px; border-radius: 50%; background: ${MAP_THEME.primary}; border: 2px solid white; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .user-marker { width: 18px; height: 18px; background: #4285F4; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(66,133,244,0.5); }
       </style>
     </head>
     <body>
@@ -250,60 +195,33 @@ export default function MapScreen() {
         window.__goongMap = {
           zoomIn: () => map.zoomIn(),
           zoomOut: () => map.zoomOut(),
-          resetToVietnam: () => {
-            if (map.getSource('route')) { map.removeLayer('route'); map.removeSource('route'); }
-            map.flyTo({ center: [${VIETNAM_REGION.longitude}, ${VIETNAM_REGION.latitude}], zoom: ${VIETNAM_REGION.zoom} });
-          },
           locateMe: (lng, lat) => {
             if (userMarker) userMarker.remove();
-            userMarker = new goongjs.Marker({ color: '#FF5252' }).setLngLat([lng, lat]).addTo(map);
+            const el = document.createElement('div'); el.className = 'user-marker';
+            userMarker = new goongjs.Marker(el).setLngLat([lng, lat]).addTo(map);
             map.flyTo({ center: [lng, lat], zoom: 15 });
           },
           updateMarkers: (newPoints) => {
             markers.forEach(m => m.remove());
-            markers = [];
-            newPoints.forEach(point => {
+            markers = newPoints.map(p => {
               const el = document.createElement('div');
               el.className = 'marker';
               el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-recycle-icon lucide-recycle"><path d="M7 19H4.815a1.83 1.83 0 0 1-1.57-.881 1.785 1.785 0 0 1-.004-1.784L7.196 9.5"/><path d="M11 19h8.203a1.83 1.83 0 0 0 1.556-.89 1.784 1.784 0 0 0 0-1.775l-1.226-2.12"/><path d="m14 16-3 3 3 3"/><path d="M8.293 13.596 7.196 9.5 3.1 10.598"/><path d="m9.344 5.811 1.093-1.892A1.83 1.83 0 0 1 11.985 3a1.784 1.784 0 0 1 1.546.888l3.943 6.843"/><path d="m13.378 9.633 4.096 1.098 1.097-4.096"/></svg>';
-              el.onclick = () => window.ReactNativeWebView.postMessage(JSON.stringify({type: 'MARKER_CLICK', id: point.id}));
-              const m = new goongjs.Marker(el).setLngLat([point.longitude, point.latitude]).addTo(map);
-              markers.push(m);
+              el.onclick = () => {
+                map.flyTo({ center: [p.longitude, p.latitude], zoom: 16, duration: 1000 });
+                window.ReactNativeWebView.postMessage(JSON.stringify({type: 'MARKER_CLICK', id: p.id}));
+              };
+              return new goongjs.Marker(el).setLngLat([p.longitude, p.latitude]).addTo(map);
             });
           },
-          drawRoute: (coordinates) => {
-            // Xóa route cũ nếu có
-            if (map.getSource('route')) { map.removeLayer('route'); map.removeSource('route'); }
-
-            if (!coordinates || !coordinates.length) return;
-
-            const geojson = {
-              type: 'Feature',
-              geometry: {
-                type: 'LineString',
-                coordinates
-              },
-              properties: {}
-            };
-
-            map.addSource('route', { 'type': 'geojson', 'data': geojson });
-            map.addLayer({
-              'id': 'route',
-              'type': 'line',
-              'source': 'route',
-              'layout': { 'line-join': 'round', 'line-cap': 'round' },
-              'paint': { 'line-color': '${MAP_THEME.line}', 'line-width': 6 }
-            });
-
-            // Căn bản đồ khớp với lộ trình
-            const bounds = coordinates.reduce((acc, coord) => acc.extend(coord), new goongjs.LngLatBounds(coordinates[0], coordinates[0]));
-            map.fitBounds(bounds, { padding: 70 });
+          drawRoute: (coords) => {
+            if (map.getLayer('route')) { map.removeLayer('route'); map.removeSource('route'); }
+            map.addSource('route', { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': coords } } });
+            map.addLayer({ 'id': 'route', 'type': 'line', 'source': 'route', 'layout': { 'line-join': 'round', 'line-cap': 'round' }, 'paint': { 'line-color': '${MAP_THEME.line}', 'line-width': 6 } });
+            const bounds = coords.reduce((b, c) => b.extend(c), new goongjs.LngLatBounds(coords[0], coords[0]));
+            map.fitBounds(bounds, { padding: 80 });
           }
         };
-
-        map.on('load', () => {
-          window.ReactNativeWebView.postMessage(JSON.stringify({type: 'MAP_READY'}));
-        });
       </script>
     </body>
     </html>
@@ -312,28 +230,15 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient colors={[MAP_THEME.primaryDark, MAP_THEME.primaryLight]} style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerRow}>
-          <Recycle size={24} color="white" />
-          <Text style={styles.headerTitle}>Tìm Điểm Thu Gom</Text>
-        </View>
+        <View style={styles.headerRow}><Recycle size={24} color="white" /><Text style={styles.headerTitle}>Trạm Thu Gom Xanh</Text></View>
       </LinearGradient>
 
       <View style={styles.mapWrapper}>
-        <WebView
-          ref={webViewRef}
-          source={{ html: goongMapHTML }}
-          onMessage={onMessage}
-          style={styles.map}
-          javaScriptEnabled={true}
-        />
-
-        <View style={[styles.mapControls, { top: 16, right: 16 }]}>
+        <WebView ref={webViewRef} source={{ html: goongMapHTML }} onMessage={onMessage} style={styles.map} javaScriptEnabled={true} />
+        <View style={styles.mapControls}>
           <TouchableOpacity style={styles.controlButton} onPress={() => runMapScript('window.__goongMap.zoomIn()')}><Plus size={20} color="#333" /></TouchableOpacity>
           <TouchableOpacity style={styles.controlButton} onPress={() => runMapScript('window.__goongMap.zoomOut()')}><Minus size={20} color="#333" /></TouchableOpacity>
-          <TouchableOpacity style={[styles.controlButton, isLocating && { backgroundColor: MAP_THEME.surfaceSoft }]} onPress={handleLocateMe}>
-            <LocateFixed size={20} color={isLocating ? MAP_THEME.primary : "#333"} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.controlButton} onPress={() => runMapScript('window.__goongMap.resetToVietnam()')}><RotateCcw size={20} color="#333" /></TouchableOpacity>
+          <TouchableOpacity style={styles.controlButton} onPress={handleLocateMe}><LocateFixed size={20} color={isLocating ? MAP_THEME.primary : "#333"} /></TouchableOpacity>
         </View>
       </View>
 
@@ -341,7 +246,6 @@ export default function MapScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}><X size={24} color="#666" /></TouchableOpacity>
-            
             <View style={styles.modalHeader}>
               <View style={styles.iconCircle}><Recycle size={28} color={MAP_THEME.primary} /></View>
               <View style={{ flex: 1, marginLeft: 15 }}>
@@ -353,41 +257,28 @@ export default function MapScreen() {
             <View style={styles.infoRow}><MapPin size={18} color={MAP_THEME.primary} /><Text style={styles.infoText}>{selectedPoint?.address}</Text></View>
             <View style={styles.infoRow}><Info size={18} color={MAP_THEME.primary} /><Text style={styles.infoText}>Nhận: {selectedPoint?.acceptedWaste}</Text></View>
 
-            {/* Hiển thị Distance Matrix thực tế */}
             <View style={styles.distanceMatrixContainer}>
               <View style={styles.matrixItem}>
-                <Navigation size={18} color={MAP_THEME.primaryDark} />
-                <Text style={styles.matrixLabel}>Khoảng cách</Text>
-                <Text style={styles.matrixValue}>{routeInfo ? routeInfo.distance : '---'}</Text>
+                <Navigation size={18} color={MAP_THEME.primaryDark} /><Text style={styles.matrixLabel}>Khoảng cách</Text>
+                <Text style={styles.matrixValue}>{routeInfo?.distance || '---'}</Text>
               </View>
               <View style={styles.matrixDivider} />
               <View style={styles.matrixItem}>
-                <Clock size={18} color={MAP_THEME.primaryDark} />
-                <Text style={styles.matrixLabel}>Thời gian đi</Text>
-                <Text style={styles.matrixValue}>{routeInfo ? routeInfo.duration : '---'}</Text>
+                <Clock size={18} color={MAP_THEME.primaryDark} /><Text style={styles.matrixLabel}>Thời gian</Text>
+                <Text style={styles.matrixValue}>{routeInfo?.duration || '---'}</Text>
               </View>
             </View>
 
             <TouchableOpacity style={styles.directionBtn} onPress={handleDrawRoute}>
-              <Navigation size={20} color="white" />
-              <Text style={styles.directionBtnText}>Chỉ đường trên bản đồ</Text>
+              <Navigation size={20} color="white" /><Text style={styles.directionBtnText}>Chỉ đường ngay</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.googleMapsBtn} 
-              onPress={() => {
-                const url = Platform.OS === 'ios' 
-                  ? `maps://0,0?q=${selectedPoint?.latitude},${selectedPoint?.longitude}`
-                  : `google.navigation:q=${selectedPoint?.latitude},${selectedPoint?.longitude}`;
-                Linking.openURL(url);
-              }}
-            >
+            <TouchableOpacity style={styles.googleMapsBtn} onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${selectedPoint?.latitude},${selectedPoint?.longitude}`)}>
               <Text style={styles.googleMapsBtnText}>Mở bằng Google Maps</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
       {isLoading && <EcoLoader />}
     </View>
   );
@@ -395,30 +286,28 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: MAP_THEME.surface },
-  header: { paddingHorizontal: 20, paddingBottom: 16 },
+  header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomLeftRadius: 25, borderBottomRightRadius: 25 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerTitle: { fontSize: 20, fontWeight: '700', color: 'white' },
-  mapWrapper: { flex: 1, margin: 10, borderRadius: 20, overflow: 'hidden', backgroundColor: 'white', elevation: 3 },
+  mapWrapper: { flex: 1, margin: 10, borderRadius: 25, overflow: 'hidden', elevation: 4 },
   map: { flex: 1 },
-  mapControls: { position: 'absolute', zIndex: 10, gap: 10 },
-  controlButton: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', elevation: 3 },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.3)' },
+  mapControls: { position: 'absolute', top: 16, right: 16, gap: 10 },
+  controlButton: { width: 46, height: 46, borderRadius: 14, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', elevation: 3 },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24 },
   closeBtn: { alignSelf: 'flex-end', padding: 5 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  iconCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: MAP_THEME.surfaceSoft, alignItems: 'center', justifyContent: 'center' },
-  modalName: { fontSize: 18, fontWeight: '700', color: '#333' },
+  iconCircle: { width: 54, height: 54, borderRadius: 27, backgroundColor: MAP_THEME.surfaceSoft, alignItems: 'center', justifyContent: 'center' },
+  modalName: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
   modalType: { fontSize: 13, color: MAP_THEME.primary, fontWeight: '600' },
-  infoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 10 },
-  infoText: { fontSize: 14, color: '#666', flex: 1 },
-  
-  distanceMatrixContainer: { flexDirection: 'row', backgroundColor: '#F1F8E9', borderRadius: 15, marginTop: 20, padding: 15, alignItems: 'center' },
-  matrixItem: { flex: 1, alignItems: 'center', gap: 4 },
-  matrixDivider: { width: 1, height: '80%', backgroundColor: '#C8E6C9' },
-  matrixLabel: { fontSize: 11, color: '#666' },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 12, gap: 10 },
+  infoText: { fontSize: 14, color: '#444', flex: 1, lineHeight: 20 },
+  distanceMatrixContainer: { flexDirection: 'row', backgroundColor: '#F1F8E9', borderRadius: 18, marginTop: 24, padding: 18, alignItems: 'center' },
+  matrixItem: { flex: 1, alignItems: 'center', gap: 5 },
+  matrixDivider: { width: 1, height: '70%', backgroundColor: '#C8E6C9' },
+  matrixLabel: { fontSize: 11, color: '#666', fontWeight: '500' },
   matrixValue: { fontSize: 18, fontWeight: '800', color: MAP_THEME.primaryDark },
-  
-  directionBtn: { backgroundColor: MAP_THEME.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 14, marginTop: 15, gap: 10 },
+  directionBtn: { backgroundColor: MAP_THEME.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 16, marginTop: 20, gap: 10 },
   directionBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
   googleMapsBtn: { padding: 12, alignItems: 'center', marginTop: 8 },
   googleMapsBtnText: { color: MAP_THEME.primary, fontWeight: '600' }

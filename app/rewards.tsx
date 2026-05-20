@@ -12,12 +12,13 @@ import { useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
-import { Award, Gift, Check, ChevronLeft, AlertCircle } from 'lucide-react-native';
+import { Award, Gift, Check, AlertCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { mockRewards } from '@/mocks/data';
 import { Reward } from '@/types';
 import EcoLoader from '@/components/EcoLoader';
 import { useWalletStore } from '@/stores/walletStore';
+import BackButton from '@/components/BackButton';
 
 export default function RewardsScreen() {
   const router = useRouter();
@@ -113,9 +114,7 @@ export default function RewardsScreen() {
           {/* Header với nút quay lại */}
           <LinearGradient colors={['#2E7D32', '#1B5E20']} style={[styles.header, { paddingTop: insets.top }]}>
             <View style={styles.navBar}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <ChevronLeft size={28} color="#FFF" />
-              </TouchableOpacity>
+              <BackButton color="#FFF" size={28} />
               <Text style={styles.headerTitle}>Đổi thưởng</Text>
               <View style={{ width: 40 }} />
             </View>

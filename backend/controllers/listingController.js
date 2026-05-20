@@ -1,9 +1,16 @@
 const Listing = require("../models/Listing");
 const User = require("../models/User");
 
+// Pass io instance from server.js
+let io = null;
+
+exports.setIO = (ioInstance) => {
+  io = ioInstance;
+};
+
 exports.createListing = async (req, res) => {
   try {
-    const { items, totalPrice, totalWeight, greenPoints, note, pickupTime, imageUrl } = req.body;
+    const { items, totalPrice, totalWeight, greenPoints, note, pickupTime, imageUrl, address: customAddress } = req.body;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ message: "Vui lòng thêm ít nhất một loại rác thải" });
@@ -17,12 +24,13 @@ exports.createListing = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
     }
 
-    const address = user.address || "";
-    if (!address) {
-      return res.status(400).json({ message: "Vui lòng cập nhật địa chỉ trong hồ sơ trước khi đăng bài" });
+    // Ưu tiên dùng địa chỉ từ request body, nếu không có mới dùng địa chỉ từ profile
+    const finalAddress = customAddress || user.address || "";
+    if (!finalAddress) {
+      return res.status(400).json({ message: "Vui lòng cung cấp địa chỉ thu gom" });
     }
 
-    const addressParts = address.split(",");
+    const addressParts = finalAddress.split(",");
     const district = addressParts.length > 1
       ? addressParts[addressParts.length - 2]?.trim()
       : "";
@@ -43,12 +51,39 @@ exports.createListing = async (req, res) => {
       totalPrice,
       totalWeight,
       greenPoints: greenPoints || Math.round(totalWeight * 10),
-      address,
+      address: finalAddress,
       district,
       note: note || "",
       pickupTime,
       imageUrl: imageUrl || null,
     });
+
+    // Emit real-time update to all connected clients
+    if (io) {
+      io.emit('new:listing', {
+        _id: listing._id,
+        sellerId: listing.sellerId,
+        sellerName: listing.sellerName,
+        sellerAvatar: listing.sellerAvatar,
+        items: listing.items,
+        totalPrice: listing.totalPrice,
+        totalWeight: listing.totalWeight,
+        address: listing.address,
+        district: listing.district,
+        note: listing.note,
+        pickupTime: listing.pickupTime,
+        status: listing.status,
+        createdAt: listing.createdAt,
+        imageUrl: listing.imageUrl,
+        greenPoints: listing.greenPoints,
+      });
+
+      // Also notify the seller about their new listing
+      io.to(req.userId).emit('seller:listing:created', {
+        listing,
+        message: "Đăng bài thành công",
+      });
+    }
 
     return res.status(201).json({
       message: "Đăng bài thành công",

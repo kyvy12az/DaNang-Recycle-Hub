@@ -93,41 +93,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = `https://github.com/login/oauth/authorize?${params.toString()}`;
   }, []);
 
-  const completeGithubLogin = useCallback(async (code: string, callbackStateParam?: string) => {
-    const callbackState = callbackStateParam || new URLSearchParams(window.location.search).get("state") || "";
-    const storedState = localStorage.getItem(OAUTH_STATE_KEY) || "";
-
-    if (!callbackState || callbackState !== storedState) {
-      throw new Error("OAuth state không hợp lệ, vui lòng thử lại");
-    }
-
-    setIsLoading(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/admin/auth/github`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          code,
-          redirectUri: getRedirectUri(),
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Đăng nhập GitHub thất bại");
-      }
-
-      localStorage.removeItem(OAUTH_STATE_KEY);
-      localStorage.setItem(AUTH_TOKEN_KEY, data.token);
-      setToken(data.token);
-      setUser(normalizeUser(data.admin));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -135,6 +100,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
   }, []);
+
+  const completeGithubLogin = useCallback(async (code: string, callbackStateParam?: string) => {
+    const storedState = localStorage.getItem(OAUTH_STATE_KEY);
+    localStorage.removeItem(OAUTH_STATE_KEY);
+
+    if (!callbackStateParam || callbackStateParam !== storedState) {
+      throw new Error("Phiên làm việc đã hết hạn. Vui lòng thử lại.");
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/auth/github`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, redirectUri: getRedirectUri() }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Đăng nhập thất bại");
+
+      localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+      setToken(data.token);
+      setUser(normalizeUser(data.admin));
+    } catch (err) {
+      logout();
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [logout]);
 
   const value = useMemo(
     () => ({

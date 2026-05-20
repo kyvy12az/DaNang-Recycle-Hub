@@ -26,6 +26,8 @@ export interface WasteItem {
   wasteType: WasteType;
   quantity: number;
   estimatedPrice: number;
+  aiConfidence?: number;
+  aiLabel?: string;
 }
 
 export interface WasteListing {
@@ -156,4 +158,39 @@ export interface GameSessionState {
   selectedAnswer: GameWasteGroup | null;
   result: 'idle' | 'correct' | 'incorrect';
   isLocked: boolean;
+}
+
+export interface Order {
+  id: string;
+  listingId: string;
+  buyerId: string;
+  sellerId: string;
+  
+  // Original estimate
+  estimatedWeight: number;
+  estimatedPrice: number;
+  estimatedGreenPoints: number;
+  
+  // Actual measurement
+  actualWeight: number | null;
+  actualPrice: number | null;
+  actualGreenPoints: number | null;
+  
+  // Status flow
+  status: 'accepted' | 'arriving' | 'arrived' | 'measured' | 'completed' | 'cancelled';
+  
+  // Payment confirmation
+  qrCode: string;
+  confirmedBySellerAt: string | null;
+  completedAt: string | null;
+  
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderWithListing extends Order {
+  listing: WasteListing;
+  buyer: UserProfile;
+  seller: UserProfile;
 }

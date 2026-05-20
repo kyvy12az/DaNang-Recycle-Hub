@@ -21,13 +21,15 @@ import {
   Search,
   ChevronRight,
   Info,
-  ArrowLeft
 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Colors from '@/constants/colors';
 import { danangDistricts } from '@/mocks/data';
 import { WasteListing } from '@/types';
 import EcoLoader from '@/components/EcoLoader';
+import { useSocket } from '@/contexts/SocketContext';
+import BackButton from '@/components/BackButton';
 
 const { width } = Dimensions.get('window');
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.6:5000').replace(/\/$/, '');
@@ -65,6 +67,7 @@ const mapListingFromAPI = (item: any): WasteListing => ({
 
 export default function BuyerListingsScreen() {
   const router = useRouter();
+  const socket = useSocket();
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [listings, setListings] = useState<WasteListing[]>([]);
@@ -92,7 +95,25 @@ export default function BuyerListingsScreen() {
     }
   }, [fadeAnim]);
 
-  useEffect(() => { fetchListings(); }, [fetchListings]);
+  useEffect(() => { 
+    fetchListings(); 
+  }, [fetchListings]);
+
+  // Listen for real-time listing updates via socket.io
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewListing = (newListingData: any) => {
+      const mappedListing = mapListingFromAPI(newListingData);
+      setListings((prevListings) => [mappedListing, ...prevListings]);
+    };
+
+    socket.on('new:listing', handleNewListing);
+
+    return () => {
+      socket.off('new:listing', handleNewListing);
+    };
+  }, [socket]);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -180,13 +201,7 @@ export default function BuyerListingsScreen() {
       <LinearGradient colors={['#2E7D32', '#1B5E20']} style={styles.topHeader}>
         <View style={styles.headerTitleRow}>
           <View style={styles.headerLeftAction}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
-              <ArrowLeft size={24} color={Colors.white} />
-            </TouchableOpacity>
+            <BackButton color={Colors.white} size={24} />
             <Text style={styles.headerTitle}>Chợ Phế Liệu</Text>
           </View>
 
@@ -273,22 +288,45 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 25,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
   },
-  headerTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  headerLeftAction: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerTitleRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 22 
+  },
+  headerLeftAction: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 14 
+  },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: 'rgba(0,0,0,0.2)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   welcomeText: { color: 'rgba(255,255,255,0.8)', fontSize: 14 },
   headerTitle: { color: Colors.white, fontSize: 20, fontWeight: '800' },
-  notifButton: { backgroundColor: 'rgba(255,255,255,0.2)', padding: 10, borderRadius: 14 },
+  notifButton: { 
+    backgroundColor: 'rgba(255,255,255,0.25)', 
+    padding: 12, 
+    borderRadius: 24,
+    shadowColor: 'rgba(0,0,0,0.2)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
   searchBar: {
     flexDirection: 'row',
     backgroundColor: Colors.white,
@@ -326,13 +364,13 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 20, paddingBottom: 30, gap: 16 },
   listingCard: {
     backgroundColor: Colors.white,
-    borderRadius: 24,
+    borderRadius: 28,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 15,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 5,
   },
   imageContainer: { position: 'relative' },
   listingImage: { width: '100%', height: 160 },

@@ -11,7 +11,6 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  ArrowLeft,
   ArrowUpRight,
   ArrowDownLeft,
   Gift,
@@ -25,6 +24,7 @@ import {
 import Colors from '@/constants/colors';
 import { useWalletStore, TransactionRecord, TransactionType } from '@/stores/walletStore';
 import EcoLoader from '@/components/EcoLoader';
+import BackButton from '@/components/BackButton';
 
 // Tab filter types
 type FilterType = 'all' | 'income' | 'expense';
@@ -194,13 +194,7 @@ export default function TransactionHistoryScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <ArrowLeft size={24} color={Colors.text} />
-        </TouchableOpacity>
+        <BackButton color={Colors.text} size={24} />
         <Text style={styles.headerTitle}>Lịch sử giao dịch</Text>
         <View style={styles.headerRight} />
       </View>

@@ -1,20 +1,20 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+const Type = {
+    OBJECT: "OBJECT",
+    STRING: "STRING",
+    ARRAY: "ARRAY"
+};
+
 const DEFAULT_LABELS = [
-    "battery",
-    "biological",
-    "cardboard",
-    "clothes",
-    "glass",
-    "metal",
-    "paper",
-    "plastic",
-    "shoes",
-    "trash",
+    "battery", "biological", "cardboard", "clothes", 
+    "glass", "metal", "paper", "plastic", "shoes", "trash", "not_waste"
 ];
 
 const GEMINI_MODEL_CANDIDATES = [
-    "gemini-2.5-flash",      
+    "gemini-2.5-flash",
+    "gemini-1.5-flash", 
+    "gemini-1.5-pro"
 ];
 
 const LABEL_ALIASES = {
@@ -31,59 +31,21 @@ const LABEL_ALIASES = {
 };
 
 let cachedGenAI = null;
-let cachedModelName = null;
-
-function getGeminiApiKey() {
-    return process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-}
 
 function getGeminiClient() {
     if (cachedGenAI) return cachedGenAI;
-    const apiKey = getGeminiApiKey();
+    const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
     if (!apiKey) throw new Error("Thiếu biến môi trường EXPO_PUBLIC_GEMINI_API_KEY.");
     cachedGenAI = new GoogleGenerativeAI(apiKey);
     return cachedGenAI;
 }
 
-function createModel(modelName) {
-    return getGeminiClient().getGenerativeModel({ model: modelName });
-}
-
-// hàm kiểm tra lỗi để quyết định có nên thử model tiếp theo hay không
-function shouldTryNextModel(error) {
-    const message = String(error?.message || "").toLowerCase();
-    const status = error?.status;
-
-    return status === 404 || // Model không tồn tại
-           status === 429 || // Hết Quota 
-           message.includes("not found") ||
-           message.includes("quota") ||
-           message.includes("limit exceeded") ||
-           message.includes("not supported");
-}
-
-function isModelNotSupportedError(error) {
-    const message = String(error?.message || "").toLowerCase();
-    const status = error?.status;
-
-    return status === 404
-        || message.includes("not found")
-        || message.includes("not supported for generatecontent")
-        || message.includes("model") && message.includes("not found");
-}
-
 function normalizeLabel(text) {
-    const normalized = String(text || "")
-        .trim()
-        .toLowerCase()
-        .replace(/```(?:json)?/g, "")
-        .replace(/[\"'`.,!?;:\[\]{}()]/g, "")
-        .trim();
+    if (!text) return null;
+    const normalized = text.trim().toLowerCase().replace(/[\"'`.,!?;:\[\]{}()]/g, "");
 
     const directMatch = DEFAULT_LABELS.find((label) => label === normalized);
-    if (directMatch) {
-        return directMatch;
-    }
+    if (directMatch) return directMatch;
 
     for (const [label, aliases] of Object.entries(LABEL_ALIASES)) {
         if (aliases.some((alias) => normalized === alias || normalized.includes(alias))) {
@@ -96,12 +58,17 @@ function normalizeLabel(text) {
 }
 
 async function classifyWithGemini(imageBuffer, mimeType = "image/jpeg") {
-    const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-    if (!apiKey) throw new Error("Missing Gemini API Key");
-
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const genAI = getGeminiClient(); 
     
-    const prompt = `Phân tích hình ảnh rác thải này. Trả về duy nhất 1 từ trong danh sách: [${DEFAULT_LABELS.join(", ")}].`;
+    // Tách danh sách nhãn sạch ra ngoài trước để Prompt gọn gàng, không bị dính khoảng trắng lỗi
+    const cleanWasteLabels = DEFAULT_LABELS.filter(l => l !== 'not_waste').join(", ");
+    
+    const prompt = `Bạn là hệ thống AI kiểm định và phân loại góc nhìn cho ứng dụng DaNang Recycle Hub.
+Hãy phân tích kỹ bức ảnh được cung cấp dựa trên các quy tắc sau:
+
+1. KIỂM TRA TÍNH HỢP LỆ: Nếu bức ảnh chụp con người, khuôn mặt, động vật, cây cối tự nhiên (không phải rác hữu cơ), phong cảnh, hoặc đồ vật thông thường KHÔNG PHẢI LÀ RÁC THẢI, hãy lập tức chọn nhãn 'not_waste'.
+2. PHÂN LOẠI RÁC: Nếu xác định đây là rác thải, hãy chọn 1 nhãn phù hợp nhất trong danh sách: [${cleanWasteLabels}].
+3. ĐỊNH NGHĨA 'trash': Chỉ chọn nhãn 'trash' cho các loại rác thải sinh hoạt còn lại, rác vô cơ không thuộc các nhóm tái chế trên.`;
 
     let lastError = null;
 
@@ -109,9 +76,22 @@ async function classifyWithGemini(imageBuffer, mimeType = "image/jpeg") {
         try {
             console.log(`📡 Đang gọi Google API với Model: ${modelName}`);
             
-            // Cấu hình cụ thể để tránh lỗi 404/403
             const model = genAI.getGenerativeModel({ 
-                model: modelName 
+                model: modelName,
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            label: {
+                                type: Type.STRING,
+                                enum: DEFAULT_LABELS, 
+                                description: "Nhãn phân loại rác thải chính xác nhất từ danh sách được cung cấp."
+                            }
+                        },
+                        required: ["label"],
+                    }
+                }
             });
 
             const result = await model.generateContent([
@@ -125,23 +105,35 @@ async function classifyWithGemini(imageBuffer, mimeType = "image/jpeg") {
             ]);
 
             const response = await result.response;
-            const text = response.text();
-            const label = normalizeLabel(text);
+            const responseText = response.text();
+            
+            // TỐI ƯU AN TOÀN: Bọc JSON.parse để nếu chuỗi lỗi thì fallback sang model tiếp theo chứ không làm sập hàm
+            let jsonResult;
+            try {
+                jsonResult = JSON.parse(responseText);
+            } catch (parseErr) {
+                console.warn(`⚠️ Model ${modelName} trả về chuỗi JSON không hợp lệ. Đang chuyển model...`);
+                lastError = parseErr;
+                continue;
+            }
+
+            const label = normalizeLabel(jsonResult.label);
 
             if (label) {
-                console.log(`✅ Thành công với model: ${modelName}`);
+                console.log(`✅ Thành công với model: ${modelName} -> Label: ${label}`);
                 return { label, model: modelName };
             }
         } catch (error) {
             lastError = error;
             const status = error?.status;
+            const errorMessage = String(error?.message || "").toLowerCase();
 
-            // Xử lý lỗi 403 (Quyền truy cập) hoặc 404 (Sai tên model) hoặc 429 (Hết lượt)
-            if (status === 403 || status === 404 || status === 429) {
-                console.warn(`⚠️ Model ${modelName} bị lỗi ${status}. Đang chuyển model...`);
+            if (status === 403 || status === 404 || status === 429 || status === 503 || 
+                errorMessage.includes("demand") || errorMessage.includes("unavailable")) {
+                console.warn(`⚠️ Model ${modelName} gặp sự cố (Status: ${status || 'N/A'}). Đang thử model dự phòng tiếp theo...`);
                 continue; 
             }
-            break;
+            break; 
         }
     }
 

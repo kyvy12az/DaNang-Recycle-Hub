@@ -12,6 +12,7 @@ const userRoutes = require("./routes/userRoutes");
 const adminAuthRoutes = require("./routes/adminAuthRoutes");
 const classifyRoutes = require("./routes/classifyRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const listingController = require("./controllers/listingController");
 
 
 const app = express();
@@ -79,6 +80,9 @@ const io = new Server(server, {
   pingInterval: 5000,
 });
 
+// Initialize listing controller with IO instance
+listingController.setIO(io);
+
 io.on("connection", (socket) => {
   console.log("User kết nối:", socket.id);
 
@@ -103,12 +107,26 @@ io.on("connection", (socket) => {
         text: data.text,
       });
 
+      // Gửi cho người nhận
       io.to(data.receiverId).emit("receive_message", data);
+      
+      // Gửi cho các thiết bị khác của người gửi (đồng bộ)
+      socket.to(data.senderId).emit("receive_message", data);
+      
+      // Thông báo cập nhật hội thoại cho người gửi
       io.to(data.senderId).emit("conversation_updated", data);
 
     } catch (err) {
       console.error("Lỗi lưu tin nhắn:", err.message);
     }
+  });
+  
+  socket.on("typing_start", (data) => {
+    socket.to(data.receiverId).emit("typing_start", data);
+  });
+
+  socket.on("typing_stop", (data) => {
+    socket.to(data.receiverId).emit("typing_stop", data);
   });
 
   socket.on("heartbeat", async (userId) => {

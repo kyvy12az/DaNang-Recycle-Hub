@@ -5,11 +5,12 @@ import {
 } from 'react-native';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, MessageCircle } from 'lucide-react-native';
+import { MessageCircle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
+import ScreenHeader from '@/components/ScreenHeader';
 
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.6:5000').replace(/\/$/, '');
 
@@ -160,13 +161,11 @@ export default function ConversationsScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
-          <ArrowLeft size={24} color={Colors.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Người nhắn tin</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader 
+        title="Người nhắn tin"
+        backgroundColor={Colors.primary}
+        titleColor={Colors.white}
+      />
 
       {isLoading ? (
         <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />

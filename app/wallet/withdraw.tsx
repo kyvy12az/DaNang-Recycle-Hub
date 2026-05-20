@@ -17,7 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import {
-  ChevronLeft,
   AlertCircle,
   ArrowRight,
   Wallet as WalletIcon,
@@ -26,6 +25,7 @@ import {
 import Colors from '@/constants/colors';
 import { useWalletStore } from '@/stores/walletStore';
 import EcoLoader from '@/components/EcoLoader';
+import BackButton from '@/components/BackButton';
 
 const MIN_WITHDRAW = 50000;
 const MAX_WITHDRAW = 10000000;
@@ -133,9 +133,7 @@ export default function WithdrawScreen() {
       {/* Header FinTech */}
       <LinearGradient colors={['#0277BD', '#01579B']} style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <ChevronLeft size={28} color="#FFF" />
-          </TouchableOpacity>
+          <BackButton color="#FFF" size={28} />
           <Text style={styles.headerTitle}>Rút tiền về ngân hàng</Text>
           <View style={{ width: 40 }} />
         </View>
