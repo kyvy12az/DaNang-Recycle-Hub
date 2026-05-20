@@ -28,7 +28,7 @@ import ScreenHeader from '@/components/ScreenHeader';
 const GOONG_MAP_KEY = process.env.EXPO_PUBLIC_GOONG_API_KEY;
 const GOONG_API_KEY = process.env.EXPO_PUBLIC_GOONG_REST_KEY;
 
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.30:5000').replace(/\/$/, '');
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
 
 export default function SellerConfirmScreen() {
   const router = useRouter();

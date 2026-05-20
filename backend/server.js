@@ -105,6 +105,8 @@ io.on("connection", (socket) => {
         receiverId: data.receiverId,
         listingId: data.listingId,
         text: data.text,
+        mediaUrl: data.mediaUrl,   
+        mediaType: data.mediaType,
       });
 
       // Gửi cho người nhận
@@ -128,6 +130,18 @@ io.on("connection", (socket) => {
   socket.on("typing_stop", (data) => {
     socket.to(data.receiverId).emit("typing_stop", data);
   });
+
+  socket.on("mark_read", async ({ senderId, readerId, listingId }) => {
+  try {
+    await Message.updateMany(
+      { senderId, receiverId: readerId, listingId, isRead: false },
+      { isRead: true }
+    );
+    io.to(senderId).emit("message_read");
+  } catch (err) {
+    console.error("Lỗi mark_read:", err.message);
+  }
+});
 
   socket.on("heartbeat", async (userId) => {
   if (userId) {
