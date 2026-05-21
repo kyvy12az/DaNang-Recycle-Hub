@@ -20,6 +20,7 @@ const normalizeUser = (user, provider = user.provider || "email") => ({
   phone: user.phone ?? null,
   address: user.address ?? null,
   greenPoints: user.greenPoints ?? 0,
+  walletBalance: user.walletBalance ?? 50000,
   totalWeight: user.totalWeight ?? 0,
   totalTransactions: user.totalTransactions ?? 0,
   createdAt: user.createdAt,

@@ -12,7 +12,7 @@ import {
 import { useRouter, Stack } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Camera, ChevronDown, Plus, Minus, Image as ImageIcon, X, Calendar, Clock as ClockIcon, Search } from 'lucide-react-native';
+import { Camera, ChevronDown, Plus, Minus, Image as ImageIcon, X, Calendar, Clock as ClockIcon, Search, ArrowLeft } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +31,19 @@ import BackButton from '@/components/BackButton';
 
 const GOONG_MAP_KEY = process.env.EXPO_PUBLIC_GOONG_API_KEY;
 const GOONG_API_KEY = process.env.EXPO_PUBLIC_GOONG_REST_KEY;
+
+const WASTE_LABELS: Record<string, string> = {
+  battery: 'Pin/Ắc quy',
+  biological: 'Thực phẩm',
+  cardboard: 'Bìa Carton',
+  clothes: 'Quần áo',
+  glass: 'Thủy tinh',
+  metal: 'Kim loại',
+  paper: 'Giấy',
+  plastic: 'Nhựa',
+  shoes: 'Giày dép',
+  trash: 'Rác còn lại',
+};
 
 export default function SellerUploadScreen() {
   const router = useRouter();
@@ -62,7 +75,7 @@ export default function SellerUploadScreen() {
   const [showMapModal, setShowMapModal] = useState(false);
   const [showAddressMapPreview, setShowAddressMapPreview] = useState(false);
   const [manualQuantityInputs, setManualQuantityInputs] = useState<Record<string, string>>({});
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const [selectedAddress, setSelectedAddress] = useState<string>(user?.address || 'Chưa cập nhật địa chỉ');
   const [userCoords, setUserCoords] = useState<{ lat: number, lng: number } | null>(null);
   const [greenPoints, setGreenPoints] = useState<any[]>([]);
@@ -74,6 +87,12 @@ export default function SellerUploadScreen() {
   useEffect(() => {
     
   }, []);
+
+  useEffect(() => {
+    if (user?.address) {
+      setSelectedAddress(user.address);
+    }
+  }, [user?.address]);
 
   // Always start with fresh state when reopening the selling screen.
   useFocusEffect(
@@ -165,12 +184,21 @@ export default function SellerUploadScreen() {
 
       // Chỉ lưu vào giỏ hàng nếu thuộc nhóm tái chế
       const formattedItems: WasteItem[] = isRecyclable
-        ? wasteItems.map((item, index) => ({
-            id: `ai-${Date.now()}-${index}`,
-            wasteType: item.wasteType,
-            quantity: item.quantity,
-            estimatedPrice: item.wasteType.pricePerKg * item.quantity,
-          }))
+        ? wasteItems.map((item, index) => {
+            const prediction = preds[index] || primaryPrediction;
+            const displayName = WASTE_LABELS[prediction.className] || prediction.classNameVi || item.wasteType.name;
+
+            return {
+              id: `ai-${Date.now()}-${index}`,
+              wasteType: {
+                ...item.wasteType,
+                name: displayName,
+              },
+              quantity: item.quantity,
+              estimatedPrice: item.wasteType.pricePerKg * item.quantity,
+              aiLabel: displayName,
+            };
+          })
         : [];
 
       // Lưu vào Store
@@ -244,14 +272,17 @@ export default function SellerUploadScreen() {
   }, []);
 
   const handleOpenMap = async () => {
-    setShowMapModal(true);
     let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status === 'granted') {
-      let location = await Location.getCurrentPositionAsync({});
-      const coords = { lat: location.coords.latitude, lng: location.coords.longitude };
-      setUserCoords(coords);
-      fetchNearbyPoints(coords.lat, coords.lng);
+    if (status !== 'granted') {
+      Alert.alert('Cần quyền vị trí', 'Vui lòng cấp quyền vị trí để chọn địa chỉ thu gom.');
+      return;
     }
+
+    setShowMapModal(true);
+    let location = await Location.getCurrentPositionAsync({});
+    const coords = { lat: location.coords.latitude, lng: location.coords.longitude };
+    setUserCoords(coords);
+    fetchNearbyPoints(coords.lat, coords.lng);
   };
 
   const fetchNearbyPoints = async (lat: number, lng: number) => {
@@ -279,6 +310,7 @@ export default function SellerUploadScreen() {
     try {
       setIsUpdatingAddress(true);
       setSelectedAddress(point.address);
+      setUserCoords({ lat: point.lat, lng: point.lng });
       setShowMapModal(false);
       Alert.alert('Thành công', 'Đã chọn địa chỉ thu gom.');
     } catch (error) {
@@ -388,7 +420,13 @@ export default function SellerUploadScreen() {
     const recyclableItems = recognizedItems.filter(item => {
       const isRecyclable = ['plastic', 'paper', 'metal', 'glass', 'electronics'].includes(item.wasteType.category);
       return isRecyclable;
-    });
+    }).map((item) => ({
+      ...item,
+      wasteType: {
+        ...item.wasteType,
+        name: item.aiLabel || item.wasteType.name,
+      },
+    }));
 
     if (recyclableItems.length === 0) {
       Alert.alert('Thông báo', 'Vui lòng chọn ít nhất một loại rác tái chế để bán.');

@@ -180,14 +180,14 @@ export const MOCK_BANKS: Bank[] = [
 export const useWalletStore = create<WalletState>()(
   persist(
     (set, get) => ({
-      vndBalance: 250000, // Mock số dư ban đầu
+      vndBalance: 50000,
       selectedBank: null,
       pendingAmount: 0,
       pendingType: null,
       otpAttempts: 0,
       lastOtpTime: null,
-      transactions: generateMockTransactions(),
-      greenPoints: 150, // Mock điểm xanh ban đầu
+      transactions: [],
+      greenPoints: 0,
 
       setSelectedBank: (bank) => set({ selectedBank: bank }),
       
@@ -276,6 +276,28 @@ export const useWalletStore = create<WalletState>()(
 
         set((state) => ({
           greenPoints: state.greenPoints + points,
+          transactions: [newTransaction, ...state.transactions],
+        }));
+      },
+
+      deductForPurchase: (orderId, amount, description) => {
+        const currentBalance = get().vndBalance;
+        if (currentBalance < amount) {
+          console.warn(`Không đủ tiền: yêu cầu ${amount}, tài khoản có ${currentBalance}`);
+          return;
+        }
+
+        const newTransaction: TransactionRecord = {
+          id: orderId,
+          type: 'redeem',
+          amount,
+          description,
+          status: 'completed',
+          timestamp: new Date().toISOString(),
+        };
+
+        set((state) => ({
+          vndBalance: state.vndBalance - amount,
           transactions: [newTransaction, ...state.transactions],
         }));
       },

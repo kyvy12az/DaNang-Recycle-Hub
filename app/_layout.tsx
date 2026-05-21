@@ -2,11 +2,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, Animated, Dimensions, Image, ActivityIndicator, StatusBar } from "react-native";
+import { View, Text, StyleSheet, Animated, Dimensions, Image, ActivityIndicator, StatusBar, Alert } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Colors from "@/constants/colors";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SocketProvider } from "@/contexts/SocketContext";
+import { useSocket } from "@/contexts/SocketContext";
 import Toast, { BaseToast, ErrorToast, InfoToast } from 'react-native-toast-message';
 
 const toastConfig = {
@@ -61,6 +62,37 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 function RootLayoutNav() {
+  const router = useRouter();
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOrderNotification = (notification: any) => {
+      Alert.alert(
+        'Có người đã nhận đơn',
+        notification.message || `${notification.buyerName || 'Người mua'} đã nhận đơn rác của bạn.`,
+        [
+          { text: 'Để sau', style: 'cancel' },
+          {
+            text: 'Theo dõi',
+            onPress: () => {
+              router.push({
+                pathname: '/seller/order-tracking' as any,
+                params: { orderId: notification.orderId },
+              });
+            },
+          },
+        ]
+      );
+    };
+
+    socket.on('order:notification', handleOrderNotification);
+    return () => {
+      socket.off('order:notification', handleOrderNotification);
+    };
+  }, [router, socket]);
+
   return (
     <Stack
       screenOptions={{
@@ -75,6 +107,7 @@ function RootLayoutNav() {
       <Stack.Screen name="register" options={{ title: "Đăng ký", headerShown: false }} />
       <Stack.Screen name="seller-post" options={{ title: "Đăng rác tái chế" }} />
       <Stack.Screen name="seller/upload" options={{ title: "Chụp ảnh & Nhận diện AI" }} />
+      <Stack.Screen name="seller/order-tracking" options={{ title: "Theo dõi đơn hàng", headerShown: false }} />
       <Stack.Screen name="seller-confirm" options={{ title: "Xác nhận thu gom" }} />
       <Stack.Screen name="seller-success" options={{ title: "Đặt lịch thành công", headerShown: false }} />
       <Stack.Screen name="buyer-listings" options={{ title: "Danh sách rác bán" }} />

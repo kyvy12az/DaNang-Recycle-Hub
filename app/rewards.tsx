@@ -17,13 +17,14 @@ import Colors from '@/constants/colors';
 import { mockRewards } from '@/mocks/data';
 import { Reward } from '@/types';
 import EcoLoader from '@/components/EcoLoader';
-import { useWalletStore } from '@/stores/walletStore';
 import BackButton from '@/components/BackButton';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function RewardsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const points = useWalletStore((state) => state.greenPoints);
+  const { user } = useAuth();
+  const points = user?.greenPoints ?? 0;
   const [redeemedIds, setRedeemedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 

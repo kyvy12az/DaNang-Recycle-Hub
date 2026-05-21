@@ -12,7 +12,12 @@ const userRoutes = require("./routes/userRoutes");
 const adminAuthRoutes = require("./routes/adminAuthRoutes");
 const classifyRoutes = require("./routes/classifyRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const listingRoutes = require("./routes/listingRoutes");
+const orderRoutes = require("./routes/orderRoutes");
 const listingController = require("./controllers/listingController");
+const orderController = require("./controllers/orderController");
+const orderSettlementService = require("./services/orderSettlementService");
 
 
 const app = express();
@@ -59,6 +64,9 @@ app.use("/api/user", userRoutes);
 app.use("/api/admin", adminAuthRoutes);
 app.use("/api/ai", classifyRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/listings", listingRoutes);
+app.use("/api/orders", orderRoutes);
 
 // route kiểm tra trạng thái server (Health Check)
 app.get("/", (req, res) => {
@@ -71,6 +79,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const Message = require("./models/Message");
 const User = require("./models/User"); 
+const Order = require("./models/Order");
 
 const server = http.createServer(app);
 
@@ -82,6 +91,8 @@ const io = new Server(server, {
 
 // Initialize listing controller with IO instance
 listingController.setIO(io);
+orderController.setIO(io);
+orderSettlementService.setIO(io);
 
 io.on("connection", (socket) => {
   console.log("User kết nối:", socket.id);
@@ -142,6 +153,67 @@ io.on("connection", (socket) => {
     console.error("Lỗi mark_read:", err.message);
   }
 });
+
+  socket.on("order:accept", async ({ orderId, buyerId, buyerName }) => {
+    try {
+      const order = await Order.findById(orderId)
+        .populate("buyerId", "name phone avatar")
+        .populate("sellerId", "name phone avatar")
+        .populate("listingId");
+
+      if (!order) {
+        socket.emit("order:error", { message: "Đơn hàng không tồn tại" });
+        return;
+      }
+
+      if (buyerId && String(order.buyerId?._id || order.buyerId) !== String(buyerId)) {
+        socket.emit("order:error", { message: "Người mua không khớp với đơn hàng" });
+        return;
+      }
+
+      order.status = order.status || "accepted";
+      await order.save();
+
+      const sellerId = String(order.sellerId?._id || order.sellerId);
+      const buyer = order.buyerId || {};
+      const listing = order.listingId || {};
+      const resolvedBuyerName = buyerName || buyer.name || "Người mua";
+
+      io.to(sellerId).emit("order:notification", {
+        orderId: String(order._id),
+        listingId: String(listing._id || listing),
+        type: "order:accepted",
+        buyerId: String(buyer._id || buyerId || ""),
+        buyerName: resolvedBuyerName,
+        buyerPhone: buyer.phone || "",
+        buyerAvatar: buyer.avatar || "",
+        message: `${resolvedBuyerName} đã nhận đơn rác của bạn.`,
+        timestamp: new Date().toISOString(),
+      });
+
+      io.to(sellerId).emit("order:status_updated", {
+        orderId: String(order._id),
+        status: order.status,
+      });
+    } catch (err) {
+      console.error("Lỗi gửi thông báo nhận đơn:", err.message);
+      socket.emit("order:error", { message: "Không thể gửi thông báo nhận đơn" });
+    }
+  });
+
+  socket.on("gps:update", async (data) => {
+    try {
+      const order = await Order.findById(data.orderId).select("sellerId");
+      if (!order) return;
+
+      io.to(String(order.sellerId)).emit("gps:update", {
+        ...data,
+        timestamp: data.timestamp || new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("Lỗi gửi GPS update:", err.message);
+    }
+  });
 
   socket.on("heartbeat", async (userId) => {
   if (userId) {

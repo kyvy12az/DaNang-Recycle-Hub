@@ -7,7 +7,7 @@ const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:50
 const SocketContext = createContext<Socket | null>(null);
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, updateRealtimeStats } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
@@ -18,6 +18,17 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     newSocket.emit('register', user.id);
 
+    newSocket.on('wallet:updated', (data) => {
+      if (!data || data.userId !== user.id) return;
+
+      updateRealtimeStats({
+        walletBalance: data.walletBalance,
+        greenPoints: data.greenPoints,
+        totalWeight: data.totalWeight,
+        totalTransactions: data.totalTransactions,
+      });
+    });
+
     const heartbeat = setInterval(() => {
       newSocket.emit('heartbeat', user.id);
     }, 10000);
@@ -27,7 +38,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       newSocket.disconnect();
       setSocket(null);
     };
-  }, [user?.id]);
+  }, [user?.id, updateRealtimeStats]);
 
   return (
     <SocketContext.Provider value={socket}>

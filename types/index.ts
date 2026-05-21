@@ -187,6 +187,25 @@ export interface Order {
   confirmedBySellerAt: string | null;
   completedAt: string | null;
   
+  // Real-time tracking
+  buyerLocation?: {
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+  };
+  estimatedArrivalTime?: string;
+  
+  // Buyer info for seller
+  buyerName?: string;
+  buyerPhone?: string;
+  buyerAvatar?: string;
+  
+  // Seller location (for route calculation)
+  sellerLocation?: {
+    latitude: number;
+    longitude: number;
+  };
+  
   // Metadata
   createdAt: string;
   updatedAt: string;

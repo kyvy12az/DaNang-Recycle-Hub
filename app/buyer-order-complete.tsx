@@ -13,8 +13,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import ScreenHeader from '@/components/ScreenHeader';
-import OrderQRCode from '@/components/OrderQRCode';
-import { CheckCircle, Clock, AlertCircle } from 'lucide-react-native';
+import MomoPaymentModal from '@/components/MomoPaymentModal';
+import { CheckCircle, AlertCircle, Zap, CreditCard } from 'lucide-react-native';
+import { useSocket } from '@/hooks/useSocket';
+import { useAuth } from '@/contexts/AuthContext';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:5000';
 
 interface CompletionData {
   orderId: string;
@@ -28,14 +32,16 @@ export default function BuyerOrderCompleteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { orderId, listingId, actualWeight, actualPrice, actualGreenPoints } = useLocalSearchParams();
+  const { emitPaymentConfirmation } = useSocket(undefined, 'buyer');
+  const { user, getAuthToken } = useAuth();
 
   const [completion, setCompletion] = useState<CompletionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [confirmationTime, setConfirmationTime] = useState<number>(30 * 60); // 30 minutes in seconds
-  const [isWaitingForConfirmation, setIsWaitingForConfirmation] = useState(true);
+  const [showMomoModal, setShowMomoModal] = useState(false);
+  const buyerName = user?.name?.trim() || 'Người mua';
+  const buyerPhone = user?.phone?.trim() || '';
 
   useEffect(() => {
-    // Initialize data
     setTimeout(() => {
       setCompletion({
         orderId: orderId as string,
@@ -46,30 +52,63 @@ export default function BuyerOrderCompleteScreen() {
       });
       setIsLoading(false);
     }, 300);
-
-    // Timer for QR code expiration
-    const interval = setInterval(() => {
-      setConfirmationTime(prev => {
-        if (prev <= 0) {
-          clearInterval(interval);
-          setIsWaitingForConfirmation(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
   }, [orderId, listingId, actualWeight, actualPrice, actualGreenPoints]);
 
-  const handleShareQR = () => {
-    Alert.alert('Thành công', 'Mã QR đã được chia sẻ với người bán');
+  const handlePaymentSuccess = async () => {
+    if (!completion) return;
+
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/api/orders/${completion.orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'bypass-tunnel-reminder': 'true',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: 'completed',
+          paymentMethod: 'momo',
+          paymentStatus: 'completed',
+          actualWeight: completion.actualWeight,
+          actualPrice: completion.actualPrice,
+          actualGreenPoints: completion.actualGreenPoints,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Cập nhật trạng thái thanh toán thất bại');
+      }
+
+      emitPaymentConfirmation(
+        completion.orderId,
+        completion.actualPrice,
+        `MOMO_${Date.now()}`
+      );
+    } catch (error) {
+      console.error('[BuyerOrderComplete] Error updating payment status:', error);
+      Alert.alert('Lỗi', 'Thanh toán thành công nhưng không thể cập nhật trạng thái đơn hàng.');
+      return;
+    }
+
+    setShowMomoModal(false);
+    Alert.alert(
+      'Thanh toán thành công! 🎉',
+      `Đã nhận được ${completion.actualGreenPoints} điểm xanh và ${completion.actualPrice.toLocaleString()}đ`,
+      [
+        {
+          text: 'Quay lại home',
+          onPress: () => {
+            router.dismissAll();
+            router.replace('/');
+          },
+        },
+      ]
+    );
   };
 
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  const handlePaymentCancel = () => {
+    setShowMomoModal(false);
   };
 
   if (isLoading) {
@@ -123,73 +162,25 @@ export default function BuyerOrderCompleteScreen() {
           </View>
           <Text style={styles.successTitle}>Sẵn sàng hoàn thành!</Text>
           <Text style={styles.successText}>
-            Đưa điện thoại cho người bán để quét mã QR và xác nhận thanh toán
+            Cân nặng đã được xác nhận. Tiến hành thanh toán qua Momo Sandbox để hoàn tất đơn hàng.
           </Text>
-        </View>
-
-        {/* QR Code Component */}
-        <View style={styles.qrSection}>
-          <OrderQRCode
-            orderId={completion.orderId}
-            buyerId="buyer_1"
-            sellerId="seller_1"
-            weight={completion.actualWeight}
-            totalPrice={completion.actualPrice}
-            greenPoints={completion.actualGreenPoints}
-            timestamp={new Date().toISOString()}
-            onShare={handleShareQR}
-          />
-        </View>
-
-        {/* Timer */}
-        <View style={styles.timerSection}>
-          <View style={[styles.timerBox, !isWaitingForConfirmation && styles.timerExpired]}>
-            <Clock size={20} color={isWaitingForConfirmation ? Colors.primary : Colors.accent} />
-            <View style={styles.timerContent}>
-              <Text style={styles.timerLabel}>Hết hạn trong</Text>
-              <Text
-                style={[
-                  styles.timerValue,
-                  !isWaitingForConfirmation && styles.timerValueExpired,
-                ]}
-              >
-                {formatTime(confirmationTime)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Confirmation Status */}
-        <View style={styles.statusSection}>
-          <LinearGradient
-            colors={['#FFF8E1', '#FFE082']}
-            style={styles.statusCard}
-          >
-            <AlertCircle size={18} color={Colors.sandDark} />
-            <View style={styles.statusContent}>
-              <Text style={styles.statusLabel}>Chờ xác nhận từ người bán</Text>
-              <Text style={styles.statusDescription}>
-                Khi người bán quét mã QR, thanh toán sẽ được xác nhận
-              </Text>
-            </View>
-          </LinearGradient>
         </View>
 
         {/* Summary Card */}
         <View style={styles.summarySection}>
           <Text style={styles.summaryTitle}>Tóm tắt thanh toán</Text>
-          
+
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Khối lượng thực tế:</Text>
-              <Text style={styles.summaryValue}>{completion.actualWeight} kg</Text>
+              <Text style={styles.summaryValue}>{completion?.actualWeight} kg</Text>
             </View>
             <View style={styles.divider} />
 
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Giá thanh toán:</Text>
               <Text style={styles.summaryValue}>
-                {completion.actualPrice.toLocaleString()}₫
+                {completion?.actualPrice.toLocaleString()}₫
               </Text>
             </View>
             <View style={styles.divider} />
@@ -197,23 +188,39 @@ export default function BuyerOrderCompleteScreen() {
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Điểm xanh kiếm được:</Text>
               <Text style={[styles.summaryValue, { color: Colors.primary }]}>
-                {completion.actualGreenPoints} 🌿
+                {completion?.actualGreenPoints} 🌿
               </Text>
             </View>
           </View>
         </View>
 
-        {/* What's Next */}
+        {/* Payment Info */}
+        <View style={styles.infoSection}>
+          <LinearGradient
+            colors={['#E3F2FD', '#BBDEFB']}
+            style={styles.infoCard}
+          >
+            <CreditCard size={20} color={Colors.primary} />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Thanh toán an toàn</Text>
+              <Text style={styles.infoDescription}>
+                Sử dụng Momo Sandbox. Tiền sẽ được chuyển cho người bán ngay lập tức.
+              </Text>
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* Steps */}
         <View style={styles.nextStepsSection}>
-          <Text style={styles.nextStepsTitle}>Tiếp theo</Text>
-          
+          <Text style={styles.nextStepsTitle}>Quy trình thanh toán</Text>
+
           <View style={styles.stepItem}>
             <View style={styles.stepNumber}>
               <Text style={styles.stepNumberText}>1</Text>
             </View>
             <View style={styles.stepContent}>
-              <Text style={styles.stepLabel}>Người bán quét mã QR</Text>
-              <Text style={styles.stepDescription}>Chờ người bán sử dụng điện thoại quét mã QR</Text>
+              <Text style={styles.stepLabel}>Nhấn "Thanh toán qua Momo"</Text>
+              <Text style={styles.stepDescription}>Mở trang thanh toán Momo Sandbox</Text>
             </View>
           </View>
 
@@ -224,7 +231,7 @@ export default function BuyerOrderCompleteScreen() {
             <View style={styles.stepContent}>
               <Text style={styles.stepLabel}>Xác nhận thanh toán</Text>
               <Text style={styles.stepDescription}>
-                Tiền sẽ được trừ từ ví và cộng vào tài khoản người bán
+                Hoàn thành giao dịch trong Momo Sandbox
               </Text>
             </View>
           </View>
@@ -236,34 +243,47 @@ export default function BuyerOrderCompleteScreen() {
             <View style={styles.stepContent}>
               <Text style={styles.stepLabel}>Nhận điểm xanh</Text>
               <Text style={styles.stepDescription}>
-                Điểm xanh sẽ được cộng vào tài khoản của bạn
+                Điểm xanh được cộng vào tài khoản ngay sau khi thanh toán thành công
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Help Text */}
-        <View style={styles.helpSection}>
-          <Text style={styles.helpTitle}>Bạn cần giúp đỡ?</Text>
-          <TouchableOpacity style={styles.helpButton} activeOpacity={0.8}>
-            <Text style={styles.helpButtonText}>Liên hệ hỗ trợ</Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* Bottom Button */}
-      {!isWaitingForConfirmation && (
-        <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + 16 }]}>
-          <TouchableOpacity
-            style={styles.bottomButton}
-            onPress={() => router.back()}
-            activeOpacity={0.8}
+      {/* Payment Button */}
+      <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + 16 }]}>
+        <TouchableOpacity
+          style={styles.paymentButton}
+          onPress={() => setShowMomoModal(true)}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={[Colors.primary, Colors.primaryLight]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.paymentButtonGradient}
           >
-            <Text style={styles.bottomButtonText}>Quay lại danh sách đơn hàng</Text>
-          </TouchableOpacity>
-        </View>
+            <Zap size={20} color="#fff" />
+            <Text style={styles.paymentButtonText}>
+              Thanh toán {completion?.actualPrice.toLocaleString()}₫ qua Momo
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+
+      {/* Momo Payment Modal */}
+      {completion && (
+        <MomoPaymentModal
+          visible={showMomoModal}
+          orderId={(orderId as string) || completion?.orderId || ""}
+          amount={Number(actualPrice) || completion?.actualPrice || 0}
+          buyerName={buyerName}
+          buyerPhone={buyerPhone}
+          onSuccess={handlePaymentSuccess}
+          onCancel={() => setShowMomoModal(false)}
+        />
       )}
     </View>
   );
@@ -335,10 +355,12 @@ const styles = StyleSheet.create({
   qrSection: {
     paddingHorizontal: 16,
     paddingVertical: 16,
+    display: 'none', // Remove QR section
   },
   timerSection: {
     paddingHorizontal: 16,
     marginBottom: 16,
+    display: 'none', // Remove timer section
   },
   timerBox: {
     flexDirection: 'row',
@@ -372,9 +394,35 @@ const styles = StyleSheet.create({
   timerValueExpired: {
     color: Colors.accent,
   },
+  infoSection: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  infoDescription: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 4,
+    lineHeight: 16,
+  },
   statusSection: {
     paddingHorizontal: 16,
     marginBottom: 16,
+    display: 'none', // Remove status section
   },
   statusCard: {
     flexDirection: 'row',
@@ -521,6 +569,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bottomButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  paymentButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  paymentButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 10,
+  },
+  paymentButtonText: {
     fontSize: 15,
     fontWeight: '700',
     color: Colors.white,

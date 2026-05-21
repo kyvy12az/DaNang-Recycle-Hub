@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin, Clock, FileText, Truck, Check, Map as MapIcon, X, Navigation, Search } from 'lucide-react-native';
+import { MapPin, Clock, FileText, Truck, Check, Map as MapIcon, X, Navigation, Search, ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -30,6 +30,51 @@ const GOONG_API_KEY = process.env.EXPO_PUBLIC_GOONG_REST_KEY;
 
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
 
+const WASTE_LABELS: Record<string, string> = {
+  battery: 'Pin/Ắc quy',
+  biological: 'Thực phẩm',
+  cardboard: 'Bìa Carton',
+  clothes: 'Quần áo',
+  glass: 'Thủy tinh',
+  metal: 'Kim loại',
+  paper: 'Giấy',
+  plastic: 'Nhựa',
+  shoes: 'Giày dép',
+  trash: 'Rác còn lại',
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  hazardous: WASTE_LABELS.battery,
+  organic: WASTE_LABELS.biological,
+  glass: WASTE_LABELS.glass,
+  metal: WASTE_LABELS.metal,
+  paper: WASTE_LABELS.paper,
+  plastic: WASTE_LABELS.plastic,
+  residual: WASTE_LABELS.trash,
+  textile: WASTE_LABELS.clothes,
+};
+
+const normalizeWasteName = (item: WasteItem) => {
+  const knownLabel = item.aiLabel || item.wasteType.name;
+  const normalized = knownLabel
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (normalized.includes('carton') || normalized.includes('cardboard')) return WASTE_LABELS.cardboard;
+  if (normalized.includes('pin') || normalized.includes('battery')) return WASTE_LABELS.battery;
+  if (normalized.includes('thuc pham') || normalized.includes('biological') || normalized.includes('organic')) return WASTE_LABELS.biological;
+  if (normalized.includes('quan ao') || normalized.includes('clothes')) return WASTE_LABELS.clothes;
+  if (normalized.includes('thuy tinh') || normalized.includes('glass')) return WASTE_LABELS.glass;
+  if (normalized.includes('kim loai') || normalized.includes('metal')) return WASTE_LABELS.metal;
+  if (normalized.includes('giay dep') || normalized.includes('shoes')) return WASTE_LABELS.shoes;
+  if (normalized.includes('rac con lai') || normalized.includes('trash')) return WASTE_LABELS.trash;
+  if (normalized.includes('nhua') || normalized.includes('plastic')) return WASTE_LABELS.plastic;
+  if (normalized.includes('giay') || normalized.includes('paper')) return WASTE_LABELS.paper;
+
+  return CATEGORY_LABELS[item.wasteType.category] || item.wasteType.name;
+};
+
 export default function SellerConfirmScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -45,15 +90,20 @@ export default function SellerConfirmScreen() {
   const [userCoords, setUserCoords] = useState<{ lat: number, lng: number } | null>(null);
   const [greenPoints, setGreenPoints] = useState<any[]>([]);
 
-  const items: WasteItem[] = params.items ? JSON.parse(params.items as string) : [];
+  const rawItems: WasteItem[] = params.items ? JSON.parse(params.items as string) : [];
+  const items: WasteItem[] = rawItems.map((item) => ({
+    ...item,
+    wasteType: {
+      ...item.wasteType,
+      name: normalizeWasteName(item),
+    },
+  }));
   const totalPrice = Number(params.totalPrice) || 0;
   const totalWeight = Number(params.totalWeight) || 0;
   const totalPoints = Number(params.totalPoints) || 0;
   const pickupTime = (params.pickupTime as string) || '';
   const imageUri = (params.imageUri as string) || '';
   const LISTING_IMAGE_BUCKET = process.env.EXPO_PUBLIC_SUPABASE_LISTINGS_BUCKET;
-
-  const { updateUser } = useAuth();
 
   const formatPrice = (price: number) => {
     return price.toLocaleString('vi-VN') + 'đ';
@@ -68,7 +118,12 @@ export default function SellerConfirmScreen() {
   }, [router]);
 
   const handleSubmit = async () => {
-    if (!user?.address) {
+    const normalizedAddress = selectedAddress
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    if (!selectedAddress.trim() || normalizedAddress.includes('chua cap nhat')) {
       Alert.alert(
         'Chưa có địa chỉ',
         'Vui lòng cập nhật địa chỉ trong hồ sơ trước khi đăng bài.',

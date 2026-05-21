@@ -52,6 +52,11 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    walletBalance: {
+      type: Number,
+      default: 50000,
+      min: 0,
+    },
     totalWeight: {
       type: Number,
       default: 0,

@@ -14,14 +14,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Recycle, ShoppingCart, Leaf, Waves, TrendingUp, Award, Gamepad2, ChevronRight, Sparkles, Flame, Medal } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import Colors from '@/constants/colors';
-import { useWalletStore } from '@/stores/walletStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const greenPoints = useWalletStore((state) => state.greenPoints);
+  const { user } = useAuth();
+  const greenPoints = user?.greenPoints ?? 0;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim1 = useRef(new Animated.Value(0.9)).current;

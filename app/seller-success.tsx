@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, Home, Leaf, Wallet } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { useWalletStore } from '@/stores/walletStore';
 import { useSellerStore } from '@/stores/sellerStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -23,7 +22,6 @@ export default function SellerSuccessScreen() {
   const insets = useSafeAreaInsets();
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const addFromSale = useWalletStore((state) => state.addFromSale);
   const { lastCreatedListing } = useSellerStore();
 
   // Use real listing data if available, otherwise use mock data
@@ -40,16 +38,6 @@ export default function SellerSuccessScreen() {
   };
 
   useEffect(() => {
-    // Add to wallet when success screen loads
-    if (saleData.amount > 0) {
-      addFromSale(
-        saleData.orderId,
-        saleData.amount,
-        saleData.points,
-        `Bán ${saleData.weight}kg rác tái chế`
-      );
-    }
-
     Animated.sequence([
       Animated.spring(scaleAnim, {
         toValue: 1,

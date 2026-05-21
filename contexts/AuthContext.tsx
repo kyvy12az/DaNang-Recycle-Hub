@@ -15,10 +15,13 @@ interface AuthUser {
   phone?: string;
   address?: string;
   greenPoints?: number;
+  walletBalance?: number;
   totalWeight?: number;
   totalTransactions?: number;
   createdAt?: string;
 }
+
+type RealtimeUserStats = Pick<AuthUser, 'greenPoints' | 'walletBalance' | 'totalWeight' | 'totalTransactions'>;
 
 const STORAGE_KEY = 'auth_user';
 const TOKEN_KEY = 'user_token_secure';
@@ -39,6 +42,7 @@ const normalizeUser = (user: any, provider: AuthUser['provider']): AuthUser => (
   phone: user.phone,
   address: user.address,
   greenPoints: user.greenPoints || 0,
+  walletBalance: user.walletBalance ?? 50000,
   totalWeight: user.totalWeight || 0,
   totalTransactions: user.totalTransactions || 0,
   createdAt: user.createdAt,
@@ -228,6 +232,26 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
   }, [user]);
 
+  const updateRealtimeStats = useCallback(async (stats: RealtimeUserStats) => {
+    setUser((currentUser) => {
+      if (!currentUser) return currentUser;
+
+      const updatedUser: AuthUser = {
+        ...currentUser,
+        greenPoints: stats.greenPoints ?? currentUser.greenPoints,
+        walletBalance: stats.walletBalance ?? currentUser.walletBalance,
+        totalWeight: stats.totalWeight ?? currentUser.totalWeight,
+        totalTransactions: stats.totalTransactions ?? currentUser.totalTransactions,
+      };
+
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser)).catch((error) => {
+        console.error('KhÃ´ng thá»ƒ lÆ°u cáº­p nháº­t vÃ­ realtime:', error);
+      });
+
+      return updatedUser;
+    });
+  }, []);
+
   const updateUser = useCallback(async (fields: { name?: string; address?: string; phone?: string }) => {
     if (!user) throw new Error('Chưa đăng nhập');
 
@@ -250,6 +274,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       name: updatedData.name ?? fields.name ?? user.name,
       address: updatedData.address ?? fields.address ?? user.address,
       phone: updatedData.phone ?? fields.phone ?? user.phone,
+      greenPoints: updatedData.greenPoints ?? user.greenPoints,
+      walletBalance: updatedData.walletBalance ?? user.walletBalance,
+      totalWeight: updatedData.totalWeight ?? user.totalWeight,
+      totalTransactions: updatedData.totalTransactions ?? user.totalTransactions,
     };
 
     setUser(updatedUser);
@@ -285,6 +313,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     logout,
     updateAvatarUrl,
     updateUser,
+    updateRealtimeStats,
     getAuthToken,
   };
 });

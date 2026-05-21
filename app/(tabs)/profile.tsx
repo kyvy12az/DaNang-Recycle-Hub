@@ -38,7 +38,6 @@ import Colors from '@/constants/colors';
 import { mockTransactions } from '@/mocks/data';
 import EcoLoader from '@/components/EcoLoader';
 import { useAuth } from '@/contexts/AuthContext';
-import { useWalletStore } from '@/stores/walletStore';
 import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 
 export default function ProfileScreen() {
@@ -78,8 +77,6 @@ export default function ProfileScreen() {
         })
       : '',
   };
-
-  const { getFormattedBalance } = useWalletStore();
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 1200);
@@ -220,7 +217,7 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.walletLabel}>Ví tiền của bạn</Text>
             </View>
-            <Text style={styles.walletBalance}>{getFormattedBalance()}</Text>
+            <Text style={styles.walletBalance}>{(user?.walletBalance ?? 50000).toLocaleString('vi-VN')} ₫</Text>
             <View style={styles.walletPoints}>
               <Award size={16} color={Colors.greenPoint} />
               <Text style={styles.walletPointsText}>{displayUser.greenPoints.toLocaleString()} Điểm Xanh</Text>

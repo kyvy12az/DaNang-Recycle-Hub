@@ -24,7 +24,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
 import Colors from '@/constants/colors';
-import { useWalletStore } from '@/stores/walletStore';
 import { WasteListing } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -78,8 +77,7 @@ export default function BuyerDetailScreen() {
   const [isAccepting, setIsAccepting] = useState<boolean>(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const { vndBalance, deductForPurchase } = useWalletStore();
-  const { user } = useAuth();
+  const { user, getAuthToken, isLoading: isAuthLoading } = useAuth();
   const { toasts, success, error: errorToast } = useToast();
 
   // Fetch dữ liệu thật từ API
@@ -140,6 +138,8 @@ export default function BuyerDetailScreen() {
 
   const formatPrice = (price: number) => price.toLocaleString('vi-VN') + 'đ';
 
+  const isOwnListing = isAuthLoading || listing?.sellerId === user?.id;
+
   const spin = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
@@ -147,19 +147,9 @@ export default function BuyerDetailScreen() {
 
   const handleAccept = () => {
     if (!listing) return;
-
-    if (vndBalance < listing.totalPrice) {
-      Alert.alert(
-        'Không đủ số dư',
-        `Bạn cần ${listing.totalPrice.toLocaleString()}₫ để nhận đơn này, nhưng ví chỉ có ${vndBalance.toLocaleString()}₫.`,
-        [{ text: 'Đóng' }]
-      );
-      return;
-    }
-
     Alert.alert(
       'Xác nhận nhận đơn',
-      `Bạn sẽ mua ${listing.totalWeight}kg rác với giá ${listing.totalPrice.toLocaleString()}₫ từ ${listing.sellerName}. Tiền sẽ được tạm giữ từ ví của bạn.`,
+      `Bạn sẽ mua ${listing.totalWeight}kg rác với giá ${listing.totalPrice.toLocaleString('vi-VN')}đ từ ${listing.sellerName}. Tiền sẽ được thanh toán khi hoàn tất đơn.`,
       [
         { text: 'Hủy', style: 'cancel' },
         {
@@ -167,33 +157,37 @@ export default function BuyerDetailScreen() {
           onPress: async () => {
             setIsAccepting(true);
             try {
-              // 1. Giả lập gọi API cập nhật trạng thái đơn hàng trên Server
-              await new Promise(resolve => setTimeout(resolve, 1500));
+              // 1. Gọi API cập nhật trạng thái đơn hàng trên Server
+              const token = await getAuthToken();
+              const orderResponse = await axios.post(
+                `${API_BASE_URL}/api/orders`,
+                {
+                  listingId: listing.id,
+                  estimatedWeight: listing.totalWeight,
+                  estimatedPrice: listing.totalPrice,
+                  estimatedGreenPoints: listing.greenPoints,
+                  status: 'accepted',
+                },
+                {
+                  headers: {
+                    'bypass-tunnel-reminder': 'true',
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
 
-              // 2. Gọi hàm trừ tiền kiểm tra an toàn (Tránh crash nếu store viết sai tên hàm)
-              if (typeof deductForPurchase === 'function') {
-                deductForPurchase(
-                  listing.id,
-                  listing.totalPrice,
-                  `Mua ${listing.totalWeight}kg rác từ ${listing.sellerName}`
-                );
-              } else {
-                console.warn(
-                  "Cảnh báo: Hàm 'deductForPurchase' không tồn tại trong walletStore. Hãy kiểm tra lại tên hàm trong store!"
-                );
-                // Bạn có thể tạm thời gọi một hàm khác của store nếu biết tên, ví dụ: 
-                // useWalletStore.getState().deductBalance?.(listing.totalPrice);
-              }
+              const createdOrder = orderResponse.data;
+              const actualOrderId = createdOrder._id || createdOrder.id;
 
-              // 3. Hiển thị thông báo Toast mượt mà cho người dùng
+              // 2. Hiển thị thông báo Toast mượt mà cho người dùng
               success('Nhận đơn thành công! Đang chuyển đến bản đồ thu gom...');
 
-              // 4. Luồng tiếp theo: Chuyển hướng sang trang theo dõi hành trình thu gom rác thực tế
+              // 3. Luồng tiếp theo: Chuyển hướng sang trang theo dõi hành trình thu gom rác thực tế
               setTimeout(() => {
                 router.push({
                   pathname: '/buyer-order-tracking' as any,
                   params: {
-                    orderId: `ORDER_${listing.id}`,
+                    orderId: actualOrderId,
                     listingId: listing.id,
                   },
                 });
@@ -338,26 +332,20 @@ export default function BuyerDetailScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      {!isOwnListing && (
+        <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.chatButton}
           onPress={() => {
-            if (listing.sellerId === user?.id) {
-              router.push({
-                pathname: '/conversations' as any,
-                params: { listingId: listing.id },
-              });
-            } else {
-              router.push({
-                pathname: '/chat' as any,
-                params: {
-                  name: listing.sellerName,
-                  otherAvatar: listing.sellerAvatar,
-                  receiverId: listing.sellerId,
-                  listingId: listing.id,
-                },
-              });
-            }
+            router.push({
+              pathname: '/chat' as any,
+              params: {
+                name: listing.sellerName,
+                otherAvatar: listing.sellerAvatar,
+                receiverId: listing.sellerId,
+                listingId: listing.id,
+              },
+            });
           }}
           activeOpacity={0.8}
         >
@@ -399,7 +387,8 @@ export default function BuyerDetailScreen() {
             </View>
           </LinearGradient>
         </TouchableOpacity>
-      </View>
+        </View>
+      )}
     </View>
   );
 }

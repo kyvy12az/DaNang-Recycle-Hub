@@ -52,6 +52,12 @@ exports.updateAvatarUrl = async (req, res) => {
         name: user.name,
         email: user.email,
         avatar: user.avatar,
+        phone: user.phone,
+        address: user.address,
+        greenPoints: user.greenPoints ?? 0,
+        walletBalance: user.walletBalance ?? 50000,
+        totalWeight: user.totalWeight ?? 0,
+        totalTransactions: user.totalTransactions ?? 0,
         createdAt: user.createdAt,
       }
     });

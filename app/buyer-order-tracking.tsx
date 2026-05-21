@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   Linking,
   Alert,
   ActivityIndicator,
+  AppState,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import * as Location from 'expo-location';
 import {
   MapPin,
   Phone,
@@ -22,54 +24,19 @@ import {
   AlertCircle,
   ChevronRight,
   Navigation,
+  Zap,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import ScreenHeader from '@/components/ScreenHeader';
 import UpdateWeightModal from '@/components/UpdateWeightModal';
 import { Order } from '@/types';
+import { useSocket } from '@/hooks/useSocket';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSocket as useAppSocket } from '@/contexts/SocketContext';
 
-// Mock data for orders
-const mockOrders: { [key: string]: Order } = {
-  'ORDER_L1': {
-    id: 'ORDER_L1',
-    listingId: 'L1',
-    buyerId: 'buyer_1',
-    sellerId: 'seller_1',
-    estimatedWeight: 5,
-    estimatedPrice: 50000,
-    estimatedGreenPoints: 500,
-    actualWeight: null,
-    actualPrice: null,
-    actualGreenPoints: null,
-    status: 'accepted',
-    qrCode: 'data:image/png;base64,...',
-    confirmedBySellerAt: null,
-    completedAt: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-};
-
-// Mock listing details
-const mockListings: { [key: string]: any } = {
-  'L1': {
-    id: 'L1',
-    sellerName: 'Anh Minh',
-    sellerAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-    sellerPhone: '0987654321',
-    address: '123 Đường Lý Thường Kiệt, Hải Châu, Đà Nẵng',
-    district: 'Hải Châu',
-    pickupTime: '14:00 - 16:00',
-    totalWeight: 5,
-    totalPrice: 50000,
-    greenPoints: 500,
-    items: [
-      { name: 'Giấy báo', quantity: 3 },
-      { name: 'Giấy vụn', quantity: 2 },
-    ],
-  },
-};
+// API Base URL - Use EXPO_PUBLIC_API_URL or fallback to localhost:5000
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:5000';
 
 // Timeline status steps
 interface TimelineStep {
@@ -80,28 +47,262 @@ interface TimelineStep {
   current: boolean;
 }
 
+const getOrderDisplayId = (order: any, fallbackOrderId: any) => {
+  const id = order?._id || order?.id || fallbackOrderId;
+  return Array.isArray(id) ? id[0] : id || 'N/A';
+};
+
+const getWasteItemName = (item: any) => {
+  return item?.wasteType?.name || item?.wasteTypeName || item?.name || 'Loại rác';
+};
+
+const getWasteItemColor = (item: any) => {
+  return item?.wasteType?.color || item?.wasteTypeColor || Colors.primary;
+};
+
 export default function BuyerOrderTrackingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { orderId, listingId } = useLocalSearchParams();
+  const { isConnected, emitGPSUpdate, onOrderStatusUpdate } = useSocket();
+  const { getAuthToken } = useAuth();
+  const socket = useAppSocket();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [isUpdatingWeight, setIsUpdatingWeight] = useState(false);
+  const [isTrackingLocation, setIsTrackingLocation] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
+
+  const locationTrackerRef = useRef<NodeJS.Timeout>();
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
-    // Load mock data
-    setTimeout(() => {
-      const mockOrder = mockOrders[orderId as string] || mockOrders['ORDER_L1'];
-      const mockListing = mockListings[listingId as string] || mockListings['L1'];
+    // Fetch real data from backend only
+    const fetchOrderAndListing = async () => {
+      try {
+        setIsLoading(true);
 
-      setOrder(mockOrder);
-      setListing(mockListing);
-      setIsLoading(false);
-    }, 500);
+        let fetchedOrder: Order | null = null;
+        let fetchedListing: any = null;
+        let hasError = false;
+
+        // Fetch listing data
+        if (listingId) {
+          try {
+            console.log('[BuyerTracking] Fetching listing:', listingId);
+            const listingResponse = await fetch(
+              `${API_BASE_URL}/api/listings/${listingId}`
+            );
+            
+            if (!listingResponse.ok) {
+              console.error('[BuyerTracking] Listing fetch failed:', listingResponse.status);
+              hasError = true;
+              throw new Error(`Listing fetch failed: ${listingResponse.status}`);
+            }
+
+            const listingData = await listingResponse.json();
+            fetchedListing = listingData.listing || listingData;
+            console.log('[BuyerTracking] Listing loaded:', fetchedListing);
+          } catch (err) {
+            console.error('[BuyerTracking] Error fetching listing:', err);
+            hasError = true;
+          }
+        }
+
+        // Fetch order data
+        if (orderId) {
+          try {
+            console.log('[BuyerTracking] Fetching order:', orderId);
+            const orderResponse = await fetch(
+              `${API_BASE_URL}/api/orders/${orderId}`
+            );
+
+            if (!orderResponse.ok) {
+              console.error('[BuyerTracking] Order fetch failed:', orderResponse.status);
+              hasError = true;
+              throw new Error(`Order fetch failed: ${orderResponse.status}`);
+            }
+
+            const orderData = await orderResponse.json();
+            fetchedOrder = orderData.order || orderData;
+            console.log('[BuyerTracking] Order loaded:', fetchedOrder);
+
+            if (!fetchedListing && fetchedOrder?.listingId && typeof fetchedOrder.listingId === 'object') {
+              fetchedListing = fetchedOrder.listingId;
+            }
+              
+            // Merge seller info from order into listing
+            if (fetchedOrder?.sellerId && fetchedListing) {
+              const sellerInfo = fetchedOrder.sellerId;
+              fetchedListing = {
+                ...fetchedListing,
+                sellerName: sellerInfo.name || sellerInfo.sellerName,
+                sellerPhone: sellerInfo.phone,
+                sellerAvatar: sellerInfo.avatar,
+              };
+            }
+          } catch (err) {
+            console.error('[BuyerTracking] Error fetching order:', err);
+            hasError = true;
+          }
+        }
+
+        setOrder(fetchedOrder);
+        setListing(fetchedListing);
+        setIsLoading(false);
+
+        // Show error if any data fetch failed
+        if (hasError) {
+          Alert.alert(
+            'Lỗi tải dữ liệu',
+            'Không thể tải đầy đủ thông tin đơn hàng. Vui lòng kiểm tra kết nối mạng.',
+            [{ text: 'OK' }]
+          );
+        }
+      } catch (error) {
+        console.error('[BuyerTracking] Fatal error fetching data:', error);
+        setIsLoading(false);
+        
+        Alert.alert(
+          'Lỗi',
+          'Không thể tải thông tin đơn hàng. Vui lòng thử lại.',
+          [{ 
+            text: 'Thử lại',
+            onPress: () => {
+              // Retry
+              window.location.reload();
+            }
+          }]
+        );
+      }
+    };
+
+    fetchOrderAndListing();
+    requestLocationPermission();
   }, [orderId, listingId]);
+
+  // Subscribe to order status updates
+  useEffect(() => {
+    const unsubscribe = onOrderStatusUpdate((data) => {
+      if (data.orderId === orderId) {
+        console.log('[BuyerTracking] Status update:', data);
+        setOrder((prev) => (prev ? { ...prev, status: data.status } : null));
+      }
+    });
+
+    return () => unsubscribe();
+  }, [orderId, onOrderStatusUpdate]);
+
+  // Start GPS tracking when order is accepted
+  useEffect(() => {
+    if (order?.status === 'accepted' || order?.status === 'arriving') {
+      startLocationTracking();
+    } else {
+      stopLocationTracking();
+    }
+
+    return () => {
+      if (locationTrackerRef.current) clearInterval(locationTrackerRef.current);
+    };
+  }, [order?.status]);
+
+  // Handle app state changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, []);
+
+  const handleAppStateChange = (state: AppState.AppStateStatus) => {
+    appStateRef.current = state;
+    if (state === 'background' || state === 'inactive') {
+      stopLocationTracking();
+    } else if (state === 'active' && (order?.status === 'accepted' || order?.status === 'arriving')) {
+      startLocationTracking();
+    }
+  };
+
+  const requestLocationPermission = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationPermission(status);
+      
+      if (status === 'granted') {
+        console.log('[BuyerTracking] Location permission granted');
+      } else {
+        Alert.alert(
+          'Quyền truy cập vị trí',
+          'Ứng dụng cần quyền truy cập vị trí để theo dõi đơn hàng. Vui lòng cấp quyền trong cài đặt.',
+          [
+            { text: 'Hủy', onPress: () => {} },
+            { text: 'Mở cài đặt', onPress: () => Linking.openURL('app-settings:') },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('[BuyerTracking] Error requesting location permission:', error);
+    }
+  };
+
+  const startLocationTracking = async () => {
+    try {
+      if (isTrackingLocation || locationPermission !== 'granted') {
+        return;
+      }
+
+      console.log('[BuyerTracking] Starting GPS tracking');
+      setIsTrackingLocation(true);
+
+      // Send location immediately
+      await sendCurrentLocation();
+
+      // Then send every 30 seconds
+      locationTrackerRef.current = setInterval(async () => {
+        if (appStateRef.current === 'active') {
+          await sendCurrentLocation();
+        }
+      }, 30000);
+    } catch (error) {
+      console.error('[BuyerTracking] Error starting location tracking:', error);
+      setIsTrackingLocation(false);
+    }
+  };
+
+  const sendCurrentLocation = async () => {
+    try {
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const currentOrderId = getOrderDisplayId(order, orderId);
+      if (location && currentOrderId !== 'N/A') {
+        const { latitude, longitude } = location.coords;
+        console.log('[BuyerTracking] Sending GPS update:', { latitude, longitude });
+        if (isConnected) {
+          emitGPSUpdate(currentOrderId, latitude, longitude);
+        }
+        socket?.emit('gps:update', {
+          orderId: currentOrderId,
+          latitude,
+          longitude,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error('[BuyerTracking] Error getting current location:', error);
+    }
+  };
+
+  const stopLocationTracking = () => {
+    if (locationTrackerRef.current) {
+      clearInterval(locationTrackerRef.current);
+      locationTrackerRef.current = undefined;
+    }
+    setIsTrackingLocation(false);
+    console.log('[BuyerTracking] Location tracking stopped');
+  };
 
   const handleCallSeller = () => {
     if (!listing?.sellerPhone) {
@@ -123,22 +324,43 @@ export default function BuyerOrderTrackingScreen() {
     });
   };
 
-  const handleWeightUpdate = (actualWeight: number, actualPrice: number, actualGreenPoints: number) => {
+  const handleWeightUpdate = async (actualWeight: number, actualPrice: number, actualGreenPoints: number) => {
     setIsUpdatingWeight(true);
-    setTimeout(() => {
-      // Update order with actual weight
-      setOrder(prev => prev ? {
-        ...prev,
-        actualWeight,
-        actualPrice,
-        actualGreenPoints,
-        status: 'measured',
-      } : null);
+    try {
+      const token = await getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'bypass-tunnel-reminder': 'true',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: 'measured',
+          paymentMethod: 'pending',
+          paymentStatus: 'pending',
+          actualWeight,
+          actualPrice,
+          actualGreenPoints,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Cập nhật khối lượng thất bại');
+      }
+
+      const orderData = await response.json();
+      const updatedOrder = orderData.order || orderData;
+      setOrder(updatedOrder);
       setShowWeightModal(false);
       setIsUpdatingWeight(false);
 
       Alert.alert('Thành công', 'Cập nhật khối lượng thành công!');
-    }, 1000);
+    } catch (error) {
+      console.error('[BuyerTracking] Error updating weight:', error);
+      setIsUpdatingWeight(false);
+      Alert.alert('Lỗi', 'Không thể cập nhật khối lượng lên server.');
+    }
   };
 
   const handleCompleteOrder = () => {
@@ -151,7 +373,7 @@ export default function BuyerOrderTrackingScreen() {
     router.push({
       pathname: '/buyer-order-complete' as any,
       params: {
-        orderId: order.id,
+        orderId: order._id,
         listingId: order.listingId,
         actualWeight: order.actualWeight.toString(),
         actualPrice: order.actualPrice?.toString(),
@@ -242,6 +464,14 @@ export default function BuyerOrderTrackingScreen() {
             <CheckCircle size={16} color={Colors.primary} />
             <Text style={styles.statusBadgeText}>Đơn hàng đã được nhận</Text>
           </View>
+          {isTrackingLocation && (
+            <View style={[styles.statusBadge, { backgroundColor: '#e8f5e9', borderColor: '#2ecc71' }]}>
+              <Zap size={14} color="#2ecc71" />
+              <Text style={[styles.statusBadgeText, { color: '#2ecc71', fontSize: 12 }]}>
+                GPS đang theo dõi
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Seller Info Card */}
@@ -329,7 +559,7 @@ export default function BuyerOrderTrackingScreen() {
           <View style={styles.detailCard}>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Mã đơn hàng:</Text>
-              <Text style={styles.detailValue}>{order.id}</Text>
+              <Text style={styles.detailValue}>{getOrderDisplayId(order, orderId)}</Text>
             </View>
             <View style={styles.divider} />
 
@@ -371,15 +601,18 @@ export default function BuyerOrderTrackingScreen() {
         {/* Items List */}
         <View style={styles.itemsSection}>
           <Text style={styles.sectionTitle}>Danh sách rác</Text>
-          {listing.items.map((item: any, index: number) => (
+          {(listing.items || []).map((item: any, index: number) => (
             <View key={index} style={styles.itemRow}>
-              <View style={styles.itemDot} />
+              <View style={[styles.itemDot, { backgroundColor: getWasteItemColor(item) }]} />
               <View style={styles.itemContent}>
-                <Text style={styles.itemName}>{item.name}</Text>
+                <Text style={styles.itemName}>{getWasteItemName(item)}</Text>
                 <Text style={styles.itemQty}>{item.quantity} kg</Text>
               </View>
             </View>
           ))}
+          {(!listing.items || listing.items.length === 0) && (
+            <Text style={styles.emptyItemsText}>Chưa có danh sách rác</Text>
+          )}
         </View>
 
         {/* Action Buttons */}
@@ -692,6 +925,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  emptyItemsText: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 12,
+    color: Colors.textSecondary,
+    fontSize: 13,
   },
   actionSection: {
     paddingHorizontal: 16,
