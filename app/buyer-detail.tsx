@@ -332,20 +332,27 @@ export default function BuyerDetailScreen() {
         </View>
       </ScrollView>
 
-      {!isOwnListing && (
-        <View style={styles.bottomBar}>
+
+      <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.chatButton}
           onPress={() => {
-            router.push({
-              pathname: '/chat' as any,
-              params: {
-                name: listing.sellerName,
-                otherAvatar: listing.sellerAvatar,
-                receiverId: listing.sellerId,
-                listingId: listing.id,
-              },
-            });
+            if (listing.sellerId === user?.id) {
+              router.push({
+                pathname: '/conversations' as any,
+                params: { listingId: listing.id },
+              });
+            } else {
+              router.push({
+                pathname: '/chat' as any,
+                params: {
+                  name: listing.sellerName,
+                  otherAvatar: listing.sellerAvatar,
+                  receiverId: listing.sellerId,
+                  listingId: listing.id,
+                },
+              });
+            }
           }}
           activeOpacity={0.8}
         >
@@ -353,42 +360,78 @@ export default function BuyerDetailScreen() {
           <Text style={styles.chatButtonText}>Nhắn tin</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.acceptButton}
-          onPress={handleAccept}
-          activeOpacity={0.8}
-          disabled={isAccepting}
-        >
-          <LinearGradient
-            colors={isAccepting ? ['#9E9E9E', '#BDBDBD'] : [Colors.primary, Colors.primaryLight]}
-            style={styles.acceptGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+        {!isOwnListing ? (
+          <TouchableOpacity
+            style={styles.acceptButton}
+            onPress={handleAccept}
+            activeOpacity={0.8}
+            disabled={isAccepting}
           >
-            <View style={styles.acceptContent}>
-              {isAccepting && (
-                <View style={styles.loaderContainer}>
-                  <Animated.View
-                    style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]}
-                  />
-                  <Animated.View
-                    style={[styles.logoContainer, { transform: [{ scale: pulseAnim }] }]}
-                  >
-                    <Image
-                      source={logoImage}
-                      style={styles.logoImage}
-                      contentFit="contain"
+            <LinearGradient
+              colors={isAccepting ? ['#9E9E9E', '#BDBDBD'] : [Colors.primary, Colors.primaryLight]}
+              style={styles.acceptGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <View style={styles.acceptContent}>
+                {isAccepting && (
+                  <View style={styles.loaderContainer}>
+                    <Animated.View
+                      style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]}
                     />
-                  </Animated.View>
-                </View>
-              )}
-              <HandHelping size={20} color={Colors.white} style={isAccepting && styles.hidden} />
-              <Text style={[styles.acceptText, isAccepting && styles.hidden]}>Nhận đơn</Text>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-        </View>
-      )}
+                    <Animated.View
+                      style={[styles.logoContainer, { transform: [{ scale: pulseAnim }] }]}
+                    >
+                      <Image
+                        source={logoImage}
+                        style={styles.logoImage}
+                        contentFit="contain"
+                      />
+                    </Animated.View>
+                  </View>
+                )}
+                <HandHelping size={20} color={Colors.white} style={isAccepting && styles.hidden} />
+                <Text style={[styles.acceptText, isAccepting && styles.hidden]}>Nhận đơn</Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        ): (
+          <TouchableOpacity
+            style={styles.availableButton}
+            activeOpacity={0.8}
+            // không cho bấm vào nút nhận đơn nếu là đơn hàng của mình 
+            disabled={true}
+          >
+            <LinearGradient
+              colors={[Colors.textLight, Colors.textSecondary]}
+              style={styles.acceptGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <View style={styles.acceptContent}>
+                {isAccepting && (
+                  <View style={styles.loaderContainer}>
+                    <Animated.View
+                      style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]}
+                    />
+                    <Animated.View
+                      style={[styles.logoContainer, { transform: [{ scale: pulseAnim }] }]}
+                    >
+                      <Image
+                        source={logoImage}
+                        style={styles.logoImage}
+                        contentFit="contain"
+                      />
+                    </Animated.View>
+                  </View>
+                )}
+                <HandHelping size={20} color={Colors.white} style={isAccepting && styles.hidden} />
+                <Text style={[styles.acceptText, isAccepting && styles.hidden]}>Chờ nhận đơn</Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
@@ -684,6 +727,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 8,
+  },
+  availableButton: {
+    flex: 1,
+    borderRadius: 20,
+    overflow: 'hidden' as const,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+    backgroundColor: Colors.metal,
   },
   acceptGradient: {
     flexDirection: 'row',

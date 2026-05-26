@@ -9,7 +9,7 @@ export default function EducationPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold">Nội dung giáo dục</h1>
+        <h1 className="text-2xl font-bold">Quản lý bài viết kiến thức cộng đồng</h1>
         <p className="text-muted-foreground text-sm mt-1">{mockEducationPosts.length} bài viết</p>
       </div>
       <DataTable

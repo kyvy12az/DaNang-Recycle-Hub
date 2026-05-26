@@ -25,6 +25,7 @@ const app = express();
 const allowedOrigins = [
   process.env.ADMIN_WEB_ORIGIN,
   "http://localhost:8080", // Admin chạy local
+  "http://192.168.1.211:8080/",
   "https://your-admin-web-deployed.vercel.app" // Admin chạy trên domain thực tế
 ];
 

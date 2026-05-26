@@ -17,7 +17,7 @@ export default function WastePostsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold">Quản lý bài đăng bán rác</h1>
+        <h1 className="text-2xl font-bold">Quản lý giám sát trạng thái và tiến độ đơn rác</h1>
         <p className="text-muted-foreground text-sm mt-1">{posts.length} bài đăng</p>
       </div>
 

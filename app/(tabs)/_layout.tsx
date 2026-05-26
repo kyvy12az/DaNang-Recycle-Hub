@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Home, Map, BookOpen, User } from "lucide-react-native";
+import { Home, Map, BookOpen, User, Trophy } from "lucide-react-native";
 import Colors from "@/constants/colors";
 
 export default function TabLayout() {
@@ -32,6 +32,15 @@ export default function TabLayout() {
         options={{
           title: "Bản đồ",
           tabBarIcon: ({ color, size }) => <Map size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="ranking"
+        options={{
+          title: 'Xếp hạng',
+          tabBarIcon: ({ color, size }) => (
+            <Trophy size={size} color={color} strokeWidth={1.8} />
+          ),
         }}
       />
       <Tabs.Screen

@@ -23,6 +23,7 @@ import AnalyticsPage from "@/pages/AnalyticsPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import { ReactNode } from "react";
+import RankPage from "./pages/RankPage";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +60,7 @@ const App = () => (
                       <Route path="/rewards/:id/edit" element={<RewardFormPage />} />
                       <Route path="/collection-points" element={<CollectionPointsPage />} />
                       <Route path="/education" element={<EducationPage />} />
+                      <Route path="/ranks" element={<RankPage />} />
                       <Route path="/ai-logs" element={<AILogsPage />} />
                       <Route path="/support" element={<SupportPage />} />
                       <Route path="/notifications" element={<NotificationsPage />} />

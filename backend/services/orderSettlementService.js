@@ -1,5 +1,6 @@
 const Order = require("../models/Order");
 const User = require("../models/User");
+const Transaction = require("../models/Transaction");
 
 const getPaymentAmount = (order) => order.actualPrice ?? order.estimatedPrice ?? 0;
 const getGreenPoints = (order) => order.actualGreenPoints ?? order.estimatedGreenPoints ?? 0;
@@ -92,6 +93,42 @@ async function settleCompletedOrder(orderId) {
 
   emitWalletUpdate(updatedBuyer);
   emitWalletUpdate(updatedSeller);
+
+  await Transaction.insertMany(
+    [
+      {
+        userId: order.buyerId,
+        orderId: order._id,
+        type: "purchase",
+        amount: -amount,
+        points,
+        description: `Thanh toán đơn hàng ${order._id}`,
+        status: "completed",
+        metadata: {
+          paymentMethod: order.paymentMethod,
+          counterpartyId: order.sellerId,
+        },
+      },
+      {
+        userId: order.sellerId,
+        orderId: order._id,
+        type: "sale",
+        amount,
+        points,
+        description: `Nhận tiền bán rác đơn hàng ${order._id}`,
+        status: "completed",
+        metadata: {
+          paymentMethod: order.paymentMethod,
+          counterpartyId: order.buyerId,
+        },
+      },
+    ],
+    { ordered: false }
+  ).catch((error) => {
+    if (error?.code !== 11000) {
+      throw error;
+    }
+  });
 
   return { settled: true, order, buyer: updatedBuyer, seller: updatedSeller };
 }

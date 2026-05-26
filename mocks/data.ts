@@ -204,7 +204,7 @@ export const mockRewards: Reward[] = [
     id: 'r1',
     title: 'Giảm 20% Highlands Coffee',
     description: 'Áp dụng tại mọi chi nhánh Highlands Coffee Đà Nẵng',
-    pointsCost: 200,
+    pointsCost: 50,
     imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400',
     category: 'Ẩm thực',
     isAvailable: true,

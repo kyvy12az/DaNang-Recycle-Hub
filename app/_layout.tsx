@@ -50,7 +50,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     const firstSegment = segments[0] as string;
-    const inAuthGroup = firstSegment === 'login' || firstSegment === 'register';
+    const inAuthGroup = firstSegment === 'login' || firstSegment === 'register' || firstSegment === 'forgot-password';
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/login' as any);
     } else if (isAuthenticated && inAuthGroup) {
@@ -105,6 +105,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="register" options={{ title: "Đăng ký", headerShown: false }} />
+      <Stack.Screen name="forgot-password" options={{headerShown: false}}/>
       <Stack.Screen name="seller-post" options={{ title: "Đăng rác tái chế" }} />
       <Stack.Screen name="seller/upload" options={{ title: "Chụp ảnh & Nhận diện AI" }} />
       <Stack.Screen name="seller/order-tracking" options={{ title: "Theo dõi đơn hàng", headerShown: false }} />

@@ -35,17 +35,19 @@ import {
   Check,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { mockTransactions } from '@/mocks/data';
 import EcoLoader from '@/components/EcoLoader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAvatarUpload } from '@/hooks/useAvatarUpload';
 
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
+
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { logout, user, updateUser } = useAuth();
+  const { logout, user, updateUser, getAuthToken } = useAuth();
   const { handleAvatarUpload, isLoading: isUploadingAvatar, error: uploadError } = useAvatarUpload();
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
 
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -83,6 +85,30 @@ export default function ProfileScreen() {
     return () => clearTimeout(timer);
   }, []);
 
+
+  useEffect(() => {
+    const fetchRecentTransactions = async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+
+        const response = await fetch(`${API_BASE_URL}/api/user/transactions?limit=3`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'bypass-tunnel-reminder': 'true',
+          },
+        });
+
+        if (!response.ok) return;
+        const data = await response.json();
+        setRecentTransactions(data.transactions || []);
+      } catch (error) {
+        console.error('Load recent transactions error:', error);
+      }
+    };
+
+    fetchRecentTransactions();
+  }, [getAuthToken]);
   useEffect(() => {
     if (uploadError) {
       Alert.alert('Upload Lỗi', uploadError);
@@ -136,9 +162,9 @@ export default function ProfileScreen() {
     return <EcoLoader message="Đang tải hồ sơ..." size="large" />;
   }
 
-  const formatPrice = (price: number) => {
-    return price.toLocaleString('vi-VN') + 'VND';
-  };
+  const formatPrice = (price: number) => price.toLocaleString('vi-VN') + ' VND';
+
+  const formatTransactionDate = (timestamp: string) => new Date(timestamp).toLocaleDateString('vi-VN');
 
   const handleDeposit = () => {
     router.push('/wallet/deposit' as any);
@@ -324,21 +350,29 @@ export default function ProfileScreen() {
               <ArrowRight size={16} color={Colors.primary} />
             </TouchableOpacity>
           </View>
-          {mockTransactions.slice(0, 3).map((tx) => (
+          {recentTransactions.length === 0 ? (
+            <View style={styles.txCard}>
+              <View style={styles.txIconContainer}>
+                <Leaf size={18} color={Colors.primary} />
+              </View>
+              <View style={styles.txInfo}>
+                <Text style={styles.txTitle}>Chưa có giao dịch nào</Text>
+                <Text style={styles.txDate}>Giao dịch mới sẽ hiển thị ở đây</Text>
+              </View>
+            </View>
+          ) : recentTransactions.map((tx) => (
             <View key={tx.id} style={styles.txCard}>
               <View style={styles.txIconContainer}>
                 <Leaf size={18} color={Colors.primary} />
               </View>
               <View style={styles.txInfo}>
-                <Text style={styles.txTitle}>
-                  {tx.items.map(i => `${i.wasteType.name} ${i.quantity}kg`).join(', ')}
-                </Text>
-                <Text style={styles.txPartner}>{tx.partnerName}</Text>
-                <Text style={styles.txDate}>{tx.date}</Text>
+                <Text style={styles.txTitle}>{tx.description || 'Giao dịch'}</Text>
+                <Text style={styles.txPartner}>{tx.type === 'sale' ? 'Tiền vào' : tx.type === 'purchase' ? 'Tiền ra' : tx.type}</Text>
+                <Text style={styles.txDate}>{formatTransactionDate(tx.timestamp)}</Text>
               </View>
               <View style={styles.txRight}>
-                <Text style={styles.txPrice}>{formatPrice(tx.totalPrice)}</Text>
-                <Text style={styles.txPoints}>+{tx.greenPoints} 🌿</Text>
+                <Text style={styles.txPrice}>{formatPrice(tx.amount || 0)}</Text>
+                {tx.points ? <Text style={styles.txPoints}>+{tx.points} điểm</Text> : null}
               </View>
             </View>
           ))}

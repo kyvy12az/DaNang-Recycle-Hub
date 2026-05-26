@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, FileText, ArrowLeftRight, Wallet, Gift,
   MapPin, BookOpen, Brain, Headphones, Bell, Settings, LogOut, BarChart3,
-  ChevronRight, Search, User as UserIcon
+  ChevronRight, Search, User as UserIcon,
+  Trophy, 
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,7 +32,7 @@ const menuItems = [
   { title: "Rewards", url: "/rewards", icon: Gift },
   { title: "Collection Points", url: "/collection-points", icon: MapPin },
   { title: "Education", url: "/education", icon: BookOpen },
-  { title: "AI Logs", url: "/ai-logs", icon: Brain },
+  { title: "Leaderboard", url: "/ranks", icon: Trophy },
   { title: "Support", url: "/support", icon: Headphones },
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
