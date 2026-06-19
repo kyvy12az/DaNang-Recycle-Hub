@@ -20,6 +20,8 @@ import {
   HandHelping,
   Scale,
   Star,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import axios from 'axios';
@@ -29,6 +31,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import ScreenHeader from '@/components/ScreenHeader';
 import ToastDisplay from '@/components/ToastDisplay';
 import { useToast } from '@/hooks/useToast';
+import { useSocket as useSocketContext } from '@/contexts/SocketContext';
 
 const logoImage = require('@/assets/images/logo.png');
 
@@ -75,10 +78,15 @@ export default function BuyerDetailScreen() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState<boolean>(false);
+  // State sau khi buyer đã nhận đơn - lưu orderId để seller confirm
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  // State khi seller đang confirm/reject
+  const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const { user, getAuthToken, isLoading: isAuthLoading } = useAuth();
   const { toasts, success, error: errorToast } = useToast();
+  const socket = useSocketContext();
 
   // Fetch dữ liệu thật từ API
   useEffect(() => {
@@ -89,9 +97,26 @@ export default function BuyerDetailScreen() {
         const response = await axios.get(`${API_BASE_URL}/api/listings/${id}`, {
           headers: { 'bypass-tunnel-reminder': 'true' },
         });
-        // BE có thể trả về { listing: {...} } hoặc trực tiếp object
         const raw = response.data.listing || response.data;
         setListing(mapListingFromAPI(raw));
+        // Nếu bài đăng đang ở trạng thái pending_confirmation, kiểm tra xem buyer hiện tại có đơn không
+        if (raw.status === 'pending_confirmation') {
+          // Kiểm tra order của buyer hoặc seller cho listing này
+          try {
+            const token = await getAuthToken();
+            const orderRes = await axios.get(`${API_BASE_URL}/api/orders/ORDER_${raw._id || raw.id}`, {
+              headers: { 'bypass-tunnel-reminder': 'true', Authorization: `Bearer ${token}` },
+            });
+            const orderData = orderRes.data;
+            if (
+              orderData &&
+              (String(orderData.buyerId?._id || orderData.buyerId) === user?.id ||
+                String(orderData.sellerId?._id || orderData.sellerId) === user?.id)
+            ) {
+              setPendingOrderId(String(orderData._id));
+            }
+          } catch (_) { /* không có đơn, bỏ qua */ }
+        }
       } catch (err: any) {
         console.error('Lỗi fetch listing detail:', err.message);
         setError('Không thể tải thông tin bài đăng. Vui lòng thử lại.');
@@ -101,7 +126,7 @@ export default function BuyerDetailScreen() {
     };
 
     if (id) fetchListing();
-  }, [id]);
+  }, [id, user?.id]);
 
   useEffect(() => {
     if (isAccepting) {
@@ -136,6 +161,37 @@ export default function BuyerDetailScreen() {
     }
   }, [isAccepting]);
 
+  // Lắng nghe socket: seller xác nhận -> buyer chuyển sang tracking
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleSellerConfirmed = (data: any) => {
+      success('Người bán đã xác nhận! Đang chuyển tới trang theo dõi...');
+      setTimeout(() => {
+        router.push({
+          pathname: '/buyer-order-tracking' as any,
+          params: {
+            orderId: data.orderId,
+            listingId: data.listingId || listing?.id,
+          },
+        });
+      }, 600);
+    };
+
+    const handleSellerRejected = (data: any) => {
+      setPendingOrderId(null);
+      setListing(prev => prev ? { ...prev, status: 'approved' } : prev);
+      errorToast('Người bán đã từ chối đơn hàng của bạn.');
+    };
+
+    socket.on('order:seller_confirmed', handleSellerConfirmed);
+    socket.on('order:seller_rejected', handleSellerRejected);
+    return () => {
+      socket.off('order:seller_confirmed', handleSellerConfirmed);
+      socket.off('order:seller_rejected', handleSellerRejected);
+    };
+  }, [socket, listing?.id]);
+
   const formatPrice = (price: number) => price.toLocaleString('vi-VN') + 'đ';
 
   const isOwnListing = isAuthLoading || listing?.sellerId === user?.id;
@@ -157,7 +213,6 @@ export default function BuyerDetailScreen() {
           onPress: async () => {
             setIsAccepting(true);
             try {
-              // 1. Gọi API cập nhật trạng thái đơn hàng trên Server
               const token = await getAuthToken();
               const orderResponse = await axios.post(
                 `${API_BASE_URL}/api/orders`,
@@ -166,7 +221,6 @@ export default function BuyerDetailScreen() {
                   estimatedWeight: listing.totalWeight,
                   estimatedPrice: listing.totalPrice,
                   estimatedGreenPoints: listing.greenPoints,
-                  status: 'accepted',
                 },
                 {
                   headers: {
@@ -179,29 +233,76 @@ export default function BuyerDetailScreen() {
               const createdOrder = orderResponse.data;
               const actualOrderId = createdOrder._id || createdOrder.id;
 
-              // 2. Hiển thị thông báo Toast mượt mà cho người dùng
-              success('Nhận đơn thành công! Đang chuyển đến bản đồ thu gom...');
-
-              // 3. Luồng tiếp theo: Chuyển hướng sang trang theo dõi hành trình thu gom rác thực tế
-              setTimeout(() => {
-                router.push({
-                  pathname: '/buyer-order-tracking' as any,
-                  params: {
-                    orderId: actualOrderId,
-                    listingId: listing.id,
-                  },
-                });
-              }, 400);
-
+              // Cập nhật state: đơn pending, chờ seller xác nhận
+              setPendingOrderId(actualOrderId);
+              setListing(prev => prev ? { ...prev, status: 'pending_confirmation' } : prev);
+              success('Đã nhận đơn! Đang chờ người bán xác nhận...');
             } catch (err) {
-              setIsAccepting(false);
               errorToast('Có lỗi xảy ra trong quá trình nhận đơn. Vui lòng thử lại.');
               console.error('Error accepting order:', err);
+            } finally {
+              setIsAccepting(false);
             }
           },
         },
       ]
     );
+  };
+
+  const handleSellerConfirm = async () => {
+    if (!pendingOrderId) return;
+    setIsConfirming(true);
+    try {
+      const token = await getAuthToken();
+      await axios.put(
+        `${API_BASE_URL}/api/orders/${pendingOrderId}/seller-confirm`,
+        {},
+        { headers: { 'bypass-tunnel-reminder': 'true', Authorization: `Bearer ${token}` } }
+      );
+      success('Đã xác nhận đơn hàng! Đang chuyển đến trang theo dõi...');
+      // Cập nhật listing status
+      setListing(prev => prev ? { ...prev, status: 'pending' } : prev);
+      setTimeout(() => {
+        router.push({
+          pathname: '/seller/order-tracking' as any,
+          params: { orderId: pendingOrderId },
+        });
+      }, 600);
+    } catch (err) {
+      errorToast('Không thể xác nhận đơn. Vui lòng thử lại.');
+      console.error('Error confirming order:', err);
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const handleSellerReject = async () => {
+    if (!pendingOrderId) return;
+    Alert.alert('Từ chối đơn?', 'Bạn chắc muốn từ chối người mua này?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Từ chối',
+        style: 'destructive',
+        onPress: async () => {
+          setIsConfirming(true);
+          try {
+            const token = await getAuthToken();
+            await axios.put(
+              `${API_BASE_URL}/api/orders/${pendingOrderId}/seller-reject`,
+              {},
+              { headers: { 'bypass-tunnel-reminder': 'true', Authorization: `Bearer ${token}` } }
+            );
+            setPendingOrderId(null);
+            setListing(prev => prev ? { ...prev, status: 'approved' } : prev);
+            success('Đã từ chối đơn hàng.');
+          } catch (err) {
+            errorToast('Không thể từ chối đơn. Vui lòng thử lại.');
+          } finally {
+            setIsConfirming(false);
+          }
+        },
+      },
+    ]);
   };
 
   // --- Loading state ---
@@ -332,7 +433,6 @@ export default function BuyerDetailScreen() {
         </View>
       </ScrollView>
 
-
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.chatButton}
@@ -361,75 +461,88 @@ export default function BuyerDetailScreen() {
         </TouchableOpacity>
 
         {!isOwnListing ? (
-          <TouchableOpacity
-            style={styles.acceptButton}
-            onPress={handleAccept}
-            activeOpacity={0.8}
-            disabled={isAccepting}
-          >
-            <LinearGradient
-              colors={isAccepting ? ['#9E9E9E', '#BDBDBD'] : [Colors.primary, Colors.primaryLight]}
-              style={styles.acceptGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+          pendingOrderId ? (
+            <View style={[styles.acceptButton, { overflow: 'hidden' as const }]}>
+              <LinearGradient colors={['#F57F17', '#F9A825']} style={styles.acceptGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <View style={styles.acceptContent}>
+                  <ActivityIndicator size="small" color={Colors.white} />
+                  <Text style={styles.acceptText}>Chờ xác nhận...</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.acceptButton}
+              onPress={handleAccept}
+              activeOpacity={0.8}
+              disabled={isAccepting || listing.status === 'pending_confirmation' || listing.status === 'pending' || listing.status === 'completed'}
             >
-              <View style={styles.acceptContent}>
-                {isAccepting && (
-                  <View style={styles.loaderContainer}>
-                    <Animated.View
-                      style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]}
-                    />
-                    <Animated.View
-                      style={[styles.logoContainer, { transform: [{ scale: pulseAnim }] }]}
-                    >
-                      <Image
-                        source={logoImage}
-                        style={styles.logoImage}
-                        contentFit="contain"
-                      />
-                    </Animated.View>
+              <LinearGradient
+                colors={(isAccepting || listing.status === 'pending_confirmation' || listing.status === 'pending' || listing.status === 'completed') ? ['#9E9E9E', '#BDBDBD'] : [Colors.primary, Colors.primaryLight]}
+                style={styles.acceptGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <View style={styles.acceptContent}>
+                  {isAccepting && (
+                    <View style={styles.loaderContainer}>
+                      <Animated.View style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]} />
+                      <Animated.View style={[styles.logoContainer, { transform: [{ scale: pulseAnim }] }]}>
+                        <Image source={logoImage} style={styles.logoImage} contentFit="contain" />
+                      </Animated.View>
+                    </View>
+                  )}
+                  <HandHelping size={20} color={Colors.white} style={isAccepting && styles.hidden} />
+                  <Text style={[styles.acceptText, isAccepting && styles.hidden]}>
+                    {(listing.status === 'pending_confirmation' || listing.status === 'pending' || listing.status === 'completed') ? 'Đã có người nhận' : 'Nhận đơn'}
+                  </Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          )
+        ) : (
+          pendingOrderId ? (
+            <>
+              <TouchableOpacity
+                style={[styles.acceptButton, { flex: 0.5 }]}
+                onPress={handleSellerReject}
+                activeOpacity={0.8}
+                disabled={isConfirming}
+              >
+                <LinearGradient colors={['#D32F2F', '#EF5350']} style={styles.acceptGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                  <View style={styles.acceptContent}>
+                    <XCircle size={18} color={Colors.white} />
+                    <Text style={styles.acceptText}>Hủy</Text>
                   </View>
-                )}
-                <HandHelping size={20} color={Colors.white} style={isAccepting && styles.hidden} />
-                <Text style={[styles.acceptText, isAccepting && styles.hidden]}>Nhận đơn</Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        ): (
-          <TouchableOpacity
-            style={styles.availableButton}
-            activeOpacity={0.8}
-            // không cho bấm vào nút nhận đơn nếu là đơn hàng của mình 
-            disabled={true}
-          >
-            <LinearGradient
-              colors={[Colors.textLight, Colors.textSecondary]}
-              style={styles.acceptGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <View style={styles.acceptContent}>
-                {isAccepting && (
-                  <View style={styles.loaderContainer}>
-                    <Animated.View
-                      style={[styles.spinnerRing, { transform: [{ rotate: spin }] }]}
-                    />
-                    <Animated.View
-                      style={[styles.logoContainer, { transform: [{ scale: pulseAnim }] }]}
-                    >
-                      <Image
-                        source={logoImage}
-                        style={styles.logoImage}
-                        contentFit="contain"
-                      />
-                    </Animated.View>
+                </LinearGradient>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.acceptButton}
+                onPress={handleSellerConfirm}
+                activeOpacity={0.8}
+                disabled={isConfirming}
+              >
+                <LinearGradient colors={[Colors.primary, Colors.primaryLight]} style={styles.acceptGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                  <View style={styles.acceptContent}>
+                    {isConfirming
+                      ? <ActivityIndicator size="small" color={Colors.white} />
+                      : <CheckCircle size={18} color={Colors.white} />
+                    }
+                    <Text style={styles.acceptText}>Xác nhận</Text>
                   </View>
-                )}
-                <HandHelping size={20} color={Colors.white} style={isAccepting && styles.hidden} />
-                <Text style={[styles.acceptText, isAccepting && styles.hidden]}>Chờ nhận đơn</Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
+                </LinearGradient>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity style={styles.availableButton} activeOpacity={0.8} disabled={true}>
+              <LinearGradient colors={[Colors.textLight, Colors.textSecondary]} style={styles.acceptGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <View style={styles.acceptContent}>
+                  <HandHelping size={20} color={Colors.white} />
+                  <Text style={styles.acceptText}>Chờ nhận đơn</Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          )
         )}
       </View>
     </View>
@@ -707,7 +820,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 6,
-    shadowColor: '#000',
+    shadowColor: '#fff',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 8,

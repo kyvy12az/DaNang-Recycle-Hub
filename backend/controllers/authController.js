@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const Listing = require("../models/Listing");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -216,6 +217,14 @@ exports.updateProfile = async (req, res) => {
 
     if (!updatedUser) {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    // Cập nhật tên trong các bài đăng của người dùng (Listing) nếu tên thay đổi
+    if (name !== undefined) {
+      await Listing.updateMany(
+        { sellerId: req.userId },
+        { $set: { sellerName: name.trim() } }
+      );
     }
 
     return res.status(200).json({

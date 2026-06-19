@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import ScreenHeader from '@/components/ScreenHeader';
 import MomoPaymentModal from '@/components/MomoPaymentModal';
-import { CheckCircle, AlertCircle, Zap, CreditCard } from 'lucide-react-native';
+import { CheckCircle, AlertCircle, Zap, CreditCard, ArrowLeft, Home, RefreshCw } from 'lucide-react-native';
 import { useSocket } from '@/hooks/useSocket';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -28,6 +27,8 @@ interface CompletionData {
   actualGreenPoints: number;
 }
 
+type PaymentStatusState = 'preparing' | 'ready' | 'processing' | 'success' | 'failed';
+
 export default function BuyerOrderCompleteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -36,26 +37,40 @@ export default function BuyerOrderCompleteScreen() {
   const { user, getAuthToken } = useAuth();
 
   const [completion, setCompletion] = useState<CompletionData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [statusState, setStatusState] = useState<PaymentStatusState>('preparing');
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const [showMomoModal, setShowMomoModal] = useState(false);
+
   const buyerName = user?.name?.trim() || 'Người mua';
   const buyerPhone = user?.phone?.trim() || '';
 
   useEffect(() => {
     setTimeout(() => {
-      setCompletion({
-        orderId: orderId as string,
-        listingId: listingId as string,
-        actualWeight: parseFloat(actualWeight as string),
-        actualPrice: parseFloat(actualPrice as string),
-        actualGreenPoints: parseFloat(actualGreenPoints as string),
-      });
-      setIsLoading(false);
+      if (orderId && actualWeight && actualPrice) {
+        setCompletion({
+          orderId: orderId as string,
+          listingId: listingId as string,
+          actualWeight: parseFloat(actualWeight as string),
+          actualPrice: parseFloat(actualPrice as string),
+          actualGreenPoints: parseFloat(actualGreenPoints as string || '0'),
+        });
+        setStatusState('ready');
+      } else {
+        setStatusState('failed');
+        setErrorMessage('Không thể tải thông tin dữ liệu đơn hàng.');
+      }
     }, 300);
   }, [orderId, listingId, actualWeight, actualPrice, actualGreenPoints]);
 
+  const handleProcessPayment = async () => {
+    if (!completion) return;
+    setShowMomoModal(true);
+  };
+
   const handlePaymentSuccess = async () => {
     if (!completion) return;
+    setShowMomoModal(false);
+    setStatusState('processing');
 
     try {
       const token = await getAuthToken();
@@ -77,7 +92,7 @@ export default function BuyerOrderCompleteScreen() {
       });
 
       if (!response.ok) {
-        throw new Error('Cập nhật trạng thái thanh toán thất bại');
+        throw new Error('Cập nhật trạng thái thanh toán lên hệ thống thất bại');
       }
 
       emitPaymentConfirmation(
@@ -85,77 +100,157 @@ export default function BuyerOrderCompleteScreen() {
         completion.actualPrice,
         `MOMO_${Date.now()}`
       );
-    } catch (error) {
+
+      setStatusState('success');
+    } catch (error: any) {
       console.error('[BuyerOrderComplete] Error updating payment status:', error);
-      Alert.alert('Lỗi', 'Thanh toán thành công nhưng không thể cập nhật trạng thái đơn hàng.');
-      return;
+      setErrorMessage(error?.message || 'Thanh toán thành công qua MoMo nhưng hệ thống gặp lỗi cập nhật.');
+      setStatusState('failed');
     }
-
-    setShowMomoModal(false);
-    Alert.alert(
-      'Thanh toán thành công! 🎉',
-      `Đã nhận được ${completion.actualGreenPoints} điểm xanh và ${completion.actualPrice.toLocaleString()}đ`,
-      [
-        {
-          text: 'Quay lại home',
-          onPress: () => {
-            router.dismissAll();
-            router.replace('/');
-          },
-        },
-      ]
-    );
   };
 
-  const handlePaymentCancel = () => {
+  const handlePaymentError = (errorMsg: string) => {
     setShowMomoModal(false);
+    setErrorMessage(errorMsg || 'Giao dịch bị từ chối hoặc đã xảy ra lỗi trong quá trình kết nối cổng thanh toán MoMo.');
+    setStatusState('failed');
   };
 
-  if (isLoading) {
+  const navigateToHome = () => {
+    router.dismissAll();
+    router.replace('/');
+  };
+
+  // ---  GIAO DIỆN ĐANG TẢI / ĐANG XỬ LÝ ---
+  if (statusState === 'preparing' || statusState === 'processing') {
     return (
       <View style={styles.centerContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScreenHeader
-          title="Hoàn thành thu gom"
-          backgroundColor={Colors.primary}
-          titleColor={Colors.white}
-        />
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Đang chuẩn bị...</Text>
+        <View style={styles.stateCard}>
+          <ActivityIndicator size="large" color="#4CAF50" style={{ marginBottom: 10 }} />
+
+          <Text style={styles.stateTitle}>
+            {statusState === 'preparing' ? 'Đang chuẩn bị đơn hàng...' : 'Đang ghi nhận thanh toán...'}
+          </Text>
+          <Text style={styles.stateSubtitle}>Vui lòng giữ kết nối mạng ổn định, không đóng ứng dụng.</Text>
+        </View>
       </View>
     );
   }
 
-  if (!completion) {
+  // --- GIAO DIỆN THANH TOÁN THÀNH CÔNG ---
+  if (statusState === 'success') {
     return (
-      <View style={styles.centerContainer}>
+      <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScreenHeader
-          title="Hoàn thành thu gom"
-          backgroundColor="transparent"
-          titleColor={Colors.white}
-        />
-        <AlertCircle size={48} color={Colors.accent} />
-        <Text style={styles.emptyText}>Không thể tải thông tin</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
-          <Text style={styles.retryText}>Quay lại</Text>
-        </TouchableOpacity>
+        <ScreenHeader title="Kết quả giao dịch" backgroundColor={Colors.primary} titleColor={Colors.white} />
+
+        <ScrollView showsVerticalScrollIndicator={false} style={styles.content} contentContainerStyle={styles.centerContent}>
+          <View style={styles.successIconCircle}>
+            <CheckCircle size={56} color={Colors.white} />
+          </View>
+
+          <Text style={styles.mainTitle}>Thanh toán thành công!</Text>
+          <Text style={styles.subTitleText}>Cảm ơn bạn đã chung tay bảo vệ môi trường Đà Nẵng! 🌿</Text>
+
+          <View style={styles.receiptCard}>
+            <Text style={styles.receiptHeader}>CHI TIẾT HÓA ĐƠN</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Mã đơn hàng:</Text>
+              <Text style={styles.summaryValue}>#{completion?.orderId.slice(-8).toUpperCase()}</Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Khối lượng thực tế:</Text>
+              <Text style={styles.summaryValue}>{completion?.actualWeight} kg</Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Số tiền đã trả:</Text>
+              <Text style={[styles.summaryValue, { color: Colors.primary, fontSize: 16 }]}>
+                {completion?.actualPrice.toLocaleString()}₫
+              </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Điểm xanh tích lũy:</Text>
+              <Text style={[styles.summaryValue, { color: '#2ecc71' }]}>
+                +{completion?.actualGreenPoints} 🌿
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + 16 }]}>
+          <TouchableOpacity style={styles.successActionBtn} onPress={navigateToHome} activeOpacity={0.8}>
+            <Home size={20} color={Colors.white} />
+            <Text style={styles.bottomButtonText}>Quay lại Trang chủ</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
+  // --- GIAO DIỆN THANH TOÁN THẤT BẠI 
+  if (statusState === 'failed') {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenHeader title="Kết quả giao dịch" backgroundColor={Colors.error} titleColor={Colors.white} />
+
+        <ScrollView showsVerticalScrollIndicator={false} style={styles.content} contentContainerStyle={styles.centerContent}>
+
+          <View style={[styles.failedIconCircle, { backgroundColor: Colors.error, shadowColor: Colors.error }]}>
+            <AlertCircle size={56} color={Colors.white} />
+          </View>
+
+          <Text style={[styles.mainTitle, { color: Colors.error }]}>Thanh toán thất bại</Text>
+          <Text style={styles.subTitleText}>
+            {errorMessage || 'Đã xảy ra lỗi không xác định trong quá trình thanh toán qua ví MoMo.'}
+          </Text>
+
+          {completion && (
+            <View style={[styles.receiptCard, { borderColor: '#ffebee', borderWidth: 1 }]}>
+
+              <Text style={[styles.receiptHeader, { color: Colors.error }]}>THÔNG TIN GIAO DỊCH BỊ LỖI</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Mã đơn hàng:</Text>
+                <Text style={styles.summaryValue}>#{completion.orderId.slice(-8).toUpperCase()}</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Số tiền dự kiến:</Text>
+                <Text style={styles.summaryValue}>{completion.actualPrice.toLocaleString()}₫</Text>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+
+        <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + 16, flexDirection: 'row', gap: 12 }]}>
+          <TouchableOpacity style={[styles.flexButton, styles.backBtn]} onPress={() => { setStatusState('ready'); }} activeOpacity={0.8}>
+            <ArrowLeft size={18} color={Colors.text} />
+            <Text style={[styles.bottomButtonText, { color: Colors.text }]}>Quay lại</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.flexButton, styles.retryActionBtn, { backgroundColor: Colors.error }]}
+            onPress={handleProcessPayment}
+            activeOpacity={0.8}
+          >
+            <RefreshCw size={18} color={Colors.white} />
+            <Text style={styles.bottomButtonText}>Thử lại ngay</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // --- GIAO DIỆN SẴN SÀNG THANH TOÁN BAN ĐẦU ---
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader
-        title="Hoàn thành thu gom"
-        backgroundColor={Colors.primary}
-        titleColor={Colors.white}
-      />
+      <ScreenHeader title="Hoàn thành thu gom" backgroundColor={Colors.primary} titleColor={Colors.white} />
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.content}>
-        {/* Success Message */}
         <View style={styles.successSection}>
           <View style={styles.successIcon}>
             <CheckCircle size={48} color={Colors.primary} />
@@ -166,25 +261,19 @@ export default function BuyerOrderCompleteScreen() {
           </Text>
         </View>
 
-        {/* Summary Card */}
         <View style={styles.summarySection}>
           <Text style={styles.summaryTitle}>Tóm tắt thanh toán</Text>
-
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Khối lượng thực tế:</Text>
               <Text style={styles.summaryValue}>{completion?.actualWeight} kg</Text>
             </View>
             <View style={styles.divider} />
-
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Giá thanh toán:</Text>
-              <Text style={styles.summaryValue}>
-                {completion?.actualPrice.toLocaleString()}₫
-              </Text>
+              <Text style={styles.summaryValue}>{completion?.actualPrice.toLocaleString()}₫</Text>
             </View>
             <View style={styles.divider} />
-
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Điểm xanh kiếm được:</Text>
               <Text style={[styles.summaryValue, { color: Colors.primary }]}>
@@ -194,12 +283,8 @@ export default function BuyerOrderCompleteScreen() {
           </View>
         </View>
 
-        {/* Payment Info */}
         <View style={styles.infoSection}>
-          <LinearGradient
-            colors={['#E3F2FD', '#BBDEFB']}
-            style={styles.infoCard}
-          >
+          <LinearGradient colors={['#E3F2FD', '#BBDEFB']} style={styles.infoCard}>
             <CreditCard size={20} color={Colors.primary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Thanh toán an toàn</Text>
@@ -210,61 +295,27 @@ export default function BuyerOrderCompleteScreen() {
           </LinearGradient>
         </View>
 
-        {/* Steps */}
         <View style={styles.nextStepsSection}>
           <Text style={styles.nextStepsTitle}>Quy trình thanh toán</Text>
-
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>1</Text>
+          {[
+            { step: '1', label: 'Nhấn "Thanh toán qua Momo"', desc: 'Mở trang thanh toán Momo Sandbox' },
+            { step: '2', label: 'Xác nhận thanh toán', desc: 'Hoàn thành giao dịch trong Momo Sandbox' },
+            { step: '3', label: 'Nhận điểm xanh', desc: 'Điểm xanh được cộng vào tài khoản ngay sau khi thanh toán thành công' },
+          ].map((item, index) => (
+            <View key={index} style={styles.stepItem}>
+              <View style={styles.stepNumber}><Text style={styles.stepNumberText}>{item.step}</Text></View>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepLabel}>{item.label}</Text>
+                <Text style={styles.stepDescription}>{item.desc}</Text>
+              </View>
             </View>
-            <View style={styles.stepContent}>
-              <Text style={styles.stepLabel}>Nhấn "Thanh toán qua Momo"</Text>
-              <Text style={styles.stepDescription}>Mở trang thanh toán Momo Sandbox</Text>
-            </View>
-          </View>
-
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>2</Text>
-            </View>
-            <View style={styles.stepContent}>
-              <Text style={styles.stepLabel}>Xác nhận thanh toán</Text>
-              <Text style={styles.stepDescription}>
-                Hoàn thành giao dịch trong Momo Sandbox
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumber}>
-              <Text style={styles.stepNumberText}>3</Text>
-            </View>
-            <View style={styles.stepContent}>
-              <Text style={styles.stepLabel}>Nhận điểm xanh</Text>
-              <Text style={styles.stepDescription}>
-                Điểm xanh được cộng vào tài khoản ngay sau khi thanh toán thành công
-              </Text>
-            </View>
-          </View>
+          ))}
         </View>
-
-        <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* Payment Button */}
       <View style={[styles.bottomButtonContainer, { paddingBottom: insets.bottom + 16 }]}>
-        <TouchableOpacity
-          style={styles.paymentButton}
-          onPress={() => setShowMomoModal(true)}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={[Colors.primary, Colors.primaryLight]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.paymentButtonGradient}
-          >
+        <TouchableOpacity style={styles.paymentButton} onPress={handleProcessPayment} activeOpacity={0.8}>
+          <LinearGradient colors={[Colors.primary, Colors.primaryLight]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.paymentButtonGradient}>
             <Zap size={20} color="#fff" />
             <Text style={styles.paymentButtonText}>
               Thanh toán {completion?.actualPrice.toLocaleString()}₫ qua Momo
@@ -273,16 +324,16 @@ export default function BuyerOrderCompleteScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Momo Payment Modal */}
       {completion && (
         <MomoPaymentModal
           visible={showMomoModal}
-          orderId={(orderId as string) || completion?.orderId || ""}
-          amount={Number(actualPrice) || completion?.actualPrice || 0}
+          orderId={completion.orderId}
+          amount={completion.actualPrice}
           buyerName={buyerName}
           buyerPhone={buyerPhone}
           onSuccess={handlePaymentSuccess}
           onCancel={() => setShowMomoModal(false)}
+          onError={handlePaymentError}
         />
       )}
     </View>
@@ -296,35 +347,125 @@ const styles = StyleSheet.create({
   },
   centerContainer: {
     flex: 1,
+    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  stateCard: {
+    padding: 24,
+    alignItems: 'center',
     gap: 12,
   },
-  loadingText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 8,
+  stateTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: 12,
+    textAlign: 'center',
   },
-  emptyText: {
-    fontSize: 14,
+  stateSubtitle: {
+    fontSize: 13,
     color: Colors.textSecondary,
     textAlign: 'center',
-    paddingHorizontal: 32,
-  },
-  retryButton: {
-    marginTop: 8,
     paddingHorizontal: 24,
-    paddingVertical: 10,
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-  },
-  retryText: {
-    color: Colors.white,
-    fontWeight: '700',
-    fontSize: 14,
+    lineHeight: 18,
   },
   content: {
     flex: 1,
+  },
+  centerContent: {
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingHorizontal: 16,
+  },
+  successIconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#2ecc71',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    elevation: 4,
+    shadowColor: '#2ecc71',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  failedIconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    elevation: 4,
+    shadowColor: Colors.accent,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  mainTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subTitleText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    lineHeight: 20,
+    marginBottom: 32,
+  },
+  receiptCard: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 24,
+  },
+  receiptHeader: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: 14,
+  },
+  successActionBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+  },
+  flexButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  backBtn: {
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  retryActionBtn: {
+    backgroundColor: Colors.accent,
   },
   successSection: {
     paddingHorizontal: 16,
@@ -352,48 +493,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  qrSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    display: 'none', // Remove QR section
-  },
-  timerSection: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    display: 'none', // Remove timer section
-  },
-  timerBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 14,
-    padding: 14,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
-  },
-  timerExpired: {
-    backgroundColor: '#FFEBEE',
-    borderLeftColor: Colors.accent,
-  },
-  timerContent: {
-    flex: 1,
-  },
-  timerLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  timerValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.primary,
-    marginTop: 2,
-    fontFamily: 'monospace',
-  },
-  timerValueExpired: {
-    color: Colors.accent,
-  },
   infoSection: {
     paddingHorizontal: 16,
     marginBottom: 16,
@@ -418,36 +517,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 4,
     lineHeight: 16,
-  },
-  statusSection: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    display: 'none', // Remove status section
-  },
-  statusCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  statusContent: {
-    flex: 1,
-  },
-  statusLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.sandDark,
-  },
-  statusDescription: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
   },
   summarySection: {
     paddingHorizontal: 16,
@@ -532,41 +601,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 2,
   },
-  helpSection: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  helpTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  helpButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    alignItems: 'center',
-  },
-  helpButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
   bottomButtonContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     backgroundColor: Colors.white,
-  },
-  bottomButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
   },
   bottomButtonText: {
     fontSize: 15,

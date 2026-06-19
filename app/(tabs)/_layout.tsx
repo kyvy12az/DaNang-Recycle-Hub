@@ -35,7 +35,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="ranking"
+        name="leaderboard"
         options={{
           title: 'Xếp hạng',
           tabBarIcon: ({ color, size }) => (

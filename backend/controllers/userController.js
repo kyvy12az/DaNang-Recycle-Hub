@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const Listing = require("../models/Listing");
 const jwt = require("jsonwebtoken");
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -44,6 +45,12 @@ exports.updateAvatarUrl = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "Không tìm thấy tài khoản" });
     }
+
+    // Cập nhật avatar trong các bài đăng của người dùng (Listing)
+    await Listing.updateMany(
+      { sellerId: userId },
+      { $set: { sellerAvatar: avatarUrl } }
+    );
 
     return res.status(200).json({
       message: "Cập nhật avatar thành công",

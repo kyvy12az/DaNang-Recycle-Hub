@@ -3,17 +3,19 @@ const router = express.Router();
 
 const userController = require("../controllers/userController");
 const authController = require("../controllers/authController"); 
+const notificationController = require("../controllers/notificationController");
+
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
 
-// route để cập nhật URL avatar của người dùng, yêu cầu xác thực bằng JWT
+// Route để cập nhật URL avatar của người dùng, yêu cầu xác thực bằng JWT
 router.put(
   "/avatar",
   userController.verifyToken,
   userController.updateAvatarUrl
 );
 
-
+// Cập nhật trạng thái Online / Offline
 router.put('/status', authController.authMiddleware, async (req, res) => {
   try {
     const { isOnline, lastSeen } = req.body;
@@ -22,8 +24,9 @@ router.put('/status', authController.authMiddleware, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
-  });
+});
 
+// Lấy lịch sử giao dịch Điểm xanh / Ví tiền
 router.get('/transactions', authController.authMiddleware, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200);
@@ -50,7 +53,8 @@ router.get('/transactions', authController.authMiddleware, async (req, res) => {
   }
 });
 
-  router.get('/:userId/phone', authController.authMiddleware, async (req, res) => {
+// Lấy số điện thoại và tên của User cụ thể
+router.get('/:userId/phone', authController.authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId).select('phone name');
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -59,5 +63,9 @@ router.get('/transactions', authController.authMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+router.get("/notifications", authController.authMiddleware, notificationController.getUserNotifications);
+router.put("/notifications/:id/read", authController.authMiddleware, notificationController.markAsRead);
+router.delete("/notifications/clear", authController.authMiddleware, notificationController.clearAllNotifications);
 
 module.exports = router;

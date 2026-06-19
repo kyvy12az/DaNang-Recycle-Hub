@@ -2,8 +2,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, Animated, Dimensions, Image, ActivityIndicator, StatusBar, Alert } from "react-native";
+import { View, Text, StyleSheet, Animated, Dimensions, Image, ActivityIndicator, StatusBar, Alert, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import * as Notifications from 'expo-notifications';
 import Colors from "@/constants/colors";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SocketProvider } from "@/contexts/SocketContext";
@@ -42,6 +43,36 @@ void SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+async function registerForPushNotificationsAsync() {
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
+
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+  if (finalStatus !== 'granted') {
+    console.log('Failed to get push token for push notification!');
+    return;
+  }
+}
+
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
@@ -66,30 +97,48 @@ function RootLayoutNav() {
   const socket = useSocket();
 
   useEffect(() => {
+    registerForPushNotificationsAsync();
+
+    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data?.url) {
+        router.push(data.url as any);
+      }
+    });
+
+    return () => {
+      if (responseListener && responseListener.remove) {
+        responseListener.remove();
+      }
+    };
+  }, [router]);
+
+  useEffect(() => {
     if (!socket) return;
 
-    const handleOrderNotification = (notification: any) => {
-      Alert.alert(
-        'Có người đã nhận đơn',
-        notification.message || `${notification.buyerName || 'Người mua'} đã nhận đơn rác của bạn.`,
-        [
-          { text: 'Để sau', style: 'cancel' },
-          {
-            text: 'Theo dõi',
-            onPress: () => {
-              router.push({
-                pathname: '/seller/order-tracking' as any,
-                params: { orderId: notification.orderId },
-              });
-            },
-          },
-        ]
-      );
+    const handleAdminNotification = async (notification: any) => {
+      let targetUrl = '/profile/notifications';
+      if (notification.type === 'order_created' && notification.listingId) {
+        targetUrl = `/buyer-detail?id=${notification.listingId}`;
+      } else if (notification.type === 'order_accepted' && notification.orderId) {
+        targetUrl = `/buyer-order-tracking?orderId=${notification.orderId}&listingId=${notification.listingId}`;
+      }
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: notification.title || "Thông báo mới",
+          body: notification.message,
+          data: { url: targetUrl },
+          sound: true,
+        },
+        trigger: null, // show immediately
+      });
     };
 
-    socket.on('order:notification', handleOrderNotification);
+    socket.on('notification:new', handleAdminNotification);
+
     return () => {
-      socket.off('order:notification', handleOrderNotification);
+      socket.off('notification:new', handleAdminNotification);
     };
   }, [router, socket]);
 

@@ -1,83 +1,83 @@
 const mongoose = require("mongoose");
 
 const wasteItemSchema = new mongoose.Schema({
-  wasteTypeId: { type: String, required: true },
-  wasteTypeName: { type: String, required: true },
-  wasteTypeCategory: { type: String },
-  wasteTypeColor: { type: String },
-  pricePerKg: { type: Number, required: true },
-  quantity: { type: Number, required: true, min: 0 },
-  estimatedPrice: { type: Number, required: true },
+    wasteTypeId: { type: String, required: true },
+    wasteTypeName: { type: String, required: true },
+    wasteTypeCategory: { type: String },
+    wasteTypeColor: { type: String },
+    pricePerKg: { type: Number, required: true },
+    quantity: { type: Number, required: true, min: 0 },
+    estimatedPrice: { type: Number, required: true },
 });
 
 const listingSchema = new mongoose.Schema(
-  {
-    sellerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-    },
+    {
+        sellerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+        },
 
-    sellerName: { 
-        type: String, 
-        required: true 
-    },
+        sellerName: {
+            type: String,
+            required: true
+        },
 
-    sellerAvatar: { 
-        type: String, 
-        default: null 
-    },
+        sellerAvatar: {
+            type: String,
+            default: null
+        },
 
-    items: [wasteItemSchema],
+        items: [wasteItemSchema],
 
-    totalPrice: { 
-        type: Number, 
-        required: true, 
-        min: 0 
-    },
+        totalPrice: {
+            type: Number,
+            required: true,
+            min: 0
+        },
 
-    totalWeight: { 
-        type: Number, 
-        required: true, 
-        min: 0 
-    },
-    greenPoints: { 
-        type: Number, 
-        default: 0 
-    },
+        totalWeight: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        greenPoints: {
+            type: Number,
+            default: 0
+        },
 
-    address: { 
-        type: String, 
-        required: true 
-    },
+        address: {
+            type: String,
+            required: true
+        },
 
-    district: { 
-        type: String, 
-        default: "" 
-    },
+        district: {
+            type: String,
+            default: ""
+        },
 
-    note: { 
-        type: String, 
-        default: "" 
-    },
+        note: {
+            type: String,
+            default: ""
+        },
 
-    pickupTime: { 
-        type: String, 
-        required: true 
-    },
+        pickupTime: {
+            type: String,
+            required: true
+        },
 
-    imageUrl: { 
-        type: String, 
-        default: null 
-    },
+        imageUrl: {
+            type: String,
+            default: null
+        },
 
-    status: {
-      type: String,
-      enum: ["available", "pending", "completed", "cancelled"],
-      default: "available",
+        status: {
+            type: String,
+            enum: ["available", "approved", "pending_confirmation", "pending", "completed", "rejected", "cancelled"],
+            default: "available",
+        },
     },
-  },
-  { timestamps: true }
+    { timestamps: true }
 );
 
 module.exports = mongoose.model("Listing", listingSchema);

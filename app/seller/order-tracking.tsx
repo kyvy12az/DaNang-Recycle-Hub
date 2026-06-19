@@ -16,7 +16,7 @@ import { WebView } from 'react-native-webview';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BackButton from '@/components/BackButton';
-import { Colors } from '@/constants/colors';
+import Colors from '@/constants/colors';
 import { useSocket as useAppSocket } from '@/contexts/SocketContext';
 import { Order } from '@/types';
 
@@ -42,6 +42,16 @@ const statusLabel: Record<string, string> = {
   measured: 'Đã cân rác',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
+};
+
+// Cấu hình màu sắc trạng thái huy hiệu (Badge)
+const statusColors: Record<string, { bg: string; text: string }> = {
+  accepted: { bg: '#E3F2FD', text: '#1E88E5' },
+  arriving: { bg: '#FFF3E0', text: '#FB8C00' },
+  arrived: { bg: '#E8F5E9', text: '#43A047' },
+  measured: { bg: '#E0F7FA', text: '#00ACC1' },
+  completed: { bg: '#E8F5E9', text: '#2E7D32' },
+  cancelled: { bg: '#FFEBEE', text: '#C62828' },
 };
 
 const buildGoongMapHtml = (initialLocation?: LocationPoint) => {
@@ -189,12 +199,12 @@ const normalizeOrder = (rawOrder: any): TrackingOrder => {
   };
 };
 
-const formatMoney = (value?: number | null) => `${(value || 0).toLocaleString('vi-VN')} d`;
+const formatMoney = (value?: number | null) => `${(value || 0).toLocaleString('vi-VN')} đ`;
 
 const formatLastSeen = (timestamp?: string) => {
   if (!timestamp) return 'Chưa có GPS';
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000));
-  if (seconds < 10) return 'Vừa cập nhật';
+  if (seconds < 10) return 'Vừa xong';
   if (seconds < 60) return `${seconds}s trước`;
   return `${Math.floor(seconds / 60)} phút trước`;
 };
@@ -291,6 +301,15 @@ export default function SellerOrderTrackingScreen() {
 
     const handleStatusUpdate = (data: any) => {
       if (String(data.orderId) !== String(orderId)) return;
+      
+      if (data.status === 'completed') {
+        Alert.alert(
+          'Đơn hàng hoàn thành',
+          'Đơn thu gom rác đã hoàn tất và thanh toán thành công.',
+          [{ text: 'Về trang chủ', onPress: () => router.replace('/(tabs)' as any) }]
+        );
+      }
+
       setOrder((prev) => (
         prev
           ? {
@@ -325,7 +344,7 @@ export default function SellerOrderTrackingScreen() {
 
   const handleCall = () => {
     if (!order?.buyerPhone) {
-      Alert.alert('Lỗi', 'Không có số diện thoại của người mua.');
+      Alert.alert('Lỗi', 'Không có số điện thoại của người mua.');
       return;
     }
     Linking.openURL(`tel:${order.buyerPhone}`);
@@ -337,13 +356,16 @@ export default function SellerOrderTrackingScreen() {
       return;
     }
 
+    const receiverIdStr = typeof order.buyerId === 'object' ? (order.buyerId as any)._id || (order.buyerId as any).id : order.buyerId;
+    const listingIdStr = typeof order.listingId === 'object' ? (order.listingId as any)._id || (order.listingId as any).id : order.listingId;
+
     router.push({
       pathname: '/chat' as any,
       params: {
         name: order.buyerName || 'Người mua',
         otherAvatar: order.buyerAvatar || '',
-        receiverId: order.buyerId,
-        listingId: order.listingId,
+        receiverId: receiverIdStr,
+        listingId: listingIdStr,
       },
     });
   };
@@ -362,18 +384,27 @@ export default function SellerOrderTrackingScreen() {
     );
   }
 
+  const currentStatusStyle = statusColors[order.status] || { bg: '#F5F5F5', text: '#616161' };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <BackButton color={Colors.primary} size={24} />
         <View style={styles.headerTextBlock}>
           <Text style={styles.headerTitle}>Theo dõi đơn hàng</Text>
-          <Text style={styles.headerSubtitle}>GPS realtime của người mua</Text>
+          <Text style={styles.headerSubtitle}>Vị trí trực tuyến của Người thu gom</Text>
         </View>
-        <View style={[styles.connectionDot, realtimeConnected ? styles.connectionOnline : styles.connectionOffline]} />
+        <View style={styles.statusIndicatorWrapper}>
+          <View style={[styles.connectionDot, realtimeConnected ? styles.connectionOnline : styles.connectionOffline]} />
+          <Text style={[styles.connectionText, { color: realtimeConnected ? '#2e7d32' : '#c62828' }]}>
+            {realtimeConnected ? 'Realtime' : 'Mất kết nối'}
+          </Text>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
+        {/* KHU VỰC BẢN ĐỒ TIÊN TIẾN */}
         <View style={styles.mapCard}>
           <WebView
             ref={webViewRef}
@@ -392,8 +423,8 @@ export default function SellerOrderTrackingScreen() {
           />
           {!latestLocation && (
             <View style={styles.mapEmptyOverlay}>
-              <MaterialCommunityIcons name="map-marker-path" size={42} color={Colors.textLight} />
-              <Text style={styles.mapEmptyText}>Đang chờ GPS từ người mua</Text>
+              <MaterialCommunityIcons name="map-marker-radius" size={48} color={Colors.primary} />
+              <Text style={styles.mapEmptyText}>Đang chờ tín hiệu GPS của người mua...</Text>
             </View>
           )}
           <View style={styles.mapControls}>
@@ -403,62 +434,89 @@ export default function SellerOrderTrackingScreen() {
             <TouchableOpacity style={styles.mapButton} onPress={() => webViewRef.current?.injectJavaScript('window.__trackingMap.zoomOut(); true;')}>
               <Ionicons name="remove" size={20} color={Colors.text} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mapButton} onPress={focusBuyer}>
-              <Ionicons name="locate" size={20} color={Colors.primary} />
+            <TouchableOpacity style={[styles.mapButton, styles.locateBtn]} onPress={focusBuyer}>
+              <Ionicons name="locate" size={20} color={Colors.white} />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.statusStrip}>
-          <View>
-            <Text style={styles.statusLabel}>Trạng thái</Text>
-            <Text style={styles.statusValue}>{statusLabel[order.status] || order.status}</Text>
+        {/* THẺ GRID SỐ LIỆU THỜI GIAN THỰC */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statBox}>
+            <MaterialCommunityIcons name="list-status" size={20} color={Colors.primary} />
+            <Text style={styles.statLabel}>Trạng thái</Text>
+            <View style={[styles.statusBadge, { backgroundColor: currentStatusStyle.bg }]}>
+              <Text style={[styles.statusBadgeText, { color: currentStatusStyle.text }]}>
+                {statusLabel[order.status] || order.status}
+              </Text>
+            </View>
           </View>
-          <View style={styles.statusDivider} />
-          <View>
-            <Text style={styles.statusLabel}>Cập nhật</Text>
-            <Text style={styles.statusValue}>{formatLastSeen(latestLocation?.timestamp)}</Text>
+          <View style={styles.statBox}>
+            <MaterialCommunityIcons name="clock-outline" size={20} color="#ff9800" />
+            <Text style={styles.statLabel}>Định vị</Text>
+            <Text style={styles.statValue}>{formatLastSeen(latestLocation?.timestamp)}</Text>
           </View>
-          <View style={styles.statusDivider} />
-          <View>
-            <Text style={styles.statusLabel}>Lộ trình</Text>
-            <Text style={styles.statusValue}>{routeDistance.toFixed(2)} km</Text>
+          <View style={styles.statBox}>
+            <MaterialCommunityIcons name="map-marker-distance" size={20} color="#00bcd4" />
+            <Text style={styles.statLabel}>Quãng đường</Text>
+            <Text style={styles.statValue}>{routeDistance.toFixed(2)} km</Text>
           </View>
         </View>
 
+        {/* THÔNG TIN NGƯỜI THU GOM / NGƯỜI MUA */}
         <View style={styles.card}>
           <View style={styles.buyerRow}>
             <Image source={{ uri: order.buyerAvatar || 'https://via.placeholder.com/80' }} style={styles.avatar} />
             <View style={styles.buyerInfo}>
-              <Text style={styles.buyerName}>{order.buyerName || 'Người mua'}</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.buyerName}>{order.buyerName || 'Người mua'}</Text>
+                <View style={styles.roleBadge}>
+                  <Text style={styles.roleBadgeText}>Collector</Text>
+                </View>
+              </View>
               <Text style={styles.buyerMeta}>{order.buyerPhone || 'Chưa có số điện thoại'}</Text>
             </View>
           </View>
+          
           <View style={styles.actionRow}>
-            <TouchableOpacity style={[styles.actionButton, styles.callButton]} onPress={handleCall}>
-              <Ionicons name="call" size={18} color={Colors.accent} />
-              <Text style={[styles.actionText, { color: Colors.accent }]}>Gọi điện</Text>
+            <TouchableOpacity style={[styles.actionButton, styles.callButton]} onPress={handleCall} activeOpacity={0.8}>
+              <Ionicons name="call" size={18} color="#1565C0" />
+              <Text style={[styles.actionText, { color: '#1565C0' }]}>Gọi điện thoại</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, styles.chatButton]} onPress={handleChat}>
-              <Ionicons name="chatbubble" size={18} color={Colors.primary} />
-              <Text style={[styles.actionText, { color: Colors.primary }]}>Nhắn tin</Text>
+            <TouchableOpacity style={[styles.actionButton, styles.chatButton]} onPress={handleChat} activeOpacity={0.8}>
+              <Ionicons name="chatbubble-ellipses" size={18} color={Colors.white} />
+              <Text style={[styles.actionText, { color: Colors.white }]}>Nhắn tin Chat</Text>
             </TouchableOpacity>
           </View>
         </View>
 
+        {/* CHI TIẾT TÓM TẮT ĐƠN HÀNG */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Thông tin đơn</Text>
-          <InfoRow label="Mã đơn" value={order.id || String(orderId || '')} />
+          <View style={styles.sectionHeaderTitleRow}>
+            <MaterialCommunityIcons name="file-document-outline" size={18} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>Thông tin chi tiết đơn hàng</Text>
+          </View>
+          
+          <InfoRow label="Mã số đơn hàng" value={`#${(order.id || String(orderId || '')).slice(-8).toUpperCase()}`} />
           <InfoRow label="Khối lượng ước tính" value={`${order.estimatedWeight || 0} kg`} />
-          <InfoRow label="Giá dự kiến" value={formatMoney(order.estimatedPrice)} />
+          <InfoRow label="Giá trị dự kiến" value={formatMoney(order.estimatedPrice)} />
           {order.actualWeight ? <InfoRow label="Khối lượng thực tế" value={`${order.actualWeight} kg`} highlight /> : null}
-          {order.actualPrice ? <InfoRow label="Giá thực tế" value={formatMoney(order.actualPrice)} highlight /> : null}
+          {order.actualPrice ? <InfoRow label="Số tiền thanh toán" value={formatMoney(order.actualPrice)} highlight /> : null}
         </View>
 
+        {/* ĐỊA CHỈ NHẬN THU GOM */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Địa chỉ thu gom</Text>
-          <Text style={styles.addressText}>{order.listing?.address || 'Chưa có địa chỉ'}</Text>
-          {order.listing?.note ? <Text style={styles.noteText}>{order.listing.note}</Text> : null}
+          <View style={styles.sectionHeaderTitleRow}>
+            <Ionicons name="location-outline" size={18} color="#e74c3c" />
+            <Text style={styles.sectionTitle}>Địa chỉ điểm hẹn thu gom</Text>
+          </View>
+          <Text style={styles.addressText}>{order.listing?.address || 'Chưa có địa chỉ rõ ràng'}</Text>
+          {order.listing?.note ? (
+            <View style={styles.noteWrapper}>
+              <Ionicons name="information-circle-outline" size={16} color={Colors.textSecondary} style={{ marginTop: 1 }} />
+              <Text style={styles.noteText}>{order.listing.note}</Text>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -503,23 +561,29 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: Colors.textSecondary,
     fontSize: 14,
+    fontWeight: '500',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   headerTextBlock: {
     flex: 1,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '700',
     color: Colors.text,
   },
   headerSubtitle: {
@@ -527,28 +591,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
   },
+  statusIndicatorWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
   connectionDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  connectionText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   connectionOnline: {
-    backgroundColor: Colors.success,
+    backgroundColor: '#2e7d32',
   },
   connectionOffline: {
-    backgroundColor: Colors.error,
+    backgroundColor: '#c62828',
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 28,
+    paddingBottom: 32,
   },
   mapCard: {
-    height: 330,
-    borderRadius: 16,
+    height: 280,
+    borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   map: {
     flex: 1,
@@ -557,80 +639,126 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(245,249,245,0.82)',
+    backgroundColor: 'rgba(244, 249, 244, 0.9)',
+    gap: 10,
   },
   mapEmptyText: {
-    marginTop: 8,
-    color: Colors.textSecondary,
-    fontWeight: '700',
+    color: Colors.text,
+    fontWeight: '600',
+    fontSize: 13,
   },
   mapControls: {
     position: 'absolute',
     right: 12,
-    top: 12,
+    bottom: 12,
     gap: 8,
   },
   mapButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  statusStrip: {
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: Colors.primaryDark,
+  locateBtn: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  statsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 14,
+    gap: 10,
   },
-  statusLabel: {
-    color: 'rgba(255,255,255,0.7)',
+  statBox: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+    gap: 4,
+  },
+  statLabel: {
     fontSize: 11,
+    color: Colors.textSecondary,
     fontWeight: '600',
   },
-  statusValue: {
-    color: Colors.white,
+  statValue: {
     fontSize: 13,
-    fontWeight: '800',
-    marginTop: 3,
+    fontWeight: '700',
+    color: Colors.text,
   },
-  statusDivider: {
-    width: 1,
-    height: 34,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   card: {
-    marginTop: 12,
+    marginTop: 14,
     padding: 16,
     borderRadius: 14,
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
   },
   buyerRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: Colors.border,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1.5,
+    borderColor: Colors.border,
   },
   buyerInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 14,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   buyerName: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
     color: Colors.text,
+  },
+  roleBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    color: Colors.primary,
+    fontWeight: '700',
   },
   buyerMeta: {
     marginTop: 4,
@@ -639,8 +767,8 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
+    gap: 12,
+    marginTop: 16,
   },
   actionButton: {
     flex: 1,
@@ -650,54 +778,76 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   callButton: {
     backgroundColor: '#E3F2FD',
+    borderWidth: 1,
+    borderColor: '#BBDEFB',
   },
   chatButton: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: Colors.primary,
   },
   actionText: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
+  },
+  sectionHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: Colors.text,
-    marginBottom: 10,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
   infoLabel: {
     color: Colors.textSecondary,
     fontSize: 13,
-    flex: 1,
+    fontWeight: '500',
   },
   infoValue: {
     color: Colors.text,
     fontSize: 13,
-    fontWeight: '700',
-    flex: 1,
-    textAlign: 'right',
+    fontWeight: '600',
   },
   infoValueHighlight: {
     color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 14,
   },
   addressText: {
     color: Colors.text,
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 20,
+    fontWeight: '500',
+  },
+  noteWrapper: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 10,
+    backgroundColor: '#fafafa',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   noteText: {
-    marginTop: 10,
     color: Colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 18,
+    flex: 1,
   },
 });

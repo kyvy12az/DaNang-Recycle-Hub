@@ -82,7 +82,7 @@ export default function BuyerListingsScreen() {
       setError(null);
       const response = await axios.get(`${API_BASE_URL}/api/listings`, {
         headers: { 'bypass-tunnel-reminder': 'true' },
-        params: { status: 'available', limit: 50 },
+        params: { status: 'approved,pending_confirmation', limit: 50 },
       });
       const mapped = (response.data.listings || []).map(mapListingFromAPI);
       setListings(mapped);

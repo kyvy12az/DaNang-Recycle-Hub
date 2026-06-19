@@ -272,17 +272,27 @@ export default function SellerUploadScreen() {
   }, []);
 
   const handleOpenMap = async () => {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Cần quyền vị trí', 'Vui lòng cấp quyền vị trí để chọn địa chỉ thu gom.');
-      return;
-    }
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Cần quyền vị trí', 'Vui lòng cấp quyền vị trí để chọn địa chỉ thu gom.');
+        return;
+      }
 
-    setShowMapModal(true);
-    let location = await Location.getCurrentPositionAsync({});
-    const coords = { lat: location.coords.latitude, lng: location.coords.longitude };
-    setUserCoords(coords);
-    fetchNearbyPoints(coords.lat, coords.lng);
+      setShowMapModal(true);
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        Alert.alert('Thông báo', 'Vui lòng bật dịch vụ vị trí (GPS) để tìm trạm gần nhất.');
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      const coords = { lat: location.coords.latitude, lng: location.coords.longitude };
+      setUserCoords(coords);
+      fetchNearbyPoints(coords.lat, coords.lng);
+    } catch (error) {
+      console.warn("Lỗi lấy vị trí:", error);
+    }
   };
 
   const fetchNearbyPoints = async (lat: number, lng: number) => {

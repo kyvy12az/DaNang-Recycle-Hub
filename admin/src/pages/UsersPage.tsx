@@ -1,90 +1,126 @@
-import { useState } from "react";
-import { mockUsers, User } from "@/data/mockData";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+export interface DBUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string | null;
+  phone: string | null;
+  address: string | null;
+  greenPoints: number;
+  walletBalance: number;
+  totalWeight: number;
+  totalTransactions: number;
+  isOnline: boolean;
+  lastSeen: string | null;
+  isLocked: boolean; 
+}
 
 export default function UsersPage() {
-  const [users, setUsers] = useState(mockUsers);
-  const [selected, setSelected] = useState<User | null>(null);
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const [users, setUsers] = useState<DBUser[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const navigate = useNavigate();
 
-  const toggleLock = (id: string) => {
-    setUsers(us => us.map(u => u.id === id ? { ...u, status: u.status === 'active' ? 'locked' as const : 'active' as const } : u));
-    if (selected?.id === id) setSelected(s => s ? { ...s, status: s.status === 'active' ? 'locked' : 'active' } : null);
-  };
+  // Gọi API lấy dữ liệu khi khởi chạy trang
+  useEffect(() => {
+    fetchUsersFromServer();
+  }, []);
 
-  const changeRole = (id: string, role: User['role']) => {
-    setUsers(us => us.map(u => u.id === id ? { ...u, role } : u));
-    if (selected?.id === id) setSelected(s => s ? { ...s, role } : null);
+  const fetchUsersFromServer = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/api/admin/management/users`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("admin_auth_token")}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setUsers(data.users);
+      }
+    } catch (error) {
+      console.error("Lỗi khi tải danh sách người dùng từ server:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold">Quản lý người dùng</h1>
-        <p className="text-muted-foreground text-sm mt-1">{users.length} người dùng trong hệ thống</p>
+        <h1 className="text-2xl font-bold tracking-tight">Quản lý người dùng</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          {loading ? "Đang xử lý dữ liệu..." : `Hệ thống đang có tất cả ${users.length} tài khoản thành viên`}
+        </p>
       </div>
 
-      <DataTable<User>
+      <DataTable<DBUser>
         data={users}
-        searchPlaceholder="Tìm theo tên, email, SĐT..."
+        searchPlaceholder="Tìm theo tên hoặc email thành viên..."
         searchKey="name"
         filterOptions={[
-          { key: "role", label: "Vai trò", options: [{ value: "user", label: "User" }, { value: "seller", label: "Seller" }, { value: "buyer", label: "Buyer" }, { value: "admin", label: "Admin" }] },
-          { key: "status", label: "Trạng thái", options: [{ value: "active", label: "Hoạt động" }, { value: "locked", label: "Đã khóa" }] },
+          { 
+            key: "isLocked", 
+            label: "Trạng thái", 
+            options: [
+              { value: "false", label: "Đang hoạt động" }, 
+              { value: "true", label: "Đang bị khóa" }
+            ] 
+          },
         ]}
-        onRowClick={setSelected}
+        // Khi bấm vào dòng, chuyển hướng sang trang chi tiết dựa trên ID gốc
+        onRowClick={(user) => navigate(`/users/${user.id}`)}
         columns={[
-          { key: "id", label: "ID" },
-          { key: "name", label: "Tên", render: (u) => <div className="flex items-center gap-2"><img src={u.avatar} className="h-7 w-7 rounded-full" alt="" /><span className="font-medium">{u.name}</span></div> },
-          { key: "email", label: "Email" },
-          { key: "role", label: "Vai trò", render: (u) => <Badge variant="secondary" className="capitalize">{u.role}</Badge> },
-          { key: "greenPoints", label: "Điểm xanh", render: (u) => <span className="text-primary font-medium">{u.greenPoints}</span> },
-          { key: "totalKg", label: "Tổng kg", render: (u) => `${u.totalKg} kg` },
-          { key: "status", label: "Trạng thái", render: (u) => <StatusBadge status={u.status} /> },
-        ]}
-      />
-
-      <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Chi tiết người dùng</DialogTitle></DialogHeader>
-          {selected && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <img src={selected.avatar} className="h-14 w-14 rounded-full" alt="" />
-                <div>
-                  <h3 className="font-bold text-lg">{selected.name}</h3>
-                  <p className="text-sm text-muted-foreground">{selected.email}</p>
-                  <p className="text-sm text-muted-foreground">{selected.phone}</p>
+          { 
+            key: "id", 
+            label: "Mã số", 
+            // Giữ nguyên ID gốc để map dữ liệu nhưng xử lý cắt chuỗi hiển thị 6 ký tự cuối
+            render: (u) => (
+              <span className="font-mono text-xs font-semibold bg-slate-100 px-2 py-1 rounded text-slate-700 shadow-sm">
+                #{u.id.substring(u.id.length - 6).toUpperCase()}
+              </span>
+            ) 
+          },
+          { 
+            key: "name", 
+            label: "Thành viên", 
+            render: (u) => (
+              <div className="flex items-center gap-3">
+                <img 
+                  src={u.avatar || "/default-avatar.png"} 
+                  className="h-8 w-8 rounded-full border bg-slate-100 object-cover" 
+                  alt="" 
+                />
+                <div className="flex flex-col">
+                  <span className="font-semibold text-slate-900 leading-tight">{u.name}</span>
+                  {u.isOnline && <span className="text-[10px] text-emerald-500 font-bold mt-0.5 animate-pulse">Online</span>}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-muted rounded-lg p-3"><span className="text-muted-foreground">Điểm xanh</span><p className="font-bold text-primary text-lg">{selected.greenPoints}</p></div>
-                <div className="bg-muted rounded-lg p-3"><span className="text-muted-foreground">Tổng kg</span><p className="font-bold text-lg">{selected.totalKg} kg</p></div>
-                <div className="bg-muted rounded-lg p-3"><span className="text-muted-foreground">Giao dịch</span><p className="font-bold text-lg">{selected.totalTransactions}</p></div>
-                <div className="bg-muted rounded-lg p-3"><span className="text-muted-foreground">Số dư ví</span><p className="font-bold text-lg">{new Intl.NumberFormat("vi-VN").format(selected.walletBalance)}đ</p></div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm">Vai trò:</span>
-                <Select value={selected.role} onValueChange={(v) => changeRole(selected.id, v as User['role'])}>
-                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {['user', 'seller', 'buyer', 'admin'].map(r => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex gap-2">
-                <Button variant={selected.status === 'active' ? 'destructive' : 'default'} onClick={() => toggleLock(selected.id)}>
-                  {selected.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            ) 
+          },
+          { key: "email", label: "Địa chỉ Email" },
+          { key: "phone", label: "Số điện thoại", render: (u) => u.phone || "---" },
+          { 
+            key: "greenPoints", 
+            label: "Điểm tích lũy", 
+            render: (u) => <span className="text-emerald-600 font-bold">{u.greenPoints} xu</span> 
+          },
+          { 
+            key: "totalWeight", 
+            label: "Khối lượng thu gom", 
+            render: (u) => <span className="font-medium text-slate-700">{u.totalWeight} kg</span> 
+          },
+          { 
+            key: "isLocked", 
+            label: "Trạng thái", 
+            render: (u) => <StatusBadge status={u.isLocked ? "locked" : "active"} />
+          },
+        ]}
+      />
     </div>
   );
 }

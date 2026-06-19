@@ -64,10 +64,32 @@ class MomoPaymentService {
           const result = await WebBrowser.openBrowserAsync(payUrl);
           console.log('[MomoPayment] WebBrowser result:', result.type);
 
-          // Wait for user to complete payment
-          // Note: In real app, use deep linking to capture callback
-          // For now, we'll assume successful payment after 5 seconds
-          await new Promise((resolve) => setTimeout(resolve, 5000));
+          // Wait for user to complete payment and check status
+          if (requestId) {
+            let isSuccess = false;
+            // Retry a few times in case webhook hasn't processed
+            for (let i = 0; i < 3; i++) {
+              // Wait 2s before each check
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              const statusResult = await this.checkPaymentStatus(requestId);
+              if (statusResult.success && statusResult.status === 'completed') {
+                isSuccess = true;
+                break;
+              }
+            }
+
+            if (!isSuccess) {
+              return {
+                success: false,
+                message: 'Thanh toán thất bại hoặc đã bị hủy',
+              };
+            }
+          } else {
+            return {
+              success: false,
+              message: 'Không thể xác minh trạng thái thanh toán',
+            };
+          }
         } catch (error) {
           console.error('[MomoPayment] Error opening browser:', error);
           return {

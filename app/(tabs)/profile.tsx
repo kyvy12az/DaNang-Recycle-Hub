@@ -33,6 +33,10 @@ import {
   Pencil,
   X,
   Check,
+  Trophy,
+  Medal,
+  Clock,
+  Bell,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import EcoLoader from '@/components/EcoLoader';
@@ -73,10 +77,10 @@ export default function ProfileScreen() {
     phone: user?.phone || 'Chưa cập nhật SĐT',
     joinDate: user?.createdAt
       ? new Date(user.createdAt).toLocaleDateString('vi-VN', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        })
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
       : '',
   };
 
@@ -109,6 +113,7 @@ export default function ProfileScreen() {
 
     fetchRecentTransactions();
   }, [getAuthToken]);
+
   useEffect(() => {
     if (uploadError) {
       Alert.alert('Upload Lỗi', uploadError);
@@ -159,7 +164,7 @@ export default function ProfileScreen() {
   };
 
   if (isLoading) {
-    return <EcoLoader message="Đang tải hồ sơ..." size="large" />;
+    return <EcoLoader message="Đang tải hồ sơ..." />;
   }
 
   const formatPrice = (price: number) => price.toLocaleString('vi-VN') + ' VND';
@@ -206,6 +211,17 @@ export default function ProfileScreen() {
             </View>
             <Text style={styles.joinDate}>Tham gia từ {displayUser.joinDate}</Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => router.push('/profile/notifications' as any)}
+            activeOpacity={0.7}
+          >
+            <Bell size={22} color={Colors.white} strokeWidth={2} />
+            {/* Chấm đỏ thông báo nhỏ xinh */}
+            <View style={styles.notificationBadge} />
+          </TouchableOpacity>
+
         </View>
 
         <View style={styles.statsRow}>
@@ -287,6 +303,28 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <TouchableOpacity
+          style={styles.ecoMenuItem}
+          onPress={() => router.push('/profile/my-listings' as any)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.menuItemLeft}>
+            {/* Vòng tròn Icon đổ màu Mint mềm mại */}
+            <View style={styles.ecoIconWrapper}>
+              <Leaf size={18} color="#4CAF50" fill="#4CAF50" style={{ opacity: 0.9 }} />
+            </View>
+
+            {/* Nhóm chữ bao gồm Tiêu đề & Subtitle định hướng */}
+            <View style={styles.menuItemTextGroup}>
+              <Text style={styles.ecoMenuTitle}>Bài rác của tôi</Text>
+              <Text style={styles.ecoMenuSubtitle}>Quản lý, theo dõi đơn chờ duyệt & đang thu gom</Text>
+            </View>
+          </View>
+
+          {/* Mũi tên chỉ hướng sang phải */}
+          <ChevronRight size={16} color="#94A3B8" strokeWidth={2.5} />
+        </TouchableOpacity>
+
         {/* Rewards Button */}
         <TouchableOpacity
           style={styles.rewardsButton}
@@ -307,6 +345,54 @@ export default function ProfileScreen() {
             <ChevronRight size={20} color="#795548" />
           </LinearGradient>
         </TouchableOpacity>
+
+        {/* Badges Section */}
+        <View style={styles.badgesSection}>
+          <View style={styles.badgesSectionHeader}>
+            <Text style={styles.sectionTitle}>Bộ sưu tập huy hiệu</Text>
+          </View>
+          <View style={styles.badgesGrid}>
+            <View style={styles.badgeItem}>
+              <LinearGradient
+                colors={['#FFD54F', '#F57F17']}
+                style={styles.badgeIcon}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Trophy size={24} color="#fff" strokeWidth={1.8} />
+              </LinearGradient>
+              <Text style={styles.badgeLabel}>Champion Week</Text>
+            </View>
+            <View style={styles.badgeItem}>
+              <LinearGradient
+                colors={['#E0E0E0', '#757575']}
+                style={styles.badgeIcon}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Medal size={24} color="#fff" strokeWidth={1.8} />
+              </LinearGradient>
+              <Text style={styles.badgeLabel}>Runner Up</Text>
+            </View>
+            <View style={styles.badgeItem}>
+              <LinearGradient
+                colors={['#CD7F32', '#A0522D']}
+                style={styles.badgeIcon}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Medal size={24} color="#fff" strokeWidth={1.8} />
+              </LinearGradient>
+              <Text style={styles.badgeLabel}>Third Place</Text>
+            </View>
+            <View style={styles.badgeItem}>
+              <View style={styles.badgeIconEmpty}>
+                <Text style={styles.badgeEmptyText}>+</Text>
+              </View>
+              <Text style={styles.badgeLabel}>Sắp mở</Text>
+            </View>
+          </View>
+        </View>
 
         {/* Personal Info Section */}
         <View style={styles.infoSection}>
@@ -765,6 +851,67 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 2,
   },
+  // Badges section
+  badgesSection: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    marginHorizontal: 0,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E8F5E9',
+    overflow: 'hidden',
+  },
+  badgesSectionHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  badgesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 12,
+  },
+  badgeItem: {
+    width: '50%',
+    alignItems: 'center',
+    paddingBottom: 12,
+  },
+  badgeIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  badgeIconEmpty: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    borderStyle: 'dashed' as const,
+  },
+  badgeEmptyText: {
+    fontSize: 28,
+    fontWeight: '300',
+    color: '#BDBDBD',
+  },
+  badgeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text,
+    textAlign: 'center',
+  },
   logoutButton: {
     marginTop: 24,
     backgroundColor: Colors.white,
@@ -973,5 +1120,93 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700' as const,
     color: Colors.white,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuIconWrapper: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  ecoMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18, 
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 1.5,
+  },
+  ecoIconWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuItemTextGroup: {
+    gap: 2,
+  },
+  ecoMenuTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B', 
+  },
+  ecoMenuSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#94A3B8', 
+  },
+  notificationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 11,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF3B30', 
+    borderWidth: 1.5,
+    borderColor: '#2E7D32', 
   },
 });

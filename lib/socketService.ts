@@ -18,11 +18,25 @@ export interface GPSUpdate {
   timestamp: string;
 }
 
+export interface AdminNotification {
+  type: 'listing_status';
+  listingId: string;
+  status: 'approved' | 'rejected';
+  message: string;
+  timestamp: string;
+}
+
+export interface ListingStatusUpdate {
+  listingId: string;
+  status: 'approved' | 'rejected' | 'pending';
+}
+
 class SocketService {
   private socket: Socket | null = null;
   private listeners: Map<string, Function[]> = new Map();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
+  private currentUserId: string | null = null;
 
   /**
    * Initialize Socket.IO connection
@@ -33,22 +47,63 @@ class SocketService {
       return this.socket;
     }
 
-    // TODO: Replace with actual backend URL from environment
-    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-    
+    this.currentUserId = userId;
+
+    const backendUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.14:5000').replace(/\/$/, '');
+
+    console.log(`[Socket.IO] Đang cố gắng kết nối tới Server: ${backendUrl}`);
+
     this.socket = io(backendUrl, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: this.maxReconnectAttempts,
+      transports: ['polling', 'websocket'],
       auth: {
         userId,
         userRole,
       },
-      transports: ['websocket'],
     });
 
-    this.setupEventListeners();
+    // Thiết lập các cổng lắng nghe hệ thống cơ bản
+    this.socket.on('connect', () => {
+      this.reconnectAttempts = 0;
+      console.log('[Socket.IO] Kết nối thành công! Socket ID:', this.socket?.id);
+      if (this.currentUserId) {
+        this.socket?.emit('register', this.currentUserId);
+      }
+      this.emit('socket:connected', true);
+    });
+
+    this.socket.on('connect_error', (error) => {
+      this.reconnectAttempts++;
+      console.error(`[Socket.IO] Lỗi kết nối (Lần ${this.reconnectAttempts}):`, error.message);
+      this.emit('socket:error', error);
+    });
+
+    this.socket.on('disconnect', (reason) => {
+      console.log('[Socket.IO] Đã ngắt kết nối với lý do:', reason);
+      this.emit('socket:connected', false);
+    });
+
+    // Lắng nghe thông báo Admin duyệt bài viết từ Server
+    this.socket.on('notification:new', (data) => {
+      this.emit('notification:new', data);
+    });
+
+    // Lắng nghe cập nhật trạng thái đơn hàng chung
+    this.socket.on('order:status_updated', (data) => {
+      this.emit('order:status_updated', data);
+    });
+
+    this.socket.on('order:notification', (data) => this.emit('order:notification', data));
+    this.socket.on('gps:update', (data) => this.emit('gps:update', data));
+    this.socket.on('payment:completed', (data) => this.emit('payment:completed', data));
+    this.socket.on('chat:message', (data) => this.emit('chat:message', data));
+    // Seller xác nhận/từ chối -> buyer nhận được realtime
+    this.socket.on('order:seller_confirmed', (data) => this.emit('order:seller_confirmed', data));
+    this.socket.on('order:seller_rejected', (data) => this.emit('order:seller_rejected', data));
+
     return this.socket;
   }
 
@@ -73,6 +128,10 @@ class SocketService {
     this.socket.on('connect', () => {
       console.log('[Socket.IO] Connected');
       this.reconnectAttempts = 0;
+      // In case setupEventListeners is used to re-setup or bind another socket
+      if (this.currentUserId) {
+        this.socket?.emit('register', this.currentUserId);
+      }
       this.emit('socket:connected', true);
     });
 
@@ -119,6 +178,16 @@ class SocketService {
     this.socket.on('chat:message', (data: any) => {
       console.log('[Socket.IO] Chat message received:', data);
       this.emit('chat:message', data);
+    });
+
+    this.socket.on('notification:new', (data: AdminNotification) => {
+      console.log('[Socket.IO] Received new admin notification:', data);
+      this.emit('notification:new', data);
+    });
+
+    this.socket.on('order:status_updated', (data: ListingStatusUpdate) => {
+      console.log('[Socket.IO] Received listing status update:', data);
+      this.emit('order:status_updated', data);
     });
   }
 
@@ -275,7 +344,7 @@ class SocketService {
   /**
    * Emit local event to registered listeners
    */
-  private emit(eventName: string, data: any) {
+  emit(eventName: string, data: any) {
     const callbacks = this.listeners.get(eventName) || [];
     callbacks.forEach((callback) => {
       try {

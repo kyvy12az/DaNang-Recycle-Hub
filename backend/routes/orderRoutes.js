@@ -21,6 +21,12 @@ router.get("/seller/orders", authController.authMiddleware, orderController.getS
 // Accept order
 router.post("/:id/accept", authController.authMiddleware, orderController.acceptOrder);
 
+// Seller confirms buyer's order (realtime navigate buyer to tracking)
+router.put("/:id/seller-confirm", authController.authMiddleware, orderController.sellerConfirmOrder);
+
+// Seller rejects buyer's order
+router.put("/:id/seller-reject", authController.authMiddleware, orderController.sellerRejectOrder);
+
 // Add GPS coordinate
 router.post("/:id/gps", orderController.addGPSCoordinate);
 

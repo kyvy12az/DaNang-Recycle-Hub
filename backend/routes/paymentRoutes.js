@@ -56,7 +56,7 @@ router.get('/momo/redirect', (req, res) => {
 
   const EXPO_SERVER_IP = process.env.EXPO_SERVER_IP || "192.168.1.6:8081";
   
-  const appDeepLink = `exp://${EXPO_SERVER_IP}/--/payment-result?resultCode=${resultCode}&orderId=${orderId}&amount=${amount || 0}`;
+  const appDeepLink = `exp://${EXPO_SERVER_IP}/--/buyer-order-complete?resultCode=${resultCode}&orderId=${orderId}&amount=${amount || 0}&transId=${transId || ''}`;
 
   res.send(`
     <!DOCTYPE html>

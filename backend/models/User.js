@@ -75,6 +75,35 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    badges: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Badge",
+      },
+    ],
+    leaderboardStats: {
+      weeklyRank: {
+        type: Number,
+        default: null,
+      },
+      monthlyRank: {
+        type: Number,
+        default: null,
+      },
+      yearlyRank: {
+        type: Number,
+        default: null,
+      },
+      totalBadges: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      isLocked: {
+        type: Boolean,
+        default: false,
+      }
+    },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

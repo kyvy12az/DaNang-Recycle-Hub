@@ -15,11 +15,12 @@ import { ChatMessage } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket } from '@/contexts/SocketContext';
 import { supabase } from '@/lib/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import BackButton from '@/components/BackButton';
 
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
 const BUCKET = 'message-images';
 
-// ─── Upload anh/video lên su pa choc ───────────────────────────────────────────────────
 async function uploadToSupabase(uri: string, mediaType: 'image' | 'video'): Promise<string> {
   const ext = uri.split('.').pop() ?? (mediaType === 'video' ? 'mp4' : 'jpg');
   const fileName = `${Date.now()}.${ext}`;
@@ -140,6 +141,7 @@ export default function ChatScreen() {
   const { name, otherAvatar, receiverId, listingId } = useLocalSearchParams();
   const { user, getAuthToken } = useAuth();
   const socket = useSocket();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [onlineStatus, setOnlineStatus] = useState<string>('');
@@ -291,73 +293,72 @@ export default function ChatScreen() {
 
   // ── Render bubble ──
   const renderMessage = ({ item }: { item: ChatMessage }) => (
-  <View style={[styles.messageBubbleContainer, item.isMe && styles.myMessageContainer]}>
-    {!item.isMe && (
-      <View style={styles.avatarContainer}>
-        <Image source={{ uri: (otherAvatar as string) || 'https://i.pravatar.cc/150?img=12' }} style={styles.avatar} contentFit="cover" />
-      </View>
-    )}
-    <View style={{ alignItems: item.isMe ? 'flex-end' : 'flex-start', maxWidth: '75%', flexShrink: 1 }}>
-      <View style={[
-        styles.messageBubble,
-        item.isMe ? styles.myBubble : styles.otherBubble,
-        (item.mediaType === 'image' || item.mediaType === 'video') && styles.mediaBubble,
-        (item.mediaType === 'image' || item.mediaType === 'video') && item.isMe && styles.myMediaBubble,
-        (item.mediaType === 'image' || item.mediaType === 'video') && !item.isMe && styles.otherMediaBubble,
-      ]}>
-        {item.mediaType === 'image' && item.mediaUrl && (
-          <Image source={{ uri: item.mediaUrl }} style={styles.mediaImage} contentFit="cover" />
-        )}
-        {item.mediaType === 'video' && item.mediaUrl && (
-          <Video source={{ uri: item.mediaUrl }} style={styles.mediaVideo} useNativeControls resizeMode={ResizeMode.CONTAIN} />
-        )}
-        {!!item.text && (
-          <Text style={[styles.messageText, item.isMe && styles.myMessageText]}>{item.text}</Text>
-        )}
-        <Text style={[styles.messageTime, item.isMe && styles.myMessageTime]}>{item.timestamp}</Text>
-      </View>
-      {item.isMe && item.id === [...messages].reverse().find(m => m.isMe)?.id && (
-        <Text style={{ fontSize: 11, color: '#4CAF50', marginTop: 2 }}>
-          {item.isRead ? '✓✓ Đã xem' : '✓ Đã gửi'}
-        </Text>
+    <View style={[styles.messageBubbleContainer, item.isMe && styles.myMessageContainer]}>
+      {!item.isMe && (
+        <View style={styles.avatarContainer}>
+          <Image source={{ uri: (otherAvatar as string) || 'https://i.pravatar.cc/150?img=12' }} style={styles.avatar} contentFit="cover" />
+        </View>
       )}
+      <View style={{ alignItems: item.isMe ? 'flex-end' : 'flex-start', maxWidth: '75%', flexShrink: 1 }}>
+        <View style={[
+          styles.messageBubble,
+          item.isMe ? styles.myBubble : styles.otherBubble,
+          (item.mediaType === 'image' || item.mediaType === 'video') && styles.mediaBubble,
+          (item.mediaType === 'image' || item.mediaType === 'video') && item.isMe && styles.myMediaBubble,
+          (item.mediaType === 'image' || item.mediaType === 'video') && !item.isMe && styles.otherMediaBubble,
+        ]}>
+          {item.mediaType === 'image' && item.mediaUrl && (
+            <Image source={{ uri: item.mediaUrl }} style={styles.mediaImage} contentFit="cover" />
+          )}
+          {item.mediaType === 'video' && item.mediaUrl && (
+            <Video source={{ uri: item.mediaUrl }} style={styles.mediaVideo} useNativeControls resizeMode={ResizeMode.CONTAIN} />
+          )}
+          {!!item.text && (
+            <Text style={[styles.messageText, item.isMe && styles.myMessageText]}>{item.text}</Text>
+          )}
+          <Text style={[styles.messageTime, item.isMe && styles.myMessageTime]}>{item.timestamp}</Text>
+        </View>
+        {item.isMe && item.id === [...messages].reverse().find(m => m.isMe)?.id && (
+          <Text style={{ fontSize: 11, color: '#4CAF50', marginTop: 2 }}>
+            {item.isRead ? '✓✓ Đã xem' : '✓ Đã gửi'}
+          </Text>
+        )}
+      </View>
     </View>
-  </View>
-);
+  );
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-      <Stack.Screen
-        options={{
-          headerTitle: () => (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: -20 }}>
-              <View style={{ position: 'relative' }}>
-                <View style={{ width: 44, height: 44, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: Colors.primaryLight }}>
-                  <Image source={{ uri: (otherAvatar as string) || 'https://i.pravatar.cc/150?img=12' }} style={{ width: 44, height: 44 }} contentFit="cover" />
-                </View>
-                {onlineStatus === 'Đang hoạt động' && (
-                  <View style={{ position: 'absolute', bottom: 0, right: 0, width: 13, height: 13, borderRadius: 7, backgroundColor: '#4CAF50', borderWidth: 2, borderColor: Colors.white }} />
-                )}
-              </View>
-              <View>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.text }}>{(name as string) || 'Nhắn tin'}</Text>
-                {onlineStatus ? (
-                  <Text style={{ fontSize: 12, color: onlineStatus === 'Đang hoạt động' ? '#4CAF50' : Colors.textSecondary }}>{onlineStatus}</Text>
-                ) : null}
-              </View>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={[styles.customHeader, { paddingTop: insets.top + 8 }]}>
+        <BackButton color={Colors.primaryLight} size={24} />
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginLeft: 10 }}>
+          <View style={{ position: 'relative' }}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, overflow: 'hidden', borderWidth: 2, borderColor: Colors.primaryLight }}>
+              <Image source={{ uri: (otherAvatar as string) || 'https://i.pravatar.cc/150?img=12' }} style={{ width: 44, height: 44 }} contentFit="cover" />
             </View>
-          ),
-          headerRight: () => (
-            <TouchableOpacity style={styles.headerButton} onPress={() => setShowCallSheet(true)} activeOpacity={0.7}>
-              <View style={styles.phoneButtonContainer}>
-                <LinearGradient colors={['#66BB6A', '#4CAF50']} style={styles.phoneButtonGradient}>
-                  <Phone size={20} color={Colors.white} />
-                </LinearGradient>
-              </View>
-            </TouchableOpacity>
-          ),
-        }}
-      />
+            {onlineStatus === 'Đang hoạt động' && (
+              <View style={{ position: 'absolute', bottom: 0, right: 0, width: 13, height: 13, borderRadius: 7, backgroundColor: '#4CAF50', borderWidth: 2, borderColor: Colors.white }} />
+            )}
+          </View>
+          <View>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.text }}>{(name as string) || 'Nhắn tin'}</Text>
+            {onlineStatus ? (
+              <Text style={{ fontSize: 12, color: onlineStatus === 'Đang hoạt động' ? '#4CAF50' : Colors.textSecondary }}>{onlineStatus}</Text>
+            ) : null}
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.headerButton} onPress={() => setShowCallSheet(true)} activeOpacity={0.7}>
+          {/* <View style={styles.phoneButtonContainer}>
+            <LinearGradient colors={['#66BB6A', '#4CAF50']} style={styles.phoneButtonGradient}>
+              <Phone size={20} color={Colors.white} />
+            </LinearGradient>
+          </View> */}
+          <Phone size={20} color={Colors.primaryLight} />
+        </TouchableOpacity>
+      </View>
 
       <FlatList
         ref={flatListRef}
@@ -438,9 +439,9 @@ const callStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  
+  customHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', zIndex: 10 },
   container: { flex: 1, backgroundColor: '#F0F4F0' },
-  headerButton: { marginRight: 8 },
+  headerButton: { marginRight: 18 },
   phoneButtonContainer: { borderRadius: 20, overflow: 'hidden', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
   phoneButtonGradient: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   messageBubbleContainer: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'flex-end', gap: 8 },
@@ -464,6 +465,6 @@ const styles = StyleSheet.create({
   myMediaBubble: { backgroundColor: 'transparent', elevation: 0 },
   otherMediaBubble: { backgroundColor: 'transparent', elevation: 0 },
   mediaBubble: { padding: 0, overflow: 'hidden' },
-  mediaImage: { width: 220, height: 220},
+  mediaImage: { width: 220, height: 220 },
   mediaVideo: { width: 200, height: 280 },
 });

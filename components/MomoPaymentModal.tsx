@@ -21,6 +21,7 @@ interface MomoPaymentModalProps {
   buyerPhone: string;
   onSuccess: () => void;
   onCancel: () => void;
+  onError?: (errorMsg: string) => void;
 }
 
 export default function MomoPaymentModal({
@@ -31,6 +32,7 @@ export default function MomoPaymentModal({
   buyerPhone,
   onSuccess,
   onCancel,
+  onError,
 }: MomoPaymentModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<'confirm' | 'processing'>('confirm');
@@ -59,59 +61,34 @@ export default function MomoPaymentModal({
       });
 
       if (result.success) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        
-        Alert.alert(
-          'Thanh toán thành công',
-          'Đơn hàng đã được xác nhận. Điểm xanh đã được cộng vào tài khoản của bạn!',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setIsProcessing(false);
-                onSuccess();
-              },
-            },
-          ]
-        );
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        setIsProcessing(false);
+        onSuccess();
       } else {
-        Alert.alert(
-          'Lỗi thanh toán',
-          result.error || result.message,
-          [
-            {
-              text: 'Thử lại',
-              onPress: () => {
-                setStep('confirm');
-                setIsProcessing(false);
-              },
-            },
-            {
-              text: 'Hủy',
-              onPress: () => {
-                setStep('confirm');
-                setIsProcessing(false);
-                onCancel();
-              },
-            },
-          ]
-        );
+        setIsProcessing(false);
+        if (onError) {
+          onError(result.error || result.message || 'Lỗi không xác định');
+        } else {
+          Alert.alert(
+            'Lỗi thanh toán',
+            result.error || result.message,
+            [
+              { text: 'Thử lại', onPress: () => setStep('confirm') },
+              { text: 'Hủy', onPress: () => { setStep('confirm'); onCancel(); } },
+            ]
+          );
+        }
       }
     } catch (error) {
       console.error('[MomoPayment] Error:', error);
-      Alert.alert(
-        'Lỗi',
-        'Có lỗi xảy ra trong quá trình thanh toán',
-        [
-          {
-            text: 'Thử lại',
-            onPress: () => {
-              setStep('confirm');
-              setIsProcessing(false);
-            },
-          },
-        ]
-      );
+      setIsProcessing(false);
+      if (onError) {
+        onError('Có lỗi xảy ra trong quá trình thanh toán');
+      } else {
+        Alert.alert('Lỗi', 'Có lỗi xảy ra trong quá trình thanh toán', [
+          { text: 'Thử lại', onPress: () => setStep('confirm') },
+        ]);
+      }
     }
   };
 

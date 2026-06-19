@@ -35,10 +35,8 @@ import { useSocket } from '@/hooks/useSocket';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSocket as useAppSocket } from '@/contexts/SocketContext';
 
-// API Base URL - Use EXPO_PUBLIC_API_URL or fallback to localhost:5000
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:5000';
 
-// Timeline status steps
 interface TimelineStep {
   id: string;
   label: string;
@@ -76,65 +74,40 @@ export default function BuyerOrderTrackingScreen() {
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
   const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
 
-  const locationTrackerRef = useRef<NodeJS.Timeout>();
+  const locationTrackerRef = useRef<any>();
   const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
-    // Fetch real data from backend only
     const fetchOrderAndListing = async () => {
       try {
         setIsLoading(true);
-
         let fetchedOrder: Order | null = null;
         let fetchedListing: any = null;
         let hasError = false;
 
-        // Fetch listing data
         if (listingId) {
           try {
-            console.log('[BuyerTracking] Fetching listing:', listingId);
-            const listingResponse = await fetch(
-              `${API_BASE_URL}/api/listings/${listingId}`
-            );
-            
-            if (!listingResponse.ok) {
-              console.error('[BuyerTracking] Listing fetch failed:', listingResponse.status);
-              hasError = true;
-              throw new Error(`Listing fetch failed: ${listingResponse.status}`);
-            }
-
+            const listingResponse = await fetch(`${API_BASE_URL}/api/listings/${listingId}`);
+            if (!listingResponse.ok) throw new Error(`Listing fetch failed: ${listingResponse.status}`);
             const listingData = await listingResponse.json();
             fetchedListing = listingData.listing || listingData;
-            console.log('[BuyerTracking] Listing loaded:', fetchedListing);
           } catch (err) {
             console.error('[BuyerTracking] Error fetching listing:', err);
             hasError = true;
           }
         }
 
-        // Fetch order data
         if (orderId) {
           try {
-            console.log('[BuyerTracking] Fetching order:', orderId);
-            const orderResponse = await fetch(
-              `${API_BASE_URL}/api/orders/${orderId}`
-            );
-
-            if (!orderResponse.ok) {
-              console.error('[BuyerTracking] Order fetch failed:', orderResponse.status);
-              hasError = true;
-              throw new Error(`Order fetch failed: ${orderResponse.status}`);
-            }
-
+            const orderResponse = await fetch(`${API_BASE_URL}/api/orders/${orderId}`);
+            if (!orderResponse.ok) throw new Error(`Order fetch failed: ${orderResponse.status}`);
             const orderData = await orderResponse.json();
             fetchedOrder = orderData.order || orderData;
-            console.log('[BuyerTracking] Order loaded:', fetchedOrder);
 
             if (!fetchedListing && fetchedOrder?.listingId && typeof fetchedOrder.listingId === 'object') {
               fetchedListing = fetchedOrder.listingId;
             }
               
-            // Merge seller info from order into listing
             if (fetchedOrder?.sellerId && fetchedListing) {
               const sellerInfo = fetchedOrder.sellerId;
               fetchedListing = {
@@ -154,7 +127,6 @@ export default function BuyerOrderTrackingScreen() {
         setListing(fetchedListing);
         setIsLoading(false);
 
-        // Show error if any data fetch failed
         if (hasError) {
           Alert.alert(
             'Lỗi tải dữ liệu',
@@ -165,18 +137,7 @@ export default function BuyerOrderTrackingScreen() {
       } catch (error) {
         console.error('[BuyerTracking] Fatal error fetching data:', error);
         setIsLoading(false);
-        
-        Alert.alert(
-          'Lỗi',
-          'Không thể tải thông tin đơn hàng. Vui lòng thử lại.',
-          [{ 
-            text: 'Thử lại',
-            onPress: () => {
-              // Retry
-              window.location.reload();
-            }
-          }]
-        );
+        Alert.alert('Lỗi', 'Không thể tải thông tin đơn hàng. Vui lòng thử lại.');
       }
     };
 
@@ -184,32 +145,26 @@ export default function BuyerOrderTrackingScreen() {
     requestLocationPermission();
   }, [orderId, listingId]);
 
-  // Subscribe to order status updates
   useEffect(() => {
     const unsubscribe = onOrderStatusUpdate((data) => {
       if (data.orderId === orderId) {
-        console.log('[BuyerTracking] Status update:', data);
         setOrder((prev) => (prev ? { ...prev, status: data.status } : null));
       }
     });
-
     return () => unsubscribe();
   }, [orderId, onOrderStatusUpdate]);
 
-  // Start GPS tracking when order is accepted
   useEffect(() => {
     if (order?.status === 'accepted' || order?.status === 'arriving') {
       startLocationTracking();
     } else {
       stopLocationTracking();
     }
-
     return () => {
       if (locationTrackerRef.current) clearInterval(locationTrackerRef.current);
     };
   }, [order?.status]);
 
-  // Handle app state changes
   useEffect(() => {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
@@ -228,19 +183,6 @@ export default function BuyerOrderTrackingScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setLocationPermission(status);
-      
-      if (status === 'granted') {
-        console.log('[BuyerTracking] Location permission granted');
-      } else {
-        Alert.alert(
-          'Quyền truy cập vị trí',
-          'Ứng dụng cần quyền truy cập vị trí để theo dõi đơn hàng. Vui lòng cấp quyền trong cài đặt.',
-          [
-            { text: 'Hủy', onPress: () => {} },
-            { text: 'Mở cài đặt', onPress: () => Linking.openURL('app-settings:') },
-          ]
-        );
-      }
     } catch (error) {
       console.error('[BuyerTracking] Error requesting location permission:', error);
     }
@@ -248,17 +190,10 @@ export default function BuyerOrderTrackingScreen() {
 
   const startLocationTracking = async () => {
     try {
-      if (isTrackingLocation || locationPermission !== 'granted') {
-        return;
-      }
-
-      console.log('[BuyerTracking] Starting GPS tracking');
+      if (isTrackingLocation || locationPermission !== 'granted') return;
       setIsTrackingLocation(true);
-
-      // Send location immediately
       await sendCurrentLocation();
 
-      // Then send every 30 seconds
       locationTrackerRef.current = setInterval(async () => {
         if (appStateRef.current === 'active') {
           await sendCurrentLocation();
@@ -272,14 +207,13 @@ export default function BuyerOrderTrackingScreen() {
 
   const sendCurrentLocation = async () => {
     try {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) return;
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
 
       const currentOrderId = getOrderDisplayId(order, orderId);
       if (location && currentOrderId !== 'N/A') {
         const { latitude, longitude } = location.coords;
-        console.log('[BuyerTracking] Sending GPS update:', { latitude, longitude });
         if (isConnected) {
           emitGPSUpdate(currentOrderId, latitude, longitude);
         }
@@ -301,7 +235,6 @@ export default function BuyerOrderTrackingScreen() {
       locationTrackerRef.current = undefined;
     }
     setIsTrackingLocation(false);
-    console.log('[BuyerTracking] Location tracking stopped');
   };
 
   const handleCallSeller = () => {
@@ -313,13 +246,16 @@ export default function BuyerOrderTrackingScreen() {
   };
 
   const handleChatSeller = () => {
+    const receiverIdStr = typeof order?.sellerId === 'object' ? (order.sellerId as any)._id || (order.sellerId as any).id : order?.sellerId;
+    const listingIdStr = typeof order?.listingId === 'object' ? (order.listingId as any)._id || (order.listingId as any).id : order?.listingId;
+
     router.push({
       pathname: '/chat' as any,
       params: {
         name: listing?.sellerName,
         otherAvatar: listing?.sellerAvatar,
-        receiverId: order?.sellerId,
-        listingId: order?.listingId,
+        receiverId: receiverIdStr,
+        listingId: listingIdStr,
       },
     });
   };
@@ -332,7 +268,6 @@ export default function BuyerOrderTrackingScreen() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'bypass-tunnel-reminder': 'true',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
@@ -345,21 +280,17 @@ export default function BuyerOrderTrackingScreen() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Cập nhật khối lượng thất bại');
-      }
+      if (!response.ok) throw new Error('Cập nhật khối lượng thất bại');
 
       const orderData = await response.json();
-      const updatedOrder = orderData.order || orderData;
-      setOrder(updatedOrder);
+      setOrder(orderData.order || orderData);
       setShowWeightModal(false);
       setIsUpdatingWeight(false);
-
       Alert.alert('Thành công', 'Cập nhật khối lượng thành công!');
     } catch (error) {
       console.error('[BuyerTracking] Error updating weight:', error);
       setIsUpdatingWeight(false);
-      Alert.alert('Lỗi', 'Không thể cập nhật khối lượng lên server.');
+      Alert.alert('Lỗi', 'Không thể cập nhật khối lượng.');
     }
   };
 
@@ -368,8 +299,6 @@ export default function BuyerOrderTrackingScreen() {
       Alert.alert('Lỗi', 'Vui lòng cập nhật khối lượng thực tế trước');
       return;
     }
-
-    // Navigate to completion screen
     router.push({
       pathname: '/buyer-order-complete' as any,
       params: {
@@ -386,13 +315,8 @@ export default function BuyerOrderTrackingScreen() {
     return (
       <View style={styles.centerContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScreenHeader
-          title="Theo dõi đơn hàng"
-          backgroundColor={Colors.primary}
-          titleColor={Colors.white}
-        />
         <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Đang tải...</Text>
+        <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
       </View>
     );
   }
@@ -401,13 +325,9 @@ export default function BuyerOrderTrackingScreen() {
     return (
       <View style={styles.centerContainer}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScreenHeader
-          title="Theo dõi đơn hàng"
-          backgroundColor="transparent"
-          titleColor={Colors.white}
-        />
+        <ScreenHeader title="Theo dõi đơn hàng" backgroundColor="transparent" titleColor={Colors.white} />
         <AlertCircle size={48} color={Colors.accent} />
-        <Text style={styles.emptyText}>Không tìm thấy đơn hàng</Text>
+        <Text style={styles.emptyText}>Không tìm thấy dữ liệu đơn hàng</Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
           <Text style={styles.retryText}>Quay lại</Text>
         </TouchableOpacity>
@@ -415,33 +335,32 @@ export default function BuyerOrderTrackingScreen() {
     );
   }
 
-  // Timeline steps
   const timelineSteps: TimelineStep[] = [
     {
       id: 'accepted',
-      label: 'Đã nhận đơn',
-      icon: <CheckCircle size={20} color={Colors.primary} />,
+      label: 'Đã nhận',
+      icon: <CheckCircle size={16} color={order.status === 'accepted' ? Colors.primary : '#94a3b8'} />,
       completed: true,
       current: order.status === 'accepted',
     },
     {
       id: 'arrived',
-      label: 'Đã đến nơi',
-      icon: <MapPin size={20} color={Colors.primary} />,
+      label: 'Đến nơi',
+      icon: <MapPin size={16} color={['arrived', 'measured', 'completed'].includes(order.status) ? Colors.primary : '#94a3b8'} />,
       completed: ['arrived', 'measured', 'completed'].includes(order.status),
       current: order.status === 'arrived',
     },
     {
       id: 'measured',
-      label: 'Cân nặng',
-      icon: <Scale size={20} color={Colors.primary} />,
+      label: 'Đã cân',
+      icon: <Scale size={16} color={['measured', 'completed'].includes(order.status) ? Colors.primary : '#94a3b8'} />,
       completed: ['measured', 'completed'].includes(order.status),
       current: order.status === 'measured',
     },
     {
       id: 'completed',
-      label: 'Hoàn thành',
-      icon: <CheckCircle size={20} color={Colors.primary} />,
+      label: 'Hoàn tất',
+      icon: <CheckCircle size={16} color={order.status === 'completed' ? Colors.primary : '#94a3b8'} />,
       completed: order.status === 'completed',
       current: false,
     },
@@ -450,214 +369,139 @@ export default function BuyerOrderTrackingScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-
-      <ScreenHeader
-        title="Theo dõi đơn hàng"
-        backgroundColor={Colors.primary}
-        titleColor={Colors.white}
-      />
+      <ScreenHeader title="Theo dõi đơn hàng" backgroundColor={Colors.primary} titleColor={Colors.white} />
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.content}>
-        {/* Order Status Badge */}
+        
+        {/* HUY HIỆU TRẠNG THÁI GPS CHUYÊN NGHIỆP */}
         <View style={styles.statusBadgeContainer}>
           <View style={[styles.statusBadge, styles.acceptedBadge]}>
-            <CheckCircle size={16} color={Colors.primary} />
-            <Text style={styles.statusBadgeText}>Đơn hàng đã được nhận</Text>
+            <CheckCircle size={15} color={Colors.primary} />
+            <Text style={styles.statusBadgeText}>Đã xác nhận thu gom</Text>
           </View>
           {isTrackingLocation && (
-            <View style={[styles.statusBadge, { backgroundColor: '#e8f5e9', borderColor: '#2ecc71' }]}>
-              <Zap size={14} color="#2ecc71" />
-              <Text style={[styles.statusBadgeText, { color: '#2ecc71', fontSize: 12 }]}>
-                GPS đang theo dõi
-              </Text>
+            <View style={[styles.statusBadge, styles.gpsTrackingBadge]}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.gpsBadgeText}>Đang chia sẻ GPS</Text>
             </View>
           )}
         </View>
 
-        {/* Seller Info Card */}
+        {/* THẺ THÔNG TIN NGƯỜI BÁN TÂN TRANG */}
         <View style={styles.sellerCard}>
           <View style={styles.sellerHeader}>
-            <Image
-              source={{ uri: listing.sellerAvatar }}
-              style={styles.sellerAvatar}
-              contentFit="cover"
-            />
+            <Image source={{ uri: listing.sellerAvatar || 'https://via.placeholder.com/80' }} style={styles.sellerAvatar} contentFit="cover" />
             <View style={styles.sellerInfo}>
-              <Text style={styles.sellerName}>{listing.sellerName}</Text>
-              <Text style={styles.sellerAddress}>{listing.address}</Text>
+              <View style={styles.sellerNameRow}>
+                <Text style={styles.sellerName}>{listing.sellerName || 'Người bán'}</Text>
+                <View style={styles.roleBadge}><Text style={styles.roleBadgeText}>Seller</Text></View>
+              </View>
+              <Text style={styles.sellerAddress} numberOfLines={2}>{listing.address}</Text>
             </View>
           </View>
 
-          {/* Contact Buttons */}
+          {/* HÀNG NÚT LIÊN LẠC ĐỒNG BỘ */}
           <View style={styles.contactButtons}>
-            <TouchableOpacity
-              style={styles.contactButton}
-              onPress={handleCallSeller}
-              activeOpacity={0.8}
-            >
-              <Phone size={18} color={Colors.primary} />
-              <Text style={styles.contactButtonText}>Gọi điện</Text>
+            <TouchableOpacity style={[styles.contactButton, styles.callButton]} onPress={handleCallSeller} activeOpacity={0.8}>
+              <Phone size={15} color="#1565C0" />
+              <Text style={[styles.contactButtonText, { color: '#1565C0' }]}>Gọi điện</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.contactButton}
-              onPress={handleChatSeller}
-              activeOpacity={0.8}
-            >
-              <MessageCircle size={18} color={Colors.primary} />
-              <Text style={styles.contactButtonText}>Chat ngay</Text>
+            <TouchableOpacity style={[styles.contactButton, styles.chatButton]} onPress={handleChatSeller} activeOpacity={0.8}>
+              <MessageCircle size={15} color={Colors.primary} />
+              <Text style={styles.contactButtonText}>Trò chuyện</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.contactButton, styles.navigationButton]}
-              activeOpacity={0.8}
-            >
-              <Navigation size={18} color={Colors.white} />
-              <Text style={[styles.contactButtonText, { color: Colors.white }]}>Chỉ đường</Text>
+            <TouchableOpacity style={[styles.contactButton, styles.navigationButton]} activeOpacity={0.8}>
+              <Navigation size={15} color={Colors.white} />
+              <Text style={[styles.contactButtonText, { color: Colors.white }]}>Dẫn đường</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Timeline */}
-        <View style={styles.timelineSection}>
-          <Text style={styles.sectionTitle}>Trạng thái đơn hàng</Text>
-          <View style={styles.timeline}>
+        {/* TIẾN TRÌNH ĐƠN HÀNG DẠNG NGANG (TIMELINE) GỌN GÀNG */}
+        <View style={styles.cardSection}>
+          <Text style={styles.sectionTitle}>Tiến trình thu gom</Text>
+          <View style={styles.timelineRowContainer}>
             {timelineSteps.map((step, index) => (
-              <View key={step.id} style={styles.timelineItem}>
-                <View
-                  style={[
-                    styles.timelineIcon,
-                    step.completed && styles.timelineIconCompleted,
-                    step.current && styles.timelineIconCurrent,
-                  ]}
-                >
-                  {step.icon}
+              <View key={step.id} style={styles.timelineStepBlock}>
+                <View style={styles.iconNodeWrapper}>
+                  <View style={[
+                    styles.nodeCircle,
+                    step.completed && styles.nodeCircleCompleted,
+                    step.current && styles.nodeCircleCurrent,
+                  ]}>
+                    {step.icon}
+                  </View>
+                  {index < timelineSteps.length - 1 && (
+                    <View style={[
+                      styles.lineConnector,
+                      step.completed && styles.lineConnectorCompleted,
+                    ]} />
+                  )}
                 </View>
-                <Text
-                  style={[
-                    styles.timelineLabel,
-                    (step.completed || step.current) && styles.timelineLabelActive,
-                  ]}
-                >
+                <Text style={[
+                  styles.nodeLabel,
+                  (step.completed || step.current) && styles.nodeLabelActive
+                ]}>
                   {step.label}
                 </Text>
-                {index < timelineSteps.length - 1 && (
-                  <View
-                    style={[
-                      styles.timelineConnector,
-                      step.completed && styles.timelineConnectorCompleted,
-                    ]}
-                  />
-                )}
               </View>
             ))}
           </View>
         </View>
 
-        {/* Order Details */}
-        <View style={styles.detailsSection}>
-          <Text style={styles.sectionTitle}>Chi tiết đơn hàng</Text>
-
+        {/* CHI TIẾT TÓM TẮT ĐƠN HÀNG */}
+        <View style={styles.cardSection}>
+          <Text style={styles.sectionTitle}>Thông tin chi tiết</Text>
           <View style={styles.detailCard}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Mã đơn hàng:</Text>
-              <Text style={styles.detailValue}>{getOrderDisplayId(order, orderId)}</Text>
-            </View>
-            <View style={styles.divider} />
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Khối lượng ước tính:</Text>
-              <Text style={styles.detailValue}>{order.estimatedWeight} kg</Text>
-            </View>
-
-            {order.actualWeight && (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Khối lượng thực tế:</Text>
-                  <Text style={[styles.detailValue, { color: Colors.primary, fontWeight: '700' }]}>
-                    {order.actualWeight} kg
-                  </Text>
-                </View>
-              </>
-            )}
-
-            <View style={styles.divider} />
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Giá:</Text>
-              <Text style={styles.detailValue}>
-                {(order.actualPrice || order.estimatedPrice).toLocaleString()}₫
-              </Text>
-            </View>
-
-            <View style={styles.divider} />
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Điểm xanh:</Text>
-              <Text style={styles.detailValue}>
-                {(order.actualGreenPoints || order.estimatedGreenPoints)} 🌿
-              </Text>
-            </View>
+            <InfoRow label="Mã số đơn hàng" value={`#${getOrderDisplayId(order, orderId).slice(-8).toUpperCase()}`} />
+            <InfoRow label="Khối lượng ước tính" value={`${order.estimatedWeight || 0} kg`} />
+            {order.actualWeight ? <InfoRow label="Khối lượng thực tế" value={`${order.actualWeight} kg`} highlight /> : null}
+            <InfoRow label="Tổng giá trị tiền" value={`${(order.actualPrice || order.estimatedPrice || 0).toLocaleString('vi-VN')} đ`} highlight={!!order.actualWeight} />
+            <InfoRow label="Điểm tích lũy" value={`${(order.actualGreenPoints || order.estimatedGreenPoints || 0)} 🌿`} />
           </View>
         </View>
 
-        {/* Items List */}
-        <View style={styles.itemsSection}>
-          <Text style={styles.sectionTitle}>Danh sách rác</Text>
-          {(listing.items || []).map((item: any, index: number) => (
-            <View key={index} style={styles.itemRow}>
-              <View style={[styles.itemDot, { backgroundColor: getWasteItemColor(item) }]} />
-              <View style={styles.itemContent}>
+        {/* DANH SÁCH PHÂN LOẠI RÁC */}
+        <View style={styles.cardSection}>
+          <Text style={styles.sectionTitle}>Danh mục rác thu gom</Text>
+          <View style={styles.itemsContainerCard}>
+            {(listing.items || []).map((item: any, index: number) => (
+              <View key={index} style={[styles.itemRow, index > 0 && styles.itemRowBorder]}>
+                <View style={[styles.itemDot, { backgroundColor: getWasteItemColor(item) }]} />
                 <Text style={styles.itemName}>{getWasteItemName(item)}</Text>
-                <Text style={styles.itemQty}>{item.quantity} kg</Text>
+                <Text style={styles.itemQty}>{item.quantity || 0} kg</Text>
               </View>
-            </View>
-          ))}
-          {(!listing.items || listing.items.length === 0) && (
-            <Text style={styles.emptyItemsText}>Chưa có danh sách rác</Text>
-          )}
+            ))}
+            {(!listing.items || listing.items.length === 0) && (
+              <Text style={styles.emptyItemsText}>Không có dữ liệu phân loại</Text>
+            )}
+          </View>
         </View>
 
-        {/* Action Buttons */}
+        {/* NÚT THAO TÁC CHÍNH ĐƯỢC BO GÓC CHUẨN */}
         <View style={styles.actionSection}>
           {!order.actualWeight ? (
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => setShowWeightModal(true)}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.actionButtonGradient}
-              >
-                <Scale size={20} color={Colors.white} />
+            <TouchableOpacity style={styles.actionButton} onPress={() => setShowWeightModal(true)} activeOpacity={0.8}>
+              <LinearGradient colors={[Colors.primary, '#43a047']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.actionButtonGradient}>
+                <Scale size={18} color={Colors.white} />
                 <Text style={styles.actionButtonText}>Cập nhật khối lượng thực tế</Text>
-                <ChevronRight size={20} color={Colors.white} />
+                <ChevronRight size={18} color={Colors.white} />
               </LinearGradient>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleCompleteOrder}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.actionButtonGradient}
-              >
-                <CheckCircle size={20} color={Colors.white} />
-                <Text style={styles.actionButtonText}>Hoàn thành thu gom</Text>
-                <ChevronRight size={20} color={Colors.white} />
+            <TouchableOpacity style={styles.actionButton} onPress={handleCompleteOrder} activeOpacity={0.8}>
+              <LinearGradient colors={[Colors.primary, '#43a047']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.actionButtonGradient}>
+                <CheckCircle size={18} color={Colors.white} />
+                <Text style={styles.actionButtonText}>Tiến hành tất toán & Hoàn thành</Text>
+                <ChevronRight size={18} color={Colors.white} />
               </LinearGradient>
             </TouchableOpacity>
           )}
         </View>
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: 32 }} />
       </ScrollView>
 
-      {/* Weight Update Modal */}
       <UpdateWeightModal
         visible={showWeightModal}
         estimatedWeight={order.estimatedWeight}
@@ -673,6 +517,15 @@ export default function BuyerOrderTrackingScreen() {
   );
 }
 
+function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={[styles.infoValue, highlight && styles.infoValueHighlight]}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -683,17 +536,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+    backgroundColor: Colors.background,
   },
   loadingText: {
     fontSize: 14,
     color: Colors.textSecondary,
-    marginTop: 8,
+    fontWeight: '500',
   },
   emptyText: {
     fontSize: 14,
     color: Colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 32,
   },
   retryButton: {
     marginTop: 8,
@@ -711,38 +563,58 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusBadgeContainer: {
+    flexDirection: 'row',
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 6,
+    gap: 8,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   acceptedBadge: {
     backgroundColor: '#E8F5E9',
+    borderColor: '#c8e6c9',
+  },
+  gpsTrackingBadge: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#bbdefb',
   },
   statusBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: Colors.primary,
+  },
+  gpsBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1565C0',
+  },
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#1e88e5',
   },
   sellerCard: {
     marginHorizontal: 16,
     marginTop: 8,
-    marginBottom: 16,
+    marginBottom: 14,
     backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 14,
-    gap: 12,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
     elevation: 2,
   },
   sellerHeader: {
@@ -751,40 +623,65 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sellerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
     borderColor: Colors.border,
+    backgroundColor: '#f5f5f5',
   },
   sellerInfo: {
     flex: 1,
+  },
+  sellerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   sellerName: {
     fontSize: 15,
     fontWeight: '700',
     color: Colors.text,
   },
+  roleBadge: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  roleBadgeText: {
+    fontSize: 9,
+    color: '#E65100',
+    fontWeight: '700',
+  },
   sellerAddress: {
     fontSize: 12,
     color: Colors.textSecondary,
-    marginTop: 2,
+    marginTop: 4,
+    lineHeight: 16,
   },
   contactButtons: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 14,
   },
   contactButton: {
     flex: 1,
+    height: 38,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
     borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    backgroundColor: Colors.white,
+    borderWidth: 1,
+  },
+  callButton: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#BBDEFB',
+  },
+  chatButton: {
+    backgroundColor: '#F5F5F5',
+    borderColor: Colors.border,
   },
   navigationButton: {
     backgroundColor: Colors.primary,
@@ -793,158 +690,166 @@ const styles = StyleSheet.create({
   contactButtonText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.text,
   },
-  timelineSection: {
+  cardSection: {
     paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.text,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  timeline: {
-    flexDirection: 'column',
-  },
-  timelineItem: {
+  timelineRowContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  timelineIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.background,
+  timelineStepBlock: {
+    flex: 1,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  iconNodeWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  nodeCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
     borderWidth: 2,
     borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    zIndex: 2,
   },
-  timelineIconCompleted: {
+  nodeCircleCompleted: {
     backgroundColor: '#E8F5E9',
     borderColor: Colors.primary,
   },
-  timelineIconCurrent: {
+  nodeCircleCurrent: {
     backgroundColor: '#E8F5E9',
     borderColor: Colors.primary,
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  timelineLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-    flex: 1,
-  },
-  timelineLabelActive: {
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  timelineConnector: {
+  lineConnector: {
     position: 'absolute',
-    left: 19,
-    top: 40,
-    width: 2,
-    height: 16,
+    left: '50%',
+    width: '100%',
+    height: 2,
     backgroundColor: Colors.border,
+    top: 15,
+    zIndex: 1,
   },
-  timelineConnectorCompleted: {
+  lineConnectorCompleted: {
     backgroundColor: Colors.primary,
   },
-  detailsSection: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+  nodeLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  nodeLabelActive: {
+    color: Colors.text,
+    fontWeight: '700',
   },
   detailCard: {
     backgroundColor: Colors.white,
     borderRadius: 14,
-    padding: 14,
-    gap: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
   },
-  detailRow: {
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
-  detailLabel: {
-    fontSize: 13,
+  infoLabel: {
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
   },
-  detailValue: {
-    fontSize: 14,
+  infoValue: {
     color: Colors.text,
+    fontSize: 13,
     fontWeight: '600',
-    textAlign: 'right',
   },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
+  infoValueHighlight: {
+    color: Colors.primary,
+    fontWeight: '700',
   },
-  itemsSection: {
+  itemsContainerCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 12,
-    gap: 12,
-    marginBottom: 8,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  itemRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
   },
   itemDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.primary,
-  },
-  itemContent: {
-    flex: 1,
   },
   itemName: {
+    flex: 1,
     fontSize: 13,
     fontWeight: '600',
     color: Colors.text,
   },
   itemQty: {
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.textSecondary,
-    marginTop: 2,
   },
   emptyItemsText: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 12,
+    paddingVertical: 12,
     color: Colors.textSecondary,
     fontSize: 13,
+    textAlign: 'center',
   },
   actionSection: {
     paddingHorizontal: 16,
-    marginBottom: 16,
+    marginTop: 6,
   },
   actionButton: {
     borderRadius: 14,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   actionButtonGradient: {
     flexDirection: 'row',
@@ -952,12 +857,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    gap: 10,
   },
   actionButtonText: {
     flex: 1,
     fontSize: 14,
     fontWeight: '700',
     color: Colors.white,
+    textAlign: 'center',
   },
 });

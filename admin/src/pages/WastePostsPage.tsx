@@ -1,78 +1,136 @@
-import { useState } from "react";
-import { mockWastePosts, WastePost } from "@/data/mockData";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { DataTable } from "@/components/shared/DataTable";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
+
+export interface WasteItemDetail {
+  wasteTypeId: string;
+  wasteTypeName: string;
+  pricePerKg: number;
+  quantity: number;
+  estimatedPrice: number;
+}
+
+export interface WastePost {
+  id: string;
+  userName: string;
+  wasteType: string;
+  weight: number;
+  estimatedPrice: number;
+  greenPoints: number;
+  status: 'available' | 'approved' | 'pending' | 'completed' | 'rejected';
+  images: string[];
+  address: string;
+  district: string;
+  pickupTime: string;
+  notes: string;
+  itemsDetail: WasteItemDetail[];
+  createdAt: string;
+}
+
+export function getStatusLabel(status: WastePost['status']) {
+  switch (status) {
+    case 'available':
+      return <span className="text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 text-xs font-semibold">Chờ duyệt đơn</span>;
+    case 'approved':
+      return <span className="text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200 text-xs font-semibold">Chờ người gom</span>;
+    case 'pending':
+      return <span className="text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200 text-xs font-semibold">Đang thu gom</span>;
+    case 'completed':
+      return <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 text-xs font-semibold">Đã thu gom thành công</span>;
+    case 'rejected':
+      return <span className="text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200 text-xs font-semibold">Đã từ chối duyệt</span>;
+    default:
+      return status;
+  }
+}
 
 export default function WastePostsPage() {
-  const [posts, setPosts] = useState(mockWastePosts);
-  const [selected, setSelected] = useState<WastePost | null>(null);
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const [posts, setPosts] = useState<WastePost[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const navigate = useNavigate();
 
-  const updateStatus = (id: string, status: WastePost['status']) => {
-    setPosts(ps => ps.map(p => p.id === id ? { ...p, status } : p));
-    if (selected?.id === id) setSelected(s => s ? { ...s, status } : null);
+  useEffect(() => {
+    fetchListings();
+  }, []);
+
+  const fetchListings = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("admin_auth_token");
+      const response = await fetch(`${API_BASE_URL}/api/admin/management/listings`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setPosts(data.listings);
+      }
+    } catch (error) {
+      console.error("Lỗi khi kết nối API lấy danh sách bài đăng rác:", error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 min-h-[300px] space-y-3">
+        <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
+        <p className="text-sm font-medium text-slate-500 animate-pulse">
+          Đang tải chi tiết bài đăng...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold">Quản lý giám sát trạng thái và tiến độ đơn rác</h1>
-        <p className="text-muted-foreground text-sm mt-1">{posts.length} bài đăng</p>
+        <h1 className="text-2xl font-bold text-slate-800">Quản lý danh sách bài đăng rác</h1>
+        <p className="text-muted-foreground text-sm mt-1">Hiện có tổng cộng {posts.length} đơn đăng ký thu gom rác trên hệ thống</p>
       </div>
 
       <DataTable<WastePost>
         data={posts}
-        searchPlaceholder="Tìm theo tên người đăng..."
+        searchPlaceholder="Tìm kiếm theo tên người đăng..."
         searchKey="userName"
         filterOptions={[
-          { key: "status", label: "Trạng thái", options: [{ value: "pending", label: "Chờ duyệt" }, { value: "approved", label: "Đã duyệt" }, { value: "collected", label: "Đã thu gom" }, { value: "rejected", label: "Từ chối" }] },
-          { key: "wasteType", label: "Loại rác", options: [{ value: "Nhựa PET", label: "Nhựa PET" }, { value: "Giấy carton", label: "Giấy carton" }, { value: "Kim loại", label: "Kim loại" }, { value: "Thủy tinh", label: "Thủy tinh" }] },
+          {
+            key: "status",
+            label: "Trạng thái đơn",
+            options: [
+              { value: "available", label: "Chờ duyệt đơn" },
+              { value: "approved", label: "Chờ người gom" },
+              { value: "pending", label: "Đang thu gom" },
+              { value: "completed", label: "Đã thu gom thành công" },
+              { value: "rejected", label: "Đã từ chối duyệt" }
+            ]
+          }
         ]}
-        onRowClick={setSelected}
+        onRowClick={(row) => navigate(`/waste-posts/${row.id}`)}
         columns={[
-          { key: "id", label: "ID" },
-          { key: "userName", label: "Người đăng", render: (p) => <span className="font-medium">{p.userName}</span> },
-          { key: "wasteType", label: "Loại rác" },
+          { key: "id", label: "Mã bài đăng" },
+          {
+            key: "image",
+            label: "Hình ảnh",
+            render: (p) => (
+              p.images && p.images.length > 0 && p.images[0] ? (
+                <img src={p.images[0]} alt="" className="h-12 w-12 rounded-lg object-cover border border-slate-200" />
+              ) : (
+                <div className="h-12 w-12 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">Không ảnh</div>
+              )
+            )
+          },
+          { key: "userName", label: "Người đăng", render: (p) => <span className="font-medium text-slate-700">{p.userName}</span> },
+          { key: "wasteType", label: "Chi tiết loại rác" },
           { key: "weight", label: "Khối lượng", render: (p) => `${p.weight} kg` },
-          { key: "estimatedPrice", label: "Giá dự tính", render: (p) => `${new Intl.NumberFormat("vi-VN").format(p.estimatedPrice)}đ` },
-          { key: "status", label: "Trạng thái", render: (p) => <StatusBadge status={p.status} /> },
-          { key: "createdAt", label: "Ngày tạo", render: (p) => new Date(p.createdAt).toLocaleDateString("vi-VN") },
+          { key: "estimatedPrice", label: "Giá tạm tính", render: (p) => `${new Intl.NumberFormat("vi-VN").format(p.estimatedPrice)}đ` },
+          { key: "status", label: "Trạng thái", render: (p) => getStatusLabel(p.status) }
         ]}
       />
-
-      <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Chi tiết bài đăng #{selected?.id}</DialogTitle></DialogHeader>
-          {selected && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Người đăng:</span><p className="font-medium">{selected.userName}</p></div>
-                <div><span className="text-muted-foreground">Loại rác:</span><p className="font-medium">{selected.wasteType}</p></div>
-                <div><span className="text-muted-foreground">Khối lượng:</span><p className="font-medium">{selected.weight} kg</p></div>
-                <div><span className="text-muted-foreground">Giá dự tính:</span><p className="font-medium">{new Intl.NumberFormat("vi-VN").format(selected.estimatedPrice)}đ</p></div>
-              </div>
-              <div className="text-sm">
-                <span className="text-muted-foreground">Địa chỉ:</span>
-                <p className="font-medium">{selected.address}</p>
-              </div>
-              <div className="text-sm">
-                <span className="text-muted-foreground">Giờ hẹn:</span>
-                <p className="font-medium">{new Date(selected.scheduledTime).toLocaleString("vi-VN")}</p>
-              </div>
-              {selected.notes && <div className="text-sm"><span className="text-muted-foreground">Ghi chú:</span><p>{selected.notes}</p></div>}
-              {selected.collectorName && <div className="text-sm"><span className="text-muted-foreground">Người thu gom:</span><p className="font-medium">{selected.collectorName}</p></div>}
-              <div className="flex gap-2 flex-wrap">
-                {selected.status === 'pending' && <>
-                  <Button onClick={() => updateStatus(selected.id, 'approved')}>Duyệt</Button>
-                  <Button variant="destructive" onClick={() => updateStatus(selected.id, 'rejected')}>Từ chối</Button>
-                </>}
-                {selected.status === 'approved' && <Button onClick={() => updateStatus(selected.id, 'collected')}>Đánh dấu đã thu gom</Button>}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

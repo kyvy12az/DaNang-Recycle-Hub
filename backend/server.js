@@ -1,6 +1,4 @@
 const path = require("path");
-// Railway tự động đặt biến môi trường từ file .env ở thư mục gốc, 
-// nhưng khi chạy local thì cần chỉ rõ đường dẫn đến file .env
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const express = require("express");
@@ -10,14 +8,17 @@ const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const adminAuthRoutes = require("./routes/adminAuthRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 const classifyRoutes = require("./routes/classifyRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const listingRoutes = require("./routes/listingRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+const leaderboardRoutes = require("./routes/leaderboardRoutes");
 const listingController = require("./controllers/listingController");
 const orderController = require("./controllers/orderController");
 const orderSettlementService = require("./services/orderSettlementService");
+const { initializeLeaderboardJobs } = require("./services/leaderboardScheduler");
 
 
 const app = express();
@@ -46,6 +47,8 @@ const mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/recycleDB";
 mongoose.connect(mongoURI)
   .then(() => {
     console.log("MongoDB kết nối thành công");
+    // Initialize leaderboard scheduled jobs
+    initializeLeaderboardJobs();
   })
   .catch((err) => {
     console.error("MongoDB kết nối lỗi: ", err.message);
@@ -68,6 +71,8 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/listings", listingRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/leaderboards", leaderboardRoutes);
+app.use("/api/admin/management", adminRoutes); 
 
 // route kiểm tra trạng thái server (Health Check)
 app.get("/", (req, res) => {
@@ -89,6 +94,8 @@ const io = new Server(server, {
   pingTimeout: 10000,  
   pingInterval: 5000,
 });
+
+global.io = io;
 
 // Initialize listing controller with IO instance
 listingController.setIO(io);

@@ -24,6 +24,8 @@ import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
 import { ReactNode } from "react";
 import RankPage from "./pages/RankPage";
+import UserDetailPage from "./pages/UserDetailPage";
+import WastePostDetailPage from "./pages/WastePostDetailPage";
 
 const queryClient = new QueryClient();
 
@@ -52,7 +54,9 @@ const App = () => (
                     <Routes>
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/users" element={<UsersPage />} />
+                      <Route path="/users/:id" element={<UserDetailPage />} />
                       <Route path="/waste-posts" element={<WastePostsPage />} />
+                      <Route path="/waste-posts/:id" element={<WastePostDetailPage />} />
                       <Route path="/transactions" element={<TransactionsPage />} />
                       <Route path="/wallet" element={<WalletPage />} />
                       <Route path="/rewards" element={<RewardsPage />} />

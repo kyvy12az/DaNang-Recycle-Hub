@@ -68,13 +68,13 @@ export interface SupportTicket {
 }
 
 export interface LeaderboardItem {
-  id: string;    
-  rank: number;     
+  id: string;
+  rank: number;
   userName: string;
   totalWeight: number;
-  points: number;    
+  points: number;
   status: 'approved' | 'pending' | 'flagged';
-  period: 'weekly' | 'monthly' | 'yearly';  
+  period: 'weekly' | 'monthly' | 'yearly';
 }
 
 export interface SystemNotification {
@@ -120,7 +120,11 @@ export const mockWastePosts: WastePost[] = Array.from({ length: 30 }, (_, i) => 
     weight: Math.floor(Math.random() * 50) + 1,
     estimatedPrice: Math.floor(Math.random() * 500000) + 10000,
     status: statuses[i % 4],
-    images: [`https://picsum.photos/seed/waste${i}/200/200`],
+    images: [
+      `https://picsum.photos/seed/waste${i}a/800/600`,
+      `https://picsum.photos/seed/waste${i}b/800/600`,
+      `https://picsum.photos/seed/waste${i}c/800/600`,
+    ],
     address: `${Math.floor(Math.random() * 200) + 1} Đường ${['Trần Phú', 'Nguyễn Văn Linh', 'Điện Biên Phủ', 'Lê Duẩn', 'Bạch Đằng'][i % 5]}, ${districts[i % districts.length]}, Đà Nẵng`,
     scheduledTime: new Date(2025, 3, Math.floor(Math.random() * 28) + 1, 8 + Math.floor(Math.random() * 10)).toISOString(),
     notes: ['Rác đã phân loại sẵn', 'Cần thu gom gấp', 'Liên hệ trước khi đến', ''][i % 4],
@@ -130,86 +134,86 @@ export const mockWastePosts: WastePost[] = Array.from({ length: 30 }, (_, i) => 
 });
 
 export const mockLeaderboard: LeaderboardItem[] = [
-  { 
-    id: 'USR-9921', 
-    rank: 1, 
-    userName: 'Nguyễn Văn An', 
-    totalWeight: 1245.5, 
-    points: 15200, 
-    status: 'approved', 
-    period: 'weekly' 
+  {
+    id: 'USR-9921',
+    rank: 1,
+    userName: 'Nguyễn Văn An',
+    totalWeight: 1245.5,
+    points: 15200,
+    status: 'approved',
+    period: 'weekly'
   },
-  { 
-    id: 'USR-4412', 
-    rank: 2, 
-    userName: 'Trần Thị Bình', 
-    totalWeight: 1102.3, 
-    points: 12500, 
-    status: 'approved', 
-    period: 'weekly' 
+  {
+    id: 'USR-4412',
+    rank: 2,
+    userName: 'Trần Thị Bình',
+    totalWeight: 1102.3,
+    points: 12500,
+    status: 'approved',
+    period: 'weekly'
   },
-  { 
-    id: 'USR-0056', 
-    rank: 3, 
-    userName: 'Lê Hoàng Cường', 
-    totalWeight: 958.0, 
-    points: 10000, 
-    status: 'pending', 
-    period: 'weekly' 
+  {
+    id: 'USR-0056',
+    rank: 3,
+    userName: 'Lê Hoàng Cường',
+    totalWeight: 958.0,
+    points: 10000,
+    status: 'pending',
+    period: 'weekly'
   },
-  { 
-    id: 'USR-7734', 
-    rank: 4, 
-    userName: 'Phạm Minh Đức', 
-    totalWeight: 845.2, 
-    points: 8450, 
-    status: 'pending', 
-    period: 'weekly' 
+  {
+    id: 'USR-7734',
+    rank: 4,
+    userName: 'Phạm Minh Đức',
+    totalWeight: 845.2,
+    points: 8450,
+    status: 'pending',
+    period: 'weekly'
   },
-  { 
-    id: 'USR-1120', 
-    rank: 5, 
-    userName: 'Hoàng Thị Em', 
-    totalWeight: 789.1, 
-    points: 7890, 
-    status: 'approved', 
-    period: 'weekly' 
+  {
+    id: 'USR-1120',
+    rank: 5,
+    userName: 'Hoàng Thị Em',
+    totalWeight: 789.1,
+    points: 7890,
+    status: 'approved',
+    period: 'weekly'
   },
-  { 
-    id: 'USR-6552', 
-    rank: 6, 
-    userName: 'Võ Quốc Phong', 
-    totalWeight: 650.5, 
-    points: 6500, 
-    status: 'flagged', 
-    period: 'weekly' 
+  {
+    id: 'USR-6552',
+    rank: 6,
+    userName: 'Võ Quốc Phong',
+    totalWeight: 650.5,
+    points: 6500,
+    status: 'flagged',
+    period: 'weekly'
   },
-  { 
-    id: 'USR-2309', 
-    rank: 7, 
-    userName: 'Đặng Thanh Giang', 
-    totalWeight: 612.0, 
-    points: 6120, 
-    status: 'approved', 
-    period: 'weekly' 
+  {
+    id: 'USR-2309',
+    rank: 7,
+    userName: 'Đặng Thanh Giang',
+    totalWeight: 612.0,
+    points: 6120,
+    status: 'approved',
+    period: 'weekly'
   },
-  { 
-    id: 'USR-1402', 
-    rank: 1, 
-    userName: 'Bùi Văn Hải', 
-    totalWeight: 4520.8, 
-    points: 54000, 
-    status: 'approved', 
-    period: 'monthly' 
+  {
+    id: 'USR-1402',
+    rank: 1,
+    userName: 'Bùi Văn Hải',
+    totalWeight: 4520.8,
+    points: 54000,
+    status: 'approved',
+    period: 'monthly'
   },
-  { 
-    id: 'USR-8891', 
-    rank: 2, 
-    userName: 'Ngô Thị Lan', 
-    totalWeight: 3980.2, 
-    points: 48500, 
-    status: 'pending', 
-    period: 'monthly' 
+  {
+    id: 'USR-8891',
+    rank: 2,
+    userName: 'Ngô Thị Lan',
+    totalWeight: 3980.2,
+    points: 48500,
+    status: 'pending',
+    period: 'monthly'
   }
 ];
 

@@ -30,7 +30,7 @@ class MomoService {
   static async createPayment(orderId, amount, buyerName, buyerPhone) {
     try {
       const requestId = `${orderId}-${Date.now()}`;
-      const orderIdMomo = `ORDER_${Date.now()}`;
+      const orderIdMomo = requestId; // Make orderId match requestId
       const orderInfo = `Thanh toan don hang thu gom rac ${orderId}`;
       const requestType = 'captureWallet';
       const extraData = ''; 
@@ -43,7 +43,7 @@ class MomoService {
         orderId: orderIdMomo,
         orderInfo: orderInfo,
         partnerCode: MOMO_CONFIG.partnerCode,
-        redirectUrl: MOMO_CONFIG.redirectUrl,
+        redirectUrl: '',
         requestId: requestId,
         requestType: requestType
       };
@@ -87,16 +87,20 @@ class MomoService {
    */
   static async queryPaymentStatus(requestId) {
     try {
-      const queryData = {
-        partnerCode: MOMO_CONFIG.partnerCode,
-        requestId,
+      const rawSignatureData = {
         accessKey: MOMO_CONFIG.accessKey,
         orderId: requestId,
-        lang: 'vi',
+        partnerCode: MOMO_CONFIG.partnerCode,
+        requestId: requestId,
       };
 
-      const signature = this.generateSignature(queryData, MOMO_CONFIG.secretKey);
-      queryData.signature = signature;
+      const signature = this.generateSignature(rawSignatureData, MOMO_CONFIG.secretKey);
+      
+      const queryData = {
+        ...rawSignatureData,
+        lang: 'vi',
+        signature: signature
+      };
 
       console.log('[MomoService] Querying payment status:', requestId);
 

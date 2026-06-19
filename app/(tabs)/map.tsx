@@ -7,11 +7,12 @@ import {
   Alert,
   Linking,
   Modal,
-  Platform
+  Platform,
+  StatusBar
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin, Recycle, Navigation, Plus, Minus, LocateFixed, RotateCcw, X, Info, Clock } from 'lucide-react-native';
+import { MapPin, Recycle, Navigation, Plus, Minus, LocateFixed, RotateCcw, X, Info, Clock, Compass } from 'lucide-react-native';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import EcoLoader from '@/components/EcoLoader';
@@ -25,8 +26,12 @@ const MAP_THEME = {
   primary: '#2E7D32',
   primaryLight: '#4CAF50',
   primaryDark: '#1B5E20',
-  surface: '#F5F9F5',
-  surfaceSoft: '#E8F5E9',
+  accent: '#43A047',
+  surface: '#FFFFFF',
+  surfaceSoft: '#F0F7F0',
+  textMain: '#1A231D',
+  textMuted: '#66756C',
+  border: '#E3ECE6',
   line: '#43A047'
 };
 
@@ -61,16 +66,29 @@ export default function MapScreen() {
   }, []);
 
   const initLocation = async () => {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setIsLoading(false);
+        return;
+      }
+
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        Alert.alert('Thông báo', 'Vui lòng bật dịch vụ vị trí (GPS) trên thiết bị của bạn.');
+        setIsLoading(false);
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+      setUserCoords({ lat: latitude, lng: longitude });
+      await fetchGreenPoints(latitude, longitude);
+    } catch (error) {
+      console.warn("Lỗi lấy vị trí:", error);
+    } finally {
       setIsLoading(false);
-      return;
     }
-    let location = await Location.getCurrentPositionAsync({});
-    const { latitude, longitude } = location.coords;
-    setUserCoords({ lat: latitude, lng: longitude });
-    await fetchGreenPoints(latitude, longitude);
-    setIsLoading(false);
   };
 
   const fetchGreenPoints = async (lat: number, lng: number) => {
@@ -155,12 +173,23 @@ export default function MapScreen() {
 
   const handleLocateMe = async () => {
     setIsLocating(true);
-    let location = await Location.getCurrentPositionAsync({});
-    const { latitude, longitude } = location.coords;
-    setUserCoords({ lat: latitude, lng: longitude });
-    runMapScript(`window.__goongMap.locateMe(${longitude}, ${latitude})`);
-    await fetchGreenPoints(latitude, longitude);
-    setIsLocating(false);
+    try {
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        Alert.alert('Thông báo', 'Vui lòng bật dịch vụ vị trí (GPS) trên thiết bị của bạn.');
+        return;
+      }
+      let location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+      setUserCoords({ lat: latitude, lng: longitude });
+      runMapScript(`window.__goongMap.locateMe(${longitude}, ${latitude})`);
+      await fetchGreenPoints(latitude, longitude);
+    } catch (error) {
+      console.warn("Lỗi lấy vị trí:", error);
+      Alert.alert('Lỗi', 'Không thể lấy vị trí hiện tại.');
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   const goongMapHTML = `
@@ -229,53 +258,113 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={[MAP_THEME.primaryDark, MAP_THEME.primaryLight]} style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerRow}><Recycle size={24} color="white" /><Text style={styles.headerTitle}>Trạm Thu Gom Xanh</Text></View>
-      </LinearGradient>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+
+      {/* Floating Header UI */}
+      <View style={[styles.floatingHeader, { paddingTop: insets.top + 10 }]}>
+        <LinearGradient
+          colors={[MAP_THEME.primaryDark, MAP_THEME.primary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerLeft}>
+            <View style={styles.ecoBadge}>
+              <Recycle size={18} color="#FFF" />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Hệ Thống Bản Đồ Xanh</Text>
+              <Text style={styles.headerSubtitle}>Tìm trạm thu gom và tái chế phế liệu gần bạn</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </View>
 
       <View style={styles.mapWrapper}>
         <WebView ref={webViewRef} source={{ html: goongMapHTML }} onMessage={onMessage} style={styles.map} javaScriptEnabled={true} />
-        <View style={styles.mapControls}>
-          <TouchableOpacity style={styles.controlButton} onPress={() => runMapScript('window.__goongMap.zoomIn()')}><Plus size={20} color="#333" /></TouchableOpacity>
-          <TouchableOpacity style={styles.controlButton} onPress={() => runMapScript('window.__goongMap.zoomOut()')}><Minus size={20} color="#333" /></TouchableOpacity>
-          <TouchableOpacity style={styles.controlButton} onPress={handleLocateMe}><LocateFixed size={20} color={isLocating ? MAP_THEME.primary : "#333"} /></TouchableOpacity>
+        <View style={[styles.mapControls, { top: insets.top + 95 }]}>
+          <TouchableOpacity style={styles.controlButton} onPress={() => runMapScript('window.__goongMap.zoomIn()')} activeOpacity={0.7}>
+            <Plus size={20} color={MAP_THEME.primary} strokeWidth={2.5} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.controlButton} onPress={() => runMapScript('window.__goongMap.zoomOut()')} activeOpacity={0.7}>
+            <Minus size={20} color={MAP_THEME.primary} strokeWidth={2.5} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.controlButton} onPress={handleLocateMe} activeOpacity={0.7}>
+            <LocateFixed size={20} color={isLocating ? MAP_THEME.primaryLight : MAP_THEME.primary} strokeWidth={2} />
+          </TouchableOpacity>
         </View>
       </View>
 
       <Modal animationType="slide" transparent visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}><X size={24} color="#666" /></TouchableOpacity>
+            {/* Grab Drag Indicator bar */}
+            <View style={styles.dragIndicator} />
+
             <View style={styles.modalHeader}>
-              <View style={styles.iconCircle}><Recycle size={28} color={MAP_THEME.primary} /></View>
-              <View style={{ flex: 1, marginLeft: 15 }}>
-                <Text style={styles.modalName} numberOfLines={1}>{selectedPoint?.name}</Text>
-                <Text style={styles.modalType}>{selectedPoint?.type}</Text>
+              <View style={styles.stationTitleContainer}>
+                <View style={styles.iconCircle}>
+                  <Compass size={22} color={MAP_THEME.primary} strokeWidth={2} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalName} numberOfLines={2}>{selectedPoint?.name}</Text>
+                  <Text style={styles.modalType}>{selectedPoint?.type}</Text>
+                </View>
               </View>
+              <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)} activeOpacity={0.7}>
+                <X size={20} color="#99A39D" strokeWidth={2.5} />
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.infoRow}><MapPin size={18} color={MAP_THEME.primary} /><Text style={styles.infoText}>{selectedPoint?.address}</Text></View>
-            <View style={styles.infoRow}><Info size={18} color={MAP_THEME.primary} /><Text style={styles.infoText}>Nhận: {selectedPoint?.acceptedWaste}</Text></View>
+            <View style={styles.divider} />
 
+            {/* Address Row Info */}
+            <View style={styles.infoRow}>
+              <MapPin size={18} color={MAP_THEME.textMuted} style={styles.infoIcon} />
+              <Text style={styles.infoText}>{selectedPoint?.address}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Info size={18} color={MAP_THEME.textMuted} style={styles.infoIcon} />
+              <Text style={styles.infoText}>Nhận gom: <Text style={{ color: MAP_THEME.primaryDark, fontWeight: '600' }}>{selectedPoint?.acceptedWaste}</Text></Text>
+            </View>
+
+            {/* Distance Matrix Custom Badges */}
             <View style={styles.distanceMatrixContainer}>
-              <View style={styles.matrixItem}>
-                <Navigation size={18} color={MAP_THEME.primaryDark} /><Text style={styles.matrixLabel}>Khoảng cách</Text>
+              <LinearGradient colors={['#E8F5E9', '#C8E6C9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.matrixItem}>
+                <Navigation size={16} color={MAP_THEME.primaryDark} fill={MAP_THEME.primaryDark} />
                 <Text style={styles.matrixValue}>{routeInfo?.distance || '---'}</Text>
-              </View>
-              <View style={styles.matrixDivider} />
-              <View style={styles.matrixItem}>
-                <Clock size={18} color={MAP_THEME.primaryDark} /><Text style={styles.matrixLabel}>Thời gian</Text>
-                <Text style={styles.matrixValue}>{routeInfo?.duration || '---'}</Text>
-              </View>
+                <Text style={styles.matrixLabel}>Khoảng cách</Text>
+              </LinearGradient>
+
+              <LinearGradient colors={['#E3F2FD', '#BBDEFB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.matrixItem}>
+                <Clock size={16} color="#1565C0" />
+                <Text style={[styles.matrixValue, { color: '#1565C0' }]}>{routeInfo?.duration || '---'}</Text>
+                <Text style={styles.matrixLabel}>Thời gian đi</Text>
+              </LinearGradient>
             </View>
 
-            <TouchableOpacity style={styles.directionBtn} onPress={handleDrawRoute}>
-              <Navigation size={20} color="white" /><Text style={styles.directionBtnText}>Chỉ đường ngay</Text>
-            </TouchableOpacity>
+            {/* Buttons UI actions */}
+            <View style={[styles.actionRow, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+              <TouchableOpacity style={styles.directionBtn} onPress={handleDrawRoute} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={[MAP_THEME.primary, MAP_THEME.accent]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.gradientButton}
+                >
+                  <Navigation size={18} color="white" fill="white" />
+                  <Text style={styles.directionBtnText}>Chỉ đường trên bản đồ</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-            <TouchableOpacity style={styles.googleMapsBtn} onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${selectedPoint?.latitude},${selectedPoint?.longitude}`)}>
-              <Text style={styles.googleMapsBtnText}>Mở bằng Google Maps</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.googleMapsBtn}
+                onPress={() => Linking.openURL(`http://maps.google.com/?q=${selectedPoint?.latitude},${selectedPoint?.longitude}`)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.googleMapsBtnText}>Mở ứng dụng Google Maps</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -285,30 +374,231 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: MAP_THEME.surface },
-  header: { paddingHorizontal: 20, paddingBottom: 16, borderBottomLeftRadius: 25, borderBottomRightRadius: 25 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: 'white' },
-  mapWrapper: { flex: 1, margin: 10, borderRadius: 25, overflow: 'hidden', elevation: 4 },
-  map: { flex: 1 },
-  mapControls: { position: 'absolute', top: 16, right: 16, gap: 10 },
-  controlButton: { width: 46, height: 46, borderRadius: 14, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', elevation: 3 },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24 },
-  closeBtn: { alignSelf: 'flex-end', padding: 5 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  iconCircle: { width: 54, height: 54, borderRadius: 27, backgroundColor: MAP_THEME.surfaceSoft, alignItems: 'center', justifyContent: 'center' },
-  modalName: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
-  modalType: { fontSize: 13, color: MAP_THEME.primary, fontWeight: '600' },
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 12, gap: 10 },
-  infoText: { fontSize: 14, color: '#444', flex: 1, lineHeight: 20 },
-  distanceMatrixContainer: { flexDirection: 'row', backgroundColor: '#F1F8E9', borderRadius: 18, marginTop: 24, padding: 18, alignItems: 'center' },
-  matrixItem: { flex: 1, alignItems: 'center', gap: 5 },
-  matrixDivider: { width: 1, height: '70%', backgroundColor: '#C8E6C9' },
-  matrixLabel: { fontSize: 11, color: '#666', fontWeight: '500' },
-  matrixValue: { fontSize: 18, fontWeight: '800', color: MAP_THEME.primaryDark },
-  directionBtn: { backgroundColor: MAP_THEME.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 16, marginTop: 20, gap: 10 },
-  directionBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
-  googleMapsBtn: { padding: 12, alignItems: 'center', marginTop: 8 },
-  googleMapsBtnText: { color: MAP_THEME.primary, fontWeight: '600' }
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F5F9F5' 
+  },
+  mapWrapper: { 
+    flex: 1, 
+    zIndex: 1 
+  },
+  map: { 
+    flex: 1 
+  },
+  
+  // Floating Header Design
+  floatingHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 14,
+    right: 14,
+    zIndex: 10,
+  },
+  headerGradient: {
+    borderRadius: 20,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#1B5E20',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1
+  },
+  ecoBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 1,
+    fontWeight: '500'
+  },
+
+  // Map Utility Circular Controls Panel 
+  mapControls: { 
+    position: 'absolute', 
+    right: 16, 
+    zIndex: 10, 
+    gap: 10 
+  },
+  controlButton: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: 'white', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4
+  },
+
+  // Premium Custom BottomSheet Drawer
+  modalOverlay: { 
+    flex: 1, 
+    justifyContent: 'flex-end', 
+    backgroundColor: 'rgba(26, 35, 29, 0.4)' 
+  },
+  modalContent: { 
+    backgroundColor: MAP_THEME.surface, 
+    borderTopLeftRadius: 28, 
+    borderTopRightRadius: 28, 
+    paddingHorizontal: 20, 
+    paddingTop: 10, 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 15,
+    elevation: 10,
+    width: '100%'
+  },
+  dragIndicator: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#E0E5E1',
+    borderRadius: 2.5,
+    alignSelf: 'center',
+    marginBottom: 14
+  },
+  modalHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-start', 
+    justifyContent: 'space-between', 
+    gap: 12 
+  },
+  stationTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1
+  },
+  iconCircle: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 14, 
+    backgroundColor: MAP_THEME.surfaceSoft, 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  modalName: { 
+    fontSize: 17, 
+    fontWeight: '800', 
+    color: MAP_THEME.textMain, 
+    lineHeight: 22 
+  },
+  modalType: { 
+    fontSize: 12, 
+    color: MAP_THEME.primary, 
+    fontWeight: '700', 
+    marginTop: 3 
+  },
+  closeBtn: { 
+    padding: 4,
+    backgroundColor: '#F0F3F1',
+    borderRadius: 10 
+  },
+  divider: {
+    height: 1,
+    backgroundColor: MAP_THEME.border,
+    marginVertical: 14
+  },
+  infoRow: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-start', 
+    marginTop: 10, 
+    gap: 10,
+    paddingHorizontal: 2
+  },
+  infoIcon: {
+    marginTop: 2
+  },
+  infoText: { 
+    fontSize: 14, 
+    color: MAP_THEME.textMuted, 
+    flex: 1, 
+    lineHeight: 20,
+    fontWeight: '500'
+  },
+
+  // Distance Matrix Cards Wrapper
+  distanceMatrixContainer: { 
+    flexDirection: 'row', 
+    gap: 12,
+    marginTop: 18, 
+    marginBottom: 6
+  },
+  matrixItem: { 
+    flex: 1, 
+    borderRadius: 16, 
+    padding: 12, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: 4 
+  },
+  matrixValue: { 
+    fontSize: 16, 
+    fontWeight: '800', 
+    color: MAP_THEME.primaryDark,
+    marginTop: 2 
+  },
+  matrixLabel: { 
+    fontSize: 11, 
+    color: '#555', 
+    fontWeight: '500' 
+  },
+
+  // Action CTA Buttons Area
+  actionRow: {
+    marginTop: 20,
+    width: '100%'
+  },
+  directionBtn: { 
+    width: '100%',
+    borderRadius: 16, 
+    overflow: 'hidden'
+  },
+  gradientButton: {
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8
+  },
+  directionBtnText: { 
+    color: 'white', 
+    fontSize: 15, 
+    fontWeight: '700' 
+  },
+  googleMapsBtn: { 
+    width: '100%',
+    paddingVertical: 12, 
+    alignItems: 'center', 
+    marginTop: 6 
+  },
+  googleMapsBtnText: { 
+    color: MAP_THEME.primary, 
+    fontSize: 14,
+    fontWeight: '700' 
+  }
 });

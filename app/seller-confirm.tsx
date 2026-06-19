@@ -260,12 +260,21 @@ export default function SellerConfirmScreen() {
 
   const handleOpenMap = async () => {
     setShowMapModal(true);
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status === 'granted') {
-      let location = await Location.getCurrentPositionAsync({});
-      const coords = { lat: location.coords.latitude, lng: location.coords.longitude };
-      setUserCoords(coords);
-      fetchNearbyPoints(coords.lat, coords.lng);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const enabled = await Location.hasServicesEnabledAsync();
+        if (!enabled) {
+          Alert.alert('Thông báo', 'Vui lòng bật dịch vụ vị trí (GPS) để tìm trạm gần nhất.');
+          return;
+        }
+        let location = await Location.getCurrentPositionAsync({});
+        const coords = { lat: location.coords.latitude, lng: location.coords.longitude };
+        setUserCoords(coords);
+        fetchNearbyPoints(coords.lat, coords.lng);
+      }
+    } catch (error) {
+      console.warn("Lỗi lấy vị trí:", error);
     }
   };
 

@@ -100,7 +100,14 @@ exports.getListings = async (req, res) => {
   try {
     const { district, status = "available", page = 1, limit = 20 } = req.query;
 
-    const filter = { status };
+    const filter = {};
+    if (status) {
+      if (status.includes(",")) {
+        filter.status = { $in: status.split(",") };
+      } else {
+        filter.status = status;
+      }
+    }
     if (district) filter.district = district;
 
     const listings = await Listing.find(filter)
