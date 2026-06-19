@@ -10,6 +10,7 @@ import {
   Keyboard,
   Platform,
   KeyboardAvoidingView,
+  StatusBar,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
@@ -18,38 +19,67 @@ import {
   Heart,
   Send,
   MessageSquare,
-  CornerDownRight,
-  MessageCircle,
+  ChevronRight,
+  SlidersHorizontal
 } from 'lucide-react-native';
-import Colors from '@/constants/colors';
-import { mockEducationDiscussions, mockEducationTips, DiscussionComment } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ScreenHeader from '@/components/ScreenHeader';
+import Colors from '@/constants/colors';
+import { mockEducationTips } from '@/mocks/data';
+import BackButton from '@/components/BackButton';
 
 const { width } = Dimensions.get('window');
+
+const staticComments = [
+  {
+    id: 'c1',
+    userName: 'Chị Hoa',
+    userAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120',
+    timestamp: '2 giờ trước',
+    content: 'Cách phân loại này rất hữu ích! Nhưng em thắc mắc rác tái chế lẫn rác hữu cơ thì sao ạ? Như cốc giấy dính mỡ thì phân loại thế nào?',
+    likesCount: 12,
+    replies: [
+      {
+        id: 'r1',
+        userName: 'Anh Minh',
+        userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120',
+        timestamp: '1 giờ trước',
+        content: 'Nếu dính mỡ thì nên vứt vào rác hữu cơ em ơi. Vì rác tái chế phải sạch để có giá trị tái chế cao hơn.',
+        likesCount: 8,
+      }
+    ]
+  },
+  {
+    id: 'c2',
+    userName: 'Thầy Tâm',
+    userAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120',
+    timestamp: '3 giờ trước',
+    content: 'Bài viết rất chi tiết và dễ hiểu. Tôi sẽ dạy cho học sinh của mình. Cảm ơn tác giả bài viết!',
+    likesCount: 25,
+    replies: []
+  },
+  {
+    id: 'c3',
+    userName: 'Bạn An',
+    userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120',
+    timestamp: '5 giờ trước',
+    content: 'Mình vừa thực hiện theo hướng dẫn này từ 1 tháng trước, đã thu được 2kg rác tái chế. Giá bán cũng cao hơn lắm!',
+    likesCount: 18,
+    replies: []
+  }
+];
 
 export default function EducationDiscussionScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
-  const tip = mockEducationTips.find(t => t.id === id);
-  const comments = mockEducationDiscussions[id as string] || [];
-  
+
+  const tip = mockEducationTips.find(t => t.id === id) || {
+    title: "Cách phân loại rác tại nhà",
+    imageUrl: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15b"
+  };
+
   const [newCommentText, setNewCommentText] = useState('');
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
-  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
-
-  if (!tip) {
-    return (
-      <View style={styles.container}>
-        <ScreenHeader title="Thảo luận" backgroundColor={Colors.primary} titleColor={Colors.white} />
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Không tìm thấy bài viết</Text>
-        </View>
-      </View>
-    );
-  }
 
   const handleLikeComment = (commentId: string) => {
     const newLiked = new Set(likedComments);
@@ -61,178 +91,169 @@ export default function EducationDiscussionScreen() {
     setLikedComments(newLiked);
   };
 
-  const toggleReplies = (commentId: string) => {
-    const newExpanded = new Set(expandedReplies);
-    if (newExpanded.has(commentId)) {
-      newExpanded.delete(commentId);
-    } else {
-      newExpanded.add(commentId);
-    }
-    setExpandedReplies(newExpanded);
-  };
-
-  const renderComment = (comment: DiscussionComment, depth: number = 0) => {
-    const isLiked = likedComments.has(comment.id);
-    const showReplies = expandedReplies.has(comment.id);
-    const isReply = depth > 0;
-
-    return (
-      <View key={comment.id} style={[styles.commentWrapper, isReply && styles.replyWrapper]}>
-        {/* Visual guide line for nested discussion replies */}
-        {isReply && (
-          <View style={styles.replyGuideLine}>
-            <CornerDownRight size={14} color="#CFD8DC" style={styles.replyIconIndicator} />
-          </View>
-        )}
-
-        <View style={[styles.commentCard, isReply && styles.replyCardLayout]}>
-          {/* Comment Header */}
-          <View style={styles.commentHeader}>
-            <Image
-              source={{ uri: comment.userAvatar }}
-              style={styles.commentAvatar}
-              contentFit="cover"
-            />
-            <View style={styles.commentInfo}>
-              <Text style={styles.commentName}>{comment.userName}</Text>
-              <Text style={styles.commentTime}>{comment.timestamp}</Text>
-            </View>
-            
-            <TouchableOpacity
-              style={[styles.likeBadge, isLiked && styles.likeBadgeActive]}
-              onPress={() => handleLikeComment(comment.id)}
-              activeOpacity={0.7}
-            >
-              <Heart
-                size={13}
-                color={isLiked ? '#FFF' : '#78909C'}
-                fill={isLiked ? '#FFF' : 'none'}
-              />
-              <Text style={[styles.likeBadgeText, isLiked && styles.likeBadgeTextActive]}>
-                {comment.likesCount + (isLiked ? 1 : 0)}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Comment Content */}
-          <View style={styles.commentContentWrapper}>
-            <Text style={styles.commentContent}>{comment.content}</Text>
-          </View>
-
-          {/* Comment Actions / Expand Trigger */}
-          {comment.replies && comment.replies.length > 0 && (
-            <View style={styles.commentActions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => toggleReplies(comment.id)}
-                activeOpacity={0.7}
-              >
-                <MessageSquare size={13} color={Colors.primary} fill="rgba(76,175,80,0.1)" />
-                <Text style={styles.actionText}>
-                  {showReplies ? 'Ẩn phản hồi' : `Xem ${comment.replies.length} trả lời`}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Nested Child Replies */}
-        {comment.replies && comment.replies.length > 0 && showReplies && (
-          <View style={styles.repliesListContainer}>
-            {comment.replies.map((reply) => renderComment(reply, depth + 1))}
-          </View>
-        )}
-      </View>
-    );
-  };
-
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      <ScreenHeader
-        title="Thảo luận xanh"
-        backgroundColor={Colors.white}
-        titleColor="#1B5E20"
-      />
+      {/* Header Thảo Luận Xanh có Nền Lá Cây bằng Image */}
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 4 }]}>
+        <Image
+          source={require('@/assets/images/pictures/background_la_3.png')} 
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+        />
+
+        {/* Lớp phủ Gradient xanh mờ để bảo toàn độ tương phản giúp chữ sắc nét và tiệp màu với ảnh gốc */}
+        <LinearGradient
+          colors={['rgba(27, 94, 32, 0.85)', 'rgba(46, 125, 50, 0.92)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+
+        <View style={styles.headerContentRow}>
+          <BackButton color="#FFF" size={24} style={styles.backButtonCircle} />
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerMainTitle}>Thảo luận xanh</Text>
+            <Text style={styles.headerSubTitle}>Cùng nhau chia sẻ kiến thức và lan tỏa lối sống xanh</Text>
+          </View>
+          <TouchableOpacity style={styles.filterButtonCircle} activeOpacity={0.7}>
+            <SlidersHorizontal size={20} color="#2E7D32" />
+          </TouchableOpacity>
+        </View>
+      </View>
 
       <KeyboardAvoidingView
-        style={styles.content}
+        style={styles.flexContent}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 44 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* Sync with EducationDetail Mini Heading Bar */}
-        <View style={styles.topicHeader}>
-          <View style={styles.topicInnerBar}>
-            <View style={styles.greenDecorator} />
-            <View style={styles.topicContent}>
-              <Text style={styles.topicTitle} numberOfLines={1}>{tip.title}</Text>
-              <Text style={styles.commentCount}>Cộng đồng ({comments.length} đóng góp)</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Main Discussion Container */}
         <ScrollView
-          style={styles.commentsList}
+          style={styles.scrollStream}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.commentsContent}
+          contentContainerStyle={styles.scrollStreamContent}
         >
-          {comments.length === 0 ? (
-            <View style={styles.noCommentsContainer}>
-              <View style={styles.noCommentsIconCircle}>
-                <MessageCircle size={32} color="#A5D6A7" />
-              </View>
-              <Text style={styles.noCommentsText}>Chưa có ý kiến thảo luận</Text>
-              <Text style={styles.noCommentsSubtext}>Hãy là người đầu tiên chia sẻ trải nghiệm phân loại rác của bạn!</Text>
-            </View>
-          ) : (
-            comments.map((comment) => renderComment(comment))
-          )}
-        </ScrollView>
-
-        {/* Premium Styled Input Sticky Footer */}
-        <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 10 }]}>
-          <LinearGradient
-            colors={['rgba(250,250,250,0)', 'rgba(250,250,250,0.95)', '#FAFAFA']}
-            style={styles.inputGradient}
-            pointerEvents="none"
-          />
-          <View style={styles.inputBox}>
+          {/* Khối chủ đề hiện tại dạng Banner nhỏ */}
+          <View style={styles.currentTopicCard}>
             <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100' }}
-              style={styles.inputAvatar}
+              source={{ uri: tip.imageUrl }}
+              style={styles.topicThumbnail}
               contentFit="cover"
             />
-            <View style={styles.inputFieldContainer}>
-              <TextInput
-                style={styles.inputField}
-                placeholder="Chia sẻ mẹo thực hành của bạn..."
-                placeholderTextColor="#90A4AE"
-                value={newCommentText}
-                onChangeText={setNewCommentText}
-                multiline
-                maxLength={500}
-              />
-              <Text style={styles.charCount}>{newCommentText.length}/500</Text>
+            <View style={styles.topicTextDetails}>
+              <Text style={styles.topicStatusLabel}>Chủ đề hiện tại</Text>
+              <Text style={styles.topicTitleText} numberOfLines={1}>{tip.title}</Text>
+              <Text style={styles.topicCommunityCount}>Cộng đồng (4 đóng góp)</Text>
             </View>
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                newCommentText.trim().length === 0 && styles.sendButtonDisabled
-              ]}
-              onPress={() => {
-                if (newCommentText.trim()) {
-                  setNewCommentText('');
-                  Keyboard.dismiss();
-                }
-              }}
-              disabled={newCommentText.trim().length === 0}
-              activeOpacity={0.8}
-            >
-              <Send size={15} color="#FFF" />
-            </TouchableOpacity>
+            <ChevronRight size={18} color="#718096" style={styles.topicArrowRight} />
           </View>
+
+          {/* Danh sách các luồng bình luận */}
+          {staticComments.map((comment) => {
+            const isMainLiked = likedComments.has(comment.id);
+            return (
+              <View key={comment.id} style={styles.threadContainer}>
+                {/* Khối bình luận gốc (Gốc cha) */}
+                <View style={styles.commentMainBlock}>
+                  <View style={styles.commentHeaderRow}>
+                    <Image source={{ uri: comment.userAvatar }} style={styles.userAvatarImage} />
+                    <View style={styles.userMetadataContainer}>
+                      <Text style={styles.userProfileName}>{comment.userName}</Text>
+                      <Text style={styles.elapsedTimeLabel}>{comment.timestamp}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.likeActionBadge, isMainLiked && styles.likeActionBadgeActive]}
+                      onPress={() => handleLikeComment(comment.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Heart size={14} color={isMainLiked ? '#FFF' : '#2E7D32'} fill={isMainLiked ? '#FFF' : 'none'} />
+                      <Text style={[styles.likeCounterText, isMainLiked && styles.likeCounterTextActive]}>
+                        {comment.likesCount + (isMainLiked ? 1 : 0)}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.commentMessageContent}>{comment.content}</Text>
+
+                  <TouchableOpacity style={styles.inlineReplyTrigger} activeOpacity={0.7}>
+                    <MessageSquare size={14} color="#2E7D32" />
+                    <Text style={styles.inlineReplyTriggerText}>Ấn phản hồi</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Luồng phản hồi thụt lề (Gốc con) */}
+                {comment.replies.map((reply) => {
+                  const isReplyLiked = likedComments.has(reply.id);
+                  return (
+                    <View key={reply.id} style={styles.nestedReplyWrapper}>
+                      {/* Đường line uốn cong chỉ hướng */}
+                      <View style={styles.treeLineGuideContainer}>
+                        <View style={styles.verticalLineGuide} />
+                        <View style={styles.horizontalLShapedCurve} />
+                      </View>
+
+                      <View style={styles.replyContentBlock}>
+                        <View style={styles.commentHeaderRow}>
+                          <Image source={{ uri: reply.userAvatar }} style={styles.userAvatarImageSmall} />
+                          <View style={styles.userMetadataContainer}>
+                            <Text style={styles.userProfileName}>{reply.userName}</Text>
+                            <Text style={styles.elapsedTimeLabel}>{reply.timestamp}</Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[styles.likeActionBadge, isReplyLiked && styles.likeActionBadgeActive]}
+                            onPress={() => handleLikeComment(reply.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Heart size={13} color={isReplyLiked ? '#FFF' : '#2E7D32'} fill={isReplyLiked ? '#FFF' : 'none'} />
+                            <Text style={[styles.likeCounterText, isReplyLiked && styles.likeCounterTextActive]}>
+                              {reply.likesCount + (isReplyLiked ? 1 : 0)}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.commentMessageContent}>{reply.content}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })}
+        </ScrollView>
+
+        {/* Sticky Footer Ô Nhập Liệu Phẳng */}
+        <View style={[styles.stickyInputBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <Image
+            source={{ uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120' }}
+            style={styles.stickyFooterAvatar}
+          />
+          <View style={styles.textInputFlexWrapper}>
+            <TextInput
+              style={styles.textInputFieldComponent}
+              placeholder="Chia sẻ mẹo thực hành của bạn..."
+              placeholderTextColor="#A0AEC0"
+              value={newCommentText}
+              onChangeText={setNewCommentText}
+              multiline
+            />
+            <Text style={styles.characterLengthIndicator}>{newCommentText.length}/500</Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.sendActionSubmitButton,
+              newCommentText.trim().length === 0 && styles.sendActionSubmitButtonDisabled
+            ]}
+            disabled={newCommentText.trim().length === 0}
+            onPress={() => {
+              if (newCommentText.trim()) {
+                setNewCommentText('');
+                Keyboard.dismiss();
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <Send size={16} color="#FFF" />
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -242,253 +263,260 @@ export default function EducationDiscussionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F7FAFC',
   },
-  content: {
-    flex: 1,
+  headerContainer: {
+    position: 'relative',
+    paddingHorizontal: 16,
+    paddingBottom: 45,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerBackgroundGradient: {
+    ...StyleSheet.absoluteFillObject,
   },
-  emptyText: {
-    fontSize: 15,
-    color: '#78909C',
-  },
-
-  // Topic Mini Summary Bar
-  topicHeader: {
-    backgroundColor: '#FFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderColor: '#ECEFF1',
-  },
-  topicInnerBar: {
+  headerContentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAF9',
-    padding: 12,
-    borderRadius: 12,
     gap: 12,
+    marginTop: 8,
+    zIndex: 2, 
   },
-  greenDecorator: {
-    width: 4,
-    height: 32,
-    backgroundColor: '#4CAF50',
-    borderRadius: 2,
-  },
-  topicContent: {
-    flex: 1,
+  backButtonCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  topicTitle: {
-    fontSize: 14,
+  headerTitleContainer: {
+    flex: 1,
+  },
+  headerMainTitle: {
+    fontSize: 18,
     fontWeight: '700',
-    color: '#1A237E',
+    color: '#FFF',
     marginBottom: 2,
   },
-  commentCount: {
+  headerSubTitle: {
     fontSize: 11,
-    color: '#78909C',
-    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 14,
   },
-
-  // Discussion Stream
-  commentsList: {
+  filterButtonCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  flexContent: {
+    flex: 1,
+    marginTop: -25,
+  },
+  scrollStream: {
     flex: 1,
   },
-  commentsContent: {
+  scrollStreamContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 40,
+    paddingTop: 0,
+    paddingBottom: 32,
   },
-  noCommentsContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 80,
-    paddingHorizontal: 32,
-  },
-  noCommentsIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#E8F5E9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  noCommentsText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#263238',
-    marginBottom: 6,
-  },
-  noCommentsSubtext: {
-    fontSize: 13,
-    color: '#78909C',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-
-  // Premium Comment Thread Styling
-  commentWrapper: {
-    marginBottom: 14,
-  },
-  replyWrapper: {
+  currentTopicCard: {
     flexDirection: 'row',
-    marginTop: 8,
-    marginBottom: 4,
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
   },
-  replyGuideLine: {
-    width: 24,
-    alignItems: 'flex-end',
-    position: 'relative',
+  topicThumbnail: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
   },
-  replyIconIndicator: {
-    marginTop: 10,
+  topicTextDetails: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+  },
+  topicStatusLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#48BB78',
+    marginBottom: 2,
+  },
+  topicTitleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A202C',
+    marginBottom: 2,
+  },
+  topicCommunityCount: {
+    fontSize: 11,
+    color: '#A0AEC0',
+  },
+  topicArrowRight: {
     marginRight: 4,
   },
-  commentCard: {
-    flex: 1,
+  threadContainer: {
+    marginBottom: 16,
+  },
+  commentMainBlock: {
     backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#ECEFF1',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 6,
-    elevation: 1,
+    borderColor: '#EDF2F7',
   },
-  replyCardLayout: {
-    backgroundColor: '#FAFAFA',
-    borderColor: '#F0F4F2',
-  },
-  commentHeader: {
+  commentHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 10,
+  userAvatarImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
   },
-  commentInfo: {
+  userAvatarImageSmall: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  userMetadataContainer: {
     flex: 1,
+    marginLeft: 12,
   },
-  commentName: {
-    fontSize: 13.5,
+  userProfileName: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#263238',
+    color: '#1A202C',
   },
-  commentTime: {
+  elapsedTimeLabel: {
     fontSize: 11,
-    color: '#90A4AE',
+    color: '#A0AEC0',
     marginTop: 1,
   },
-  likeBadge: {
+  likeActionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F4F6F7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
   },
-  likeBadgeActive: {
-    backgroundColor: '#FF5252',
+  likeActionBadgeActive: {
+    backgroundColor: '#E53E3E',
   },
-  likeBadgeText: {
-    fontSize: 11,
+  likeCounterText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#546E7A',
+    color: '#2E7D32',
   },
-  likeBadgeTextActive: {
+  likeCounterTextActive: {
     color: '#FFF',
   },
-  commentContentWrapper: {
-    paddingLeft: 2,
-  },
-  commentContent: {
+  commentMessageContent: {
     fontSize: 14,
-    color: '#37474F',
+    color: '#4A5568',
     lineHeight: 21,
+    marginTop: 12,
+    paddingHorizontal: 2,
   },
-  commentActions: {
-    flexDirection: 'row',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F5F7F8',
-  },
-  actionButton: {
+  inlineReplyTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 14,
   },
-  actionText: {
-    fontSize: 12,
+  inlineReplyTriggerText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#2E7D32',
-    fontWeight: '700',
   },
-  repliesListContainer: {
-    marginTop: 2,
+  nestedReplyWrapper: {
+    flexDirection: 'row',
+    marginTop: 8,
+    marginLeft: 16,
   },
-
-  // Smooth Sticky Input Panel
-  inputContainer: {
-    backgroundColor: '#FFF',
-    borderTopWidth: 1,
-    borderColor: '#ECEFF1',
+  treeLineGuideContainer: {
+    width: 24,
+    position: 'relative',
   },
-  inputGradient: {
+  verticalLineGuide: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: -30,
-    height: 30,
+    left: 8,
+    top: -24,
+    bottom: 25,
+    width: 1,
+    borderLeftWidth: 1,
+    borderColor: '#CBD5E0',
+    borderStyle: 'dashed',
   },
-  inputBox: {
+  horizontalLShapedCurve: {
+    position: 'absolute',
+    left: 8,
+    top: 24,
+    width: 12,
+    height: 1,
+    borderTopWidth: 1,
+    borderColor: '#CBD5E0',
+    borderStyle: 'dashed',
+  },
+  replyContentBlock: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+  },
+  stickyInputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
   },
-  inputAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  stickyFooterAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     marginBottom: 4,
   },
-  inputFieldContainer: {
+  textInputFlexWrapper: {
     flex: 1,
-    backgroundColor: '#F4F6F7',
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 20,
+    paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 6,
+    position: 'relative',
   },
-  inputField: {
+  textInputFieldComponent: {
     fontSize: 14,
-    color: '#263238',
-    maxHeight: 72,
+    color: '#1A202C',
+    maxHeight: 80,
     padding: 0,
+    paddingRight: 45,
   },
-  charCount: {
+  characterLengthIndicator: {
+    position: 'absolute',
+    right: 12,
+    bottom: 6,
     fontSize: 10,
-    color: '#90A4AE',
-    textAlign: 'right',
-    marginTop: 4,
+    color: '#A0AEC0',
   },
-  sendButton: {
+  sendActionSubmitButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -497,7 +525,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  sendButtonDisabled: {
-    backgroundColor: '#CFD8DC',
+  sendActionSubmitButtonDisabled: {
+    backgroundColor: '#CBD5E0',
   },
 });

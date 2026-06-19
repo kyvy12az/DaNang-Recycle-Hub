@@ -262,7 +262,7 @@ export const mockEducationTips: EducationTip[] = [
     title: 'Cách phân loại rác tại nhà',
     summary: 'Hướng dẫn 4 nhóm rác cơ bản giúp tái chế hiệu quả',
     content: 'Rác hữu cơ (thức ăn thừa, lá cây), Rác tái chế (nhựa, giấy, kim loại), Rác nguy hại (pin, bóng đèn), Rác còn lại. Phân loại đúng giúp tăng giá trị tái chế lên 300%.',
-    imageUrl: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=400',
+    imageUrl: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b',
     category: 'Hướng dẫn',
   },
   {
@@ -270,7 +270,7 @@ export const mockEducationTips: EducationTip[] = [
     title: 'Tác hại nhựa biển ở Đà Nẵng',
     summary: 'Mỗi năm 8 triệu tấn nhựa đổ ra biển toàn cầu',
     content: 'Bãi biển Đà Nẵng đang đối mặt với ô nhiễm nhựa nghiêm trọng. Mỗi km bờ biển có hàng trăm mảnh nhựa. Tái chế là giải pháp hiệu quả nhất.',
-    imageUrl: 'https://images.unsplash.com/photo-1621451537084-482c73073a0f?w=400',
+    imageUrl: 'https://images.unsplash.com/photo-1621451537084-482c73073a0f',
     category: 'Môi trường',
   },
   {
@@ -278,7 +278,7 @@ export const mockEducationTips: EducationTip[] = [
     title: '5 mẹo giảm rác nhựa hàng ngày',
     summary: 'Những thay đổi nhỏ tạo nên sự khác biệt lớn',
     content: '1. Mang túi vải khi đi chợ. 2. Dùng bình nước cá nhân. 3. Từ chối ống hút nhựa. 4. Chọn sản phẩm ít bao bì. 5. Tái sử dụng hộp nhựa.',
-    imageUrl: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=400',
+    imageUrl: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09',
     category: 'Mẹo hay',
   },
 ];
