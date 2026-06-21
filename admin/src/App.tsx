@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { RewardsProvider } from "@/contexts/RewardsContext";
+import { EducationProvider } from "@/contexts/EducationContext"; 
 import AdminLayout from "@/components/layout/AdminLayout";
 import Dashboard from "@/pages/Dashboard";
 import UsersPage from "@/pages/UsersPage";
@@ -26,6 +27,8 @@ import { ReactNode } from "react";
 import RankPage from "./pages/RankPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import WastePostDetailPage from "./pages/WastePostDetailPage";
+import EducationFormPage from "./pages/EducationFormPage";
+import EducationDetailPage from "./pages/EducationDetailPage";
 
 const queryClient = new QueryClient();
 
@@ -42,42 +45,47 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <RewardsProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="*" element={
-                <ProtectedRoute>
-                  <AdminLayout>
-                    <Routes>
-                      <Route path="/" element={<Dashboard />} />
-                      <Route path="/users" element={<UsersPage />} />
-                      <Route path="/users/:id" element={<UserDetailPage />} />
-                      <Route path="/waste-posts" element={<WastePostsPage />} />
-                      <Route path="/waste-posts/:id" element={<WastePostDetailPage />} />
-                      <Route path="/transactions" element={<TransactionsPage />} />
-                      <Route path="/wallet" element={<WalletPage />} />
-                      <Route path="/rewards" element={<RewardsPage />} />
-                      <Route path="/rewards/new" element={<RewardFormPage />} />
-                      <Route path="/rewards/:id/edit" element={<RewardFormPage />} />
-                      <Route path="/collection-points" element={<CollectionPointsPage />} />
-                      <Route path="/education" element={<EducationPage />} />
-                      <Route path="/ranks" element={<RankPage />} />
-                      <Route path="/ai-logs" element={<AILogsPage />} />
-                      <Route path="/support" element={<SupportPage />} />
-                      <Route path="/notifications" element={<NotificationsPage />} />
-                      <Route path="/analytics" element={<AnalyticsPage />} />
-                      <Route path="/settings" element={<SettingsPage />} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </AdminLayout>
-                </ProtectedRoute>
-              } />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+        <EducationProvider> 
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="*" element={
+                  <ProtectedRoute>
+                    <AdminLayout>
+                      <Routes>
+                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/users" element={<UsersPage />} />
+                        <Route path="/users/:id" element={<UserDetailPage />} />
+                        <Route path="/waste-posts" element={<WastePostsPage />} />
+                        <Route path="/waste-posts/:id" element={<WastePostDetailPage />} />
+                        <Route path="/transactions" element={<TransactionsPage />} />
+                        <Route path="/wallet" element={<WalletPage />} />
+                        <Route path="/rewards" element={<RewardsPage />} />
+                        <Route path="/rewards/new" element={<RewardFormPage />} />
+                        <Route path="/rewards/:id/edit" element={<RewardFormPage />} />
+                        <Route path="/collection-points" element={<CollectionPointsPage />} />
+                        <Route path="/education" element={<EducationPage />} />
+                        <Route path="/education/new" element={<EducationFormPage />} />
+                        <Route path="/education/:id" element={<EducationDetailPage />} />
+                        <Route path="/education/:id/edit" element={<EducationFormPage />} />
+                        <Route path="/ranks" element={<RankPage />} />
+                        <Route path="/ai-logs" element={<AILogsPage />} />
+                        <Route path="/support" element={<SupportPage />} />
+                        <Route path="/notifications" element={<NotificationsPage />} />
+                        <Route path="/analytics" element={<AnalyticsPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </AdminLayout>
+                  </ProtectedRoute>
+                } />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </EducationProvider>
       </RewardsProvider>
     </AuthProvider>
   </QueryClientProvider>

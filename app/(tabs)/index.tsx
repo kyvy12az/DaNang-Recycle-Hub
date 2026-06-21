@@ -23,6 +23,11 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const greenPoints = user?.greenPoints ?? 0;
+  const totalWeight = user?.totalWeight ?? 0;
+  const totalTransactions = user?.totalTransactions ?? 0;
+  const walletBalance = user?.walletBalance ?? 0;
+  const todayWeight = user?.todayWeight ?? 0; 
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim1 = useRef(new Animated.Value(0.9)).current;
@@ -30,6 +35,7 @@ export default function HomeScreen() {
   const counterAnim = useRef(new Animated.Value(0)).current;
   const [savedKg, setSavedKg] = useState<number>(0);
 
+  // useEffect 1: animations layout
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -57,18 +63,22 @@ export default function HomeScreen() {
         delay: 500,
       }),
     ]).start();
+  }, []);
 
+  // useEffect 2: animate counter theo todayWeight
+  useEffect(() => {
+    counterAnim.setValue(0);
     const listener = counterAnim.addListener(({ value }) => {
       setSavedKg(Math.round(value));
     });
     Animated.timing(counterAnim, {
-      toValue: 150,
+      toValue: todayWeight,
       duration: 2000,
       useNativeDriver: false,
     }).start();
 
     return () => counterAnim.removeListener(listener);
-  }, []);
+  }, [todayWeight]);
 
   const handleSellerPress = () => {
     Animated.sequence([
@@ -124,7 +134,7 @@ export default function HomeScreen() {
             <Text style={styles.statsLabel}>Hôm nay đã cứu</Text>
             <View style={styles.statsRow}>
               <Text style={styles.statsNumber}>{savedKg}</Text>
-              <Text style={styles.statsUnit}>kg nhựa</Text>
+              <Text style={styles.statsUnit}>kg rác thải</Text>
             </View>
             <Text style={styles.statsSubtext}>khỏi đại dương 🌊</Text>
           </View>
@@ -204,17 +214,17 @@ export default function HomeScreen() {
         <View style={styles.impactRow}>
           <View style={[styles.impactCard, { backgroundColor: '#E8F5E9' }]}>
             <Leaf size={24} color={Colors.primary} />
-            <Text style={styles.impactNumber}>0 kg</Text>
+            <Text style={styles.impactNumber}>{totalWeight.toLocaleString()} kg</Text>
             <Text style={styles.impactLabel}>Đã tái chế</Text>
           </View>
           <View style={[styles.impactCard, { backgroundColor: '#FFF8E1' }]}>
             <Award size={24} color={Colors.sandDark} />
-            <Text style={styles.impactNumber}>0</Text>
+            <Text style={styles.impactNumber}>{greenPoints.toLocaleString()}</Text>
             <Text style={styles.impactLabel}>Điểm xanh</Text>
           </View>
           <View style={[styles.impactCard, { backgroundColor: '#E0F7FA' }]}>
             <TrendingUp size={24} color={Colors.accent} />
-            <Text style={styles.impactNumber}>0</Text>
+            <Text style={styles.impactNumber}>{totalTransactions.toLocaleString()}</Text>
             <Text style={styles.impactLabel}>Giao dịch</Text>
           </View>
         </View>
@@ -242,7 +252,6 @@ export default function HomeScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.gameGradient}
           >
-            {/* Phần thông tin chung */}
             <View style={styles.gameTopRow}>
               <View style={styles.gameIconWrap}>
                 <Gamepad2 size={24} color={Colors.white} />
@@ -267,27 +276,23 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.actionButtonsRow}>
-
-              {/* Nút vào Game */}
               <TouchableOpacity
                 style={styles.btnActionPrimary}
-                onPress={handleGamePress} 
+                onPress={handleGamePress}
                 activeOpacity={0.7}
               >
                 <Text style={styles.gameCtaText}>Vào game ngay</Text>
                 <ChevronRight size={18} color={Colors.white} />
               </TouchableOpacity>
 
-              {/* Nút vào Huy hiệu */}
               <TouchableOpacity
                 style={styles.btnActionSecondary}
-                onPress={handleProgressPress} 
+                onPress={handleProgressPress}
                 activeOpacity={0.7}
               >
                 <Medal size={18} color={Colors.white} />
                 <Text style={styles.gameCtaText}>Huy hiệu</Text>
               </TouchableOpacity>
-
             </View>
           </LinearGradient>
         </View>
@@ -295,6 +300,7 @@ export default function HomeScreen() {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

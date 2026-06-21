@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   StatusBar,
   Dimensions,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,11 +19,9 @@ import Colors from '@/constants/colors';
 import { useSocket } from '@/hooks/useSocket';
 import { useAuth } from '@/contexts/AuthContext';
 
-// ─── Config ───────────────────────────────────────────────────────────────────
 const API_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
 const { width } = Dimensions.get('window');
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type Period = 'weekly' | 'monthly' | 'yearly';
 
 interface LeaderboardEntry {
@@ -35,6 +34,7 @@ interface LeaderboardEntry {
   periodType: string;
   snapshotDate: string;
   rewardStatus: string;
+  avatar?: string | null;
 }
 
 interface Player {
@@ -43,6 +43,7 @@ interface Player {
   kg: number;
   pts?: number;
   rank: number;
+  avatar?: string | null;
 }
 
 interface Reward {
@@ -555,17 +556,13 @@ function CrownIcon() {
 
 function MedalIcon({ rank }: { rank: 1 | 2 | 3 }) {
   const configs = {
-    1: { colors: ['#FFD54F', '#F57F17'] as const, icon: <Trophy size={16} color="#fff" strokeWidth={2} /> },
-    2: { colors: ['#E0E0E0', '#757575'] as const, icon: <Medal size={15} color="#fff" strokeWidth={2} /> },
-    3: { colors: ['#CD7F32', '#7B3F00'] as const, icon: <Medal size={14} color="#fff" strokeWidth={2} /> },
+    1: { image: require('../../assets/images/pictures/cup_gold.png') },
+    2: { image: require('../../assets/images/pictures/cup_bac.png') },
+    3: { image: require('../../assets/images/pictures/cup_dong.png') },
   };
   const c = configs[rank];
   return (
-    <View style={styles.medalIconWrap}>
-      <LinearGradient colors={c.colors} style={styles.medalIconGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        {c.icon}
-      </LinearGradient>
-    </View>
+    <Image source={c.image} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
   );
 }
 
@@ -591,21 +588,39 @@ function PodiumCard({ player, rank, fadeAnim }: PodiumCardProps) {
           borderRadius: (avatarSize + 8) / 2,
           borderColor: cfg.glowColor,
         }]}>
-          <View style={[styles.podAvatar, {
-            width: avatarSize,
-            height: avatarSize,
-            borderRadius: avatarSize / 2,
-            backgroundColor: cfg.avatarBg,
-            borderColor: cfg.avatarBorder,
-          }]}>
-            <Text style={[styles.podAvatarText, { fontSize, color: cfg.avatarText }]}>
-              {player.initials}
-            </Text>
-          </View>
+          {player.avatar ? (
+            <Image
+              source={{ uri: player.avatar }}
+              style={{
+                width: avatarSize,
+                height: avatarSize,
+                borderRadius: avatarSize / 2,
+                borderWidth: 2,
+                borderColor: cfg.avatarBorder,
+              }}
+            />
+          ) : (
+            <View style={[styles.podAvatar, {
+              width: avatarSize,
+              height: avatarSize,
+              borderRadius: avatarSize / 2,
+              backgroundColor: cfg.avatarBg,
+              borderColor: cfg.avatarBorder,
+            }]}>
+              <Text style={[styles.podAvatarText, { fontSize, color: cfg.avatarText }]}>
+                {player.initials}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.rankBadgeWrap}>
-          <LinearGradient colors={cfg.badgeBg} style={styles.rankBadge} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+          <LinearGradient
+            colors={cfg.badgeBg}
+            style={styles.rankBadge}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
             <Text style={styles.rankBadgeText}>{rank}</Text>
           </LinearGradient>
         </View>
@@ -659,25 +674,26 @@ function mapLeaderboardToPlayer(entry: LeaderboardEntry): Player {
     kg: entry.totalWeightScrapped,
     pts: entry.accumulatedPoints,
     rank: entry.rankPosition,
+    avatar: entry.avatar || null,
   };
 }
 
 function getRewardText(rank: number, period: Period): Reward {
   const rewards: Record<Period, Record<number, Reward>> = {
     weekly: {
-      1: { rank: 'Hạng 1', gift: 'Voucher 500k + Áo Tái Chế', bonus: '+100 Pts' },
-      2: { rank: 'Hạng 2', gift: 'Voucher 300k + Bình Nước', bonus: '+50 Pts' },
-      3: { rank: 'Hạng 3', gift: 'Voucher 150k + Túi Vải', bonus: '+25 Pts' },
+      1: { rank: 'Hạng 2', gift: 'Voucher 300k + Bình Nước', bonus: '+50 Điểm xanh' },
+      2: { rank: 'Hạng 1', gift: 'Voucher 500k + Áo Tái Chế', bonus: '+100 Điểm xanh' },   
+      3: { rank: 'Hạng 3', gift: 'Voucher 150k + Túi Vải', bonus: '+25 Điểm xanh' },
     },
     monthly: {
-      1: { rank: 'Hạng 1', gift: 'Voucher 1Tr + Xe Đạp Xanh', bonus: '+300 Pts' },
-      2: { rank: 'Hạng 2', gift: 'Voucher 500k + Balo Eco', bonus: '+150 Pts' },
-      3: { rank: 'Hạng 3', gift: 'Voucher 200k + Mũ Vải', bonus: '+75 Pts' },
+      1: { rank: 'Hạng 2', gift: 'Voucher 500k + Balo Eco', bonus: '+150 Điểm xanh' },
+      2: { rank: 'Hạng 1', gift: 'Voucher 1Tr + Xe Đạp Xanh', bonus: '+300 Điểm xanh' },
+      3: { rank: 'Hạng 3', gift: 'Voucher 200k + Mũ Vải', bonus: '+75 Điểm xanh' },
     },
     yearly: {
-      1: { rank: 'Hạng 1', gift: 'Tablet Eco + 5Tr Xu Green', bonus: '+1000 Pts' },
-      2: { rank: 'Hạng 2', gift: 'Phone Eco + 2Tr Xu Green', bonus: '+500 Pts' },
-      3: { rank: 'Hạng 3', gift: 'Đồng Hồ + 1Tr Xu Green', bonus: '+250 Pts' },
+      1: { rank: 'Hạng 2', gift: 'Phone Eco + 2Tr Xu Green', bonus: '+500 Điểm xanh' },
+      2: { rank: 'Hạng 1', gift: 'Tablet Eco + 5Tr Xu Green', bonus: '+1000 Điểm xanh' }, 
+      3: { rank: 'Hạng 3', gift: 'Đồng Hồ + 1Tr Xu Green', bonus: '+250 Điểm xanh' },
     },
   };
   return rewards[period]?.[rank] || { rank: `Hạng ${rank}`, gift: '', bonus: '' };
@@ -898,12 +914,19 @@ export default function RankingScreen() {
               return (
                 <Animated.View key={player.name} style={[styles.listItem, { opacity: fadeAnim }]}>
                   <Text style={styles.listRank}>{rank}</Text>
-                  
-                  <View style={[styles.listAvatar, { backgroundColor: ac.bg }]}>
-                    <Text style={[styles.listAvatarText, { color: ac.text }]}>
-                      {player.initials}
-                    </Text>
-                  </View>
+                  {/* ✅ Avatar thật hoặc fallback chữ tắt */}
+                  {player.avatar ? (
+                    <Image
+                      source={{ uri: player.avatar }}
+                      style={[styles.listAvatar, { borderRadius: 14 }]}
+                    />
+                  ) : (
+                    <View style={[styles.listAvatar, { backgroundColor: ac.bg }]}>
+                      <Text style={[styles.listAvatarText, { color: ac.text }]}>
+                        {player.initials}
+                      </Text>
+                    </View>
+                  )}
                   
                   <View style={styles.listInfo}>
                     <Text style={styles.listName} numberOfLines={1}>{player.name}</Text>
@@ -915,7 +938,7 @@ export default function RankingScreen() {
                     {player.pts !== undefined && (
                       <View style={styles.ptsBadge}>
                         <Leaf size={10} color="#2E7D32" />
-                        <Text style={styles.ptsText}>+{player.pts} Pts</Text>
+                        <Text style={styles.ptsText}>+ 0 Điểm xanh</Text>
                       </View>
                     )}
                   </View>

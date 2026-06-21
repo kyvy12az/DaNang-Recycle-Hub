@@ -8,46 +8,113 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
-import { 
-  ChevronRight, 
-  Leaf, 
-  Recycle, 
-  Award, 
-  TrendingUp, 
+import {
+  ChevronRight,
+  Leaf,
+  Recycle,
+  Award,
+  TrendingUp,
   Search,
   Zap,
   BookOpen,
-  MapPin
+  MapPin,
+  Heart,
+  MessageCircle
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { mockEducationTips } from '@/mocks/data';
 import EcoLoader from '@/components/EcoLoader';
 
 const { width } = Dimensions.get('window');
 
-// Cập nhật danh mục chuẩn theo hình ảnh thiết kế
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+const categoryMapBackend: Record<string, string> = {
+  recycle: 'recycling',
+  save: 'saving',
+  knowledge: 'environment',
+  location: 'environment'
+};
+
 const CATEGORIES = [
   { id: 'all', name: 'Tất cả', icon: Leaf, color: '#2E7D32' },
   { id: 'recycle', name: 'Tái chế', icon: Recycle, color: '#1E88E5' },
   { id: 'save', name: 'Tiết kiệm', icon: Zap, color: '#F57C00' },
-  { id: 'knowledge', name: 'Kiến thức', icon: BookOpen, color: '#AB47BC' },
+  { id: 'environment', name: 'Môi trường', icon: BookOpen, color: '#AB47BC' },
   { id: 'location', name: 'Địa điểm', icon: MapPin, color: '#E53935' },
 ];
+
+const catLabels: Record<string, string> = {
+  recycling: "Tái chế",
+  saving: "Tiết kiệm",
+  environment: "Môi trường"
+};
+
+interface EducationPost {
+  id: string;
+  title: string;
+  description: string;
+  content: string;
+  category: 'recycling' | 'saving' | 'environment';
+  status: 'published' | 'draft';
+  featured: boolean;
+  image?: string;
+  coverImage?: string;
+  likes: number;
+  comments: any[];
+  createdAt: string;
+}
 
 export default function EducationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [posts, setPosts] = useState<EducationPost[]>([]);
+  const [filteredPosts, setFilteredPosts] = useState<EducationPost[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState('all');
 
+  // lấy danh sách bài viết
+  const fetchEducationPosts = async (showLoader = true) => {
+    try {
+      if (showLoader) setIsLoading(true);
+      const response = await fetch(`${API_URL}/api/educations`);
+      const json = await response.json();
+
+      if (json.success) {
+        // chỉ lấy những bài viết ở trạng thái đã xuất bản (published)
+        const publishedPosts = (json.data as EducationPost[]).filter(
+          (post) => post.status === 'published'
+        );
+        setPosts(publishedPosts);
+      }
+    } catch (error) {
+      console.error("Lỗi lấy dữ liệu thư viện xanh:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchEducationPosts(false);
+    }, [])
+  );
+
+  // xử lý bộ lọc bài viết khi activeTab hoặc danh sách bài viết thay đổi
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1000);
-    return () => clearTimeout(timer);
-  }, []);
+    if (activeTab === 'all') {
+      setFilteredPosts(posts);
+    } else {
+      const backendCategoryKey = categoryMapBackend[activeTab];
+      const filtered = posts.filter(post => post.category === backendCategoryKey);
+      setFilteredPosts(filtered);
+    }
+  }, [activeTab, posts]);
 
   if (isLoading) {
     return <EcoLoader message="Đang tải kiến thức xanh..." size="large" />;
@@ -56,7 +123,7 @@ export default function EducationScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      
+
       {/* Header chuẩn thiết kế thư viện xanh */}
       <LinearGradient
         colors={['#1B5E20', '#2E7D32']}
@@ -65,8 +132,8 @@ export default function EducationScreen() {
       >
         {/* Hình minh họa góc phải header (Thùng rác tái chế và chai lọ) */}
         <View style={styles.headerIllustrationContainer}>
-          <Image 
-            source={require('@/assets/images/pictures/anh_thung_rac.png')} 
+          <Image
+            source={require('@/assets/images/pictures/anh_thung_rac.png')}
             style={styles.headerIllustration}
             contentFit="contain"
           />
@@ -105,12 +172,12 @@ export default function EducationScreen() {
         <TouchableOpacity activeOpacity={0.9} style={styles.featuredWidget}>
           <View style={styles.featuredContentRow}>
             {/* Hình ảnh hộp quà bên trái */}
-            <Image 
+            <Image
               source={{ uri: 'https://cdn-icons-png.flaticon.com/512/4213/4213958.png' }}
               style={styles.giftIcon}
               contentFit="contain"
             />
-            
+
             <View style={styles.featuredTextContainer}>
               <Text style={styles.featuredTag}>MẸO HAY HÔM NAY</Text>
               <Text style={styles.featuredText}>
@@ -124,19 +191,19 @@ export default function EducationScreen() {
         </TouchableOpacity>
 
         {/* Categories Grid/Row */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoriesContainer}
         >
           {CATEGORIES.map((cat) => {
             const isSelected = activeTab === cat.id;
             return (
-              <TouchableOpacity 
-                key={cat.id} 
+              <TouchableOpacity
+                key={cat.id}
                 onPress={() => setActiveTab(cat.id)}
                 style={[
-                  styles.categoryItem, 
+                  styles.categoryItem,
                   isSelected && styles.categoryItemActive
                 ]}
               >
@@ -158,52 +225,72 @@ export default function EducationScreen() {
         {/* Section Header */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Khám phá bài viết</Text>
-          <TouchableOpacity style={styles.seeAllContainer}>
-            <Text style={styles.seeAll}>Xem tất cả</Text>
-            <ChevronRight size={16} color="#2E7D32" />
+          <TouchableOpacity
+            onPress={() => { setActiveTab('all'); fetchEducationPosts(false); }}
+            style={styles.seeAllContainer}
+          >
+            <Text style={styles.seeAll}>Làm mới</Text>
           </TouchableOpacity>
         </View>
 
         {/* List bài viết chuẩn mẫu mã */}
-        {mockEducationTips.map((tip) => (
-          <TouchableOpacity
-            key={tip.id}
-            style={styles.articleCard}
-            onPress={() => router.push({ pathname: '/education-detail' as any, params: { id: tip.id } })}
-            activeOpacity={0.9}
-          >
-            <View style={styles.articleImageWrapper}>
-              <Image
-                source={{ uri: tip.imageUrl || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b' }}
-                style={styles.articleImage}
-                contentFit="cover"
-              />
-              <View style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>HƯỚNG DẪN</Text>
-              </View>
-            </View>
-            
-            <View style={styles.articleInfo}>
-              <Text style={styles.articleTitle} numberOfLines={2}>
-                Cách phân loại rác tại nhà
-              </Text>
-              <Text style={styles.articleSummary} numberOfLines={2}>
-                Hướng dẫn 4 nhóm rác cơ bản giúp tái chế hiệu quả
-              </Text>
-              
-              <View style={styles.articleFooter}>
-                <View style={styles.authorRow}>
-                  <Leaf size={14} color="#2E7D32" />
-                  <Text style={styles.authorText}>Green Guide</Text>
-                </View>
-                <View style={styles.readMoreBtn}>
-                  <Text style={styles.readMoreLabel}>Chi tiết</Text>
-                  <ChevronRight size={14} color="#2E7D32" />
+        {filteredPosts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Leaf size={40} color="#CBD5E1" />
+            <Text style={styles.emptyText}>Chưa có bài viết nào thuộc danh mục này</Text>
+          </View>
+        ) : (
+          filteredPosts.map((tip) => (
+            <TouchableOpacity
+              key={tip.id}
+              style={styles.articleCard}
+              onPress={() => router.push({ pathname: '/education-detail' as any, params: { id: tip.id } })}
+              activeOpacity={0.9}
+            >
+              <View style={styles.articleImageWrapper}>
+                <Image
+                  source={{ uri: tip.coverImage || 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b' }}
+                  style={styles.articleImage}
+                  contentFit="cover"
+                />
+                <View style={styles.categoryTag}>
+                  <Text style={styles.categoryTagText}>
+                    {(catLabels[tip.category] || "Kiến thức").toUpperCase()}
+                  </Text>
                 </View>
               </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+
+              <View style={styles.articleInfo}>
+                <Text style={styles.articleTitle} numberOfLines={2}>
+                  {tip.title}
+                </Text>
+                <Text style={styles.articleSummary} numberOfLines={2}>
+                  {tip.description}
+                </Text>
+
+                <View style={styles.articleFooter}>
+                  <View style={styles.engagementRow}>
+                    <View style={styles.engagementItem}>
+                      <Heart size={14} color="#E53935" fill={tip.likes > 0 ? "#E53935" : "transparent"} />
+                      <Text style={styles.engagementText}>{tip.likes || 0}</Text>
+                    </View>
+                    <View style={[styles.engagementItem, { marginLeft: 12 }]}>
+                      <MessageCircle size={14} color="#64748B" />
+                      <Text style={styles.engagementText}>
+                        {(tip.comments || []).reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.readMoreBtn}>
+                    <Text style={styles.readMoreLabel}>Chi tiết</Text>
+                    <ChevronRight size={14} color="#2E7D32" />
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
 
         <View style={{ height: 80 }} />
       </ScrollView>
@@ -288,7 +375,7 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    marginTop: -15, 
+    marginTop: -15,
   },
   bodyContent: {
     paddingHorizontal: 16,
@@ -469,5 +556,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#2E7D32',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  engagementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  engagementItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  engagementText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
 });

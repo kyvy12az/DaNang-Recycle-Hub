@@ -165,7 +165,8 @@ function RootLayoutNav() {
       <Stack.Screen name="chat" options={{ title: "Nhắn tin" }} />
       <Stack.Screen name="game" options={{ headerShown: false }} />
       <Stack.Screen name="rewards" options={{ title: "Đổi thưởng" }} />
-      <Stack.Screen name="education-detail" options={{ title: "Chi tiết" }} />
+      <Stack.Screen name="education-detail" options={{ title: "Chi tiết", headerShown: false }} />
+      <Stack.Screen name="education-discussion" options={{ title: "Thảo luận xanh", headerShown: false }} />
       <Stack.Screen name="profile/history" options={{ title: "Lịch sử giao dịch", headerShown: false }} />
     </Stack>
   );

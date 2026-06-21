@@ -17,8 +17,14 @@ import {
   MapPin,
   Scale,
   Check,
-  ChevronLeft,
   PackageOpen,
+  Hourglass,
+  PackageCheck,
+  CheckCircle2,
+  XCircle,
+  Bookmark,
+  ChevronRight,
+  FileSearch2,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
@@ -33,12 +39,25 @@ type TabType = 'pending' | 'approved';
 
 const getStatusMeta = (status: string) => {
   switch (status) {
-    case 'available': return { bg: '#FFF8E1', text: '#F57F17', label: 'Chờ duyệt', emoji: '⏳' };
-    case 'approved': return { bg: '#E3F2FD', text: '#1565C0', label: 'Đã duyệt', emoji: '📦' };
-    case 'collected':
-    case 'completed': return { bg: '#E8F5E9', text: '#2E7D32', label: 'Thu gom xong', emoji: '✅' };
-    case 'rejected': return { bg: '#FFEBEE', text: '#C62828', label: 'Từ chối', emoji: '❌' };
-    default: return { bg: '#F1F5F9', text: '#475569', label: status, emoji: '🔖' };
+    case 'available':
+      return { bg: '#FFF8E1', text: '#F57F17', label: 'Chờ duyệt', icon: <Hourglass size={12} color="#F57F17" strokeWidth={2.5} /> };
+    case 'approved':
+      return { bg: '#E3F2FD', text: '#1565C0', label: 'Đã duyệt', icon: <PackageCheck size={13} color="#1565C0" strokeWidth={2.5} /> };
+    case 'pending_confirmation':
+      return {
+        bg: '#FFF3E0', 
+        text: '#E65100', 
+        label: 'Chờ xác nhận',
+        icon: <FileSearch2 size={13} color="#E65100" strokeWidth={2.5} />
+      };
+    case 'pending':
+      return { bg: '#E8F5E9', text: '#94A3B8', label: 'Đang thu gom', icon: <Clock size={13} color="#94A3B8" strokeWidth={2.5} /> };
+    case 'completed':
+      return { bg: '#E8F5E9', text: '#2E7D32', label: 'Thu gom xong', icon: <CheckCircle2 size={13} color="#2E7D32" strokeWidth={2.5} /> };
+    case 'rejected':
+      return { bg: '#FFEBEE', text: '#C62828', label: 'Từ chối', icon: <XCircle size={13} color="#C62828" strokeWidth={2.5} /> };
+    default:
+      return { bg: '#F1F5F9', text: '#475569', label: status, icon: <Bookmark size={13} color="#475569" strokeWidth={2.5} /> };
   }
 };
 
@@ -99,7 +118,11 @@ export default function MyListingsScreen() {
       .join(', ');
 
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.9}
+      // onPress={() => router.push(`/buyer-detail/${id}`)}
+      >
         {/* --- Image Banner --- */}
         <View style={styles.imageWrap}>
           <Image
@@ -110,7 +133,7 @@ export default function MyListingsScreen() {
           />
           {/* overlay gradient */}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.55)']}
+            colors={['transparent', 'rgba(0,0,0,0.6)']}
             style={styles.imageOverlay}
           />
           {/* Price chip */}
@@ -131,38 +154,39 @@ export default function MyListingsScreen() {
           {/* top row: id + status */}
           <View style={styles.cardTopRow}>
             <View>
-              <Text style={styles.cardIdLabel}>MÃ ĐƠN</Text>
+              <Text style={styles.cardIdLabel}>MÃ ĐƠN HÀNG</Text>
               <Text style={styles.cardIdValue}>#{shortId}</Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
+              {s.icon}
               <Text style={[styles.statusBadgeText, { color: s.text }]}>
-                {s.emoji} {s.label}
+                {s.label}
               </Text>
             </View>
           </View>
 
           {/* Item names */}
           <View style={styles.itemsRow}>
-            <Leaf size={13} color="#4CAF50" />
+            <Leaf size={14} color="#4CAF50" style={{ marginTop: 2 }} />
             <Text style={styles.itemsText} numberOfLines={2}>{itemNames || 'Không có vật phẩm'}</Text>
           </View>
 
           {/* Stats strip */}
           <View style={styles.statsStrip}>
             <View style={styles.statsCell}>
-              <Text style={styles.statsCellLabel}>⚖️ Khối lượng</Text>
+              <Text style={styles.statsCellLabel}>Khối lượng</Text>
               <Text style={styles.statsCellValue}>{item.totalWeight} kg</Text>
             </View>
             <View style={styles.statsDiv} />
             <View style={styles.statsCell}>
-              <Text style={styles.statsCellLabel}>💰 Thành tiền</Text>
+              <Text style={styles.statsCellLabel}>Thành tiền</Text>
               <Text style={[styles.statsCellValue, { color: '#2E7D32' }]}>
                 {new Intl.NumberFormat('vi-VN').format(item.totalPrice)}đ
               </Text>
             </View>
             <View style={styles.statsDiv} />
             <View style={styles.statsCell}>
-              <Text style={styles.statsCellLabel}>🌿 Điểm tích</Text>
+              <Text style={styles.statsCellLabel}>Điểm thưởng</Text>
               <Text style={[styles.statsCellValue, { color: '#1565C0' }]}>+{item.greenPoints || 0}</Text>
             </View>
           </View>
@@ -172,7 +196,7 @@ export default function MyListingsScreen() {
             {item.pickupTime && (
               <View style={styles.footerRow}>
                 <Clock size={12} color="#78909C" />
-                <Text style={styles.footerText}>
+                <Text style={styles.footerText} numberOfLines={1}>
                   Hẹn thu gom:{' '}
                   <Text style={styles.footerBold}>{item.pickupTime}</Text>
                 </Text>
@@ -184,9 +208,15 @@ export default function MyListingsScreen() {
                 <Text style={styles.footerText} numberOfLines={1}>{item.address}</Text>
               </View>
             )}
+
+            {/* Thanh điều hướng chỉ thị hành động */}
+            <View style={styles.actionPromptRow}>
+              <Text style={styles.actionPromptText}>Xem chi tiết tiến trình</Text>
+              <ChevronRight size={14} color="#94A3B8" />
+            </View>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -276,28 +306,20 @@ export default function MyListingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F0F4F8' },
+  root: { flex: 1, backgroundColor: '#F4F6F9' },
 
   // Header
   header: {
     paddingHorizontal: 16,
     paddingBottom: 20,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 18,
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 4,
   },
   headerTitleGroup: {
     flexDirection: 'row',
@@ -305,37 +327,26 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: '800',
     color: '#fff',
     letterSpacing: 0.3,
   },
-  headerStats: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 16,
-    padding: 14,
-    alignItems: 'center',
-  },
-  headerStat: { flex: 1, alignItems: 'center' },
-  headerStatVal: { fontSize: 20, fontWeight: '800', color: '#fff' },
-  headerStatLabel: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-  headerStatDiv: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.25)' },
 
   // Tabs
   tabBar: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
   },
   tabItem: {
     flex: 1,
@@ -348,7 +359,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   tabItemActive: { backgroundColor: '#E8F5E9' },
-  tabText: { fontSize: 13, fontWeight: '600', color: '#94A3B8' },
+  tabText: { fontSize: 13, fontWeight: '700', color: '#94A3B8' },
   tabTextActive: { color: '#2E7D32' },
   tabBadge: {
     minWidth: 20,
@@ -366,11 +377,11 @@ const styles = StyleSheet.create({
   // Loading / empty
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { fontSize: 13, color: '#78909C', fontWeight: '500' },
-  emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 72, paddingHorizontal: 32 },
+  emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, paddingHorizontal: 32 },
   emptyIconWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
@@ -385,28 +396,28 @@ const styles = StyleSheet.create({
   // Card
   card: {
     backgroundColor: '#fff',
-    borderRadius: 22,
+    borderRadius: 20,
     overflow: 'hidden',
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.09,
-    shadowRadius: 12,
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
   },
-  imageWrap: { position: 'relative', height: 170 },
+  imageWrap: { position: 'relative', height: 160 },
   cardImage: { width: '100%', height: '100%' },
   imageOverlay: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
-    height: 70,
+    height: 60,
   },
   priceChip: {
     position: 'absolute',
     top: 12, right: 12,
-    backgroundColor: 'rgba(0,0,0,0.68)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   priceChipText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   weightChip: {
@@ -423,40 +434,61 @@ const styles = StyleSheet.create({
   weightChipText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 
   // Card body
-  cardBody: { padding: 14, gap: 10 },
+  cardBody: { padding: 14, gap: 12 },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cardIdLabel: { fontSize: 9, fontWeight: '700', color: '#94A3B8', letterSpacing: 1 },
-  cardIdValue: { fontSize: 14, fontWeight: '800', color: '#334155' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  statusBadgeText: { fontSize: 12, fontWeight: '700' },
+  cardIdLabel: { fontSize: 9, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5 },
+  cardIdValue: { fontSize: 15, fontWeight: '800', color: '#1E293B', marginTop: 1 },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12
+  },
+  statusBadgeText: { fontSize: 12, fontWeight: '800', marginLeft: 1 },
 
   itemsRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
     backgroundColor: '#F8FAFC',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 10,
   },
-  itemsText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#334155', lineHeight: 19 },
+  itemsText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#334155', lineHeight: 18 },
 
   statsStrip: {
     flexDirection: 'row',
-    backgroundColor: '#F0F9F1',
+    backgroundColor: '#F0FDF4',
     borderRadius: 12,
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
   },
-  statsCell: { flex: 1, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6, gap: 3 },
-  statsDiv: { width: 1, backgroundColor: '#C8E6C9' },
-  statsCellLabel: { fontSize: 10, color: '#78909C', fontWeight: '600' },
-  statsCellValue: { fontSize: 14, fontWeight: '800', color: '#334155' },
+  statsCell: { flex: 1, alignItems: 'center', paddingVertical: 8, paddingHorizontal: 4, gap: 2 },
+  statsDiv: { width: 1, backgroundColor: '#BBF7D0' },
+  statsCellLabel: { fontSize: 10, color: '#718096', fontWeight: '600' },
+  statsCellValue: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
 
-  cardFooter: { gap: 5, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  cardFooter: { gap: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  footerText: { fontSize: 12, color: '#78909C', flex: 1 },
+  footerText: { fontSize: 12, color: '#64748B', flex: 1 },
   footerBold: { fontWeight: '700', color: '#475569' },
+
+  actionPromptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 4,
+  },
+  actionPromptText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#3B82F6',
+  }
 });

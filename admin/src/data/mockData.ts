@@ -52,6 +52,24 @@ export interface EducationPost {
   id: string; title: string; description: string; content: string;
   category: 'recycling' | 'saving' | 'environment'; status: 'published' | 'draft';
   featured: boolean; image: string; createdAt: string;
+  coverImage?: string;
+  co2SavedKg?: number;
+  waterSavedL?: number;
+  greenPoints?: number;
+  readMinutesForPoints?: number;
+  readMinutes?: number;
+  likes?: number;
+  comments?: EducationComment[];
+}
+
+export interface EducationComment {
+  id: string;
+  userId: string;
+  userName: string;
+  avatar?: string;
+  content: string;
+  createdAt: string;
+  replies?: EducationComment[];
 }
 
 export interface AILog {
@@ -279,11 +297,16 @@ export const mockCollectionPoints: CollectionPoint[] = [
 ];
 
 export const mockEducationPosts: EducationPost[] = [
-  { id: 'ED001', title: '10 cách tái chế rác nhựa tại nhà', description: 'Hướng dẫn chi tiết cách tái chế nhựa đơn giản', content: '...', category: 'recycling', status: 'published', featured: true, image: '♻️', createdAt: '2025-01-15' },
-  { id: 'ED002', title: 'Phân loại rác đúng cách', description: 'Cách phân loại rác thải sinh hoạt', content: '...', category: 'environment', status: 'published', featured: false, image: '🗑️', createdAt: '2025-02-10' },
-  { id: 'ED003', title: 'Tiết kiệm năng lượng mùa hè', description: 'Mẹo giảm hóa đơn điện hiệu quả', content: '...', category: 'saving', status: 'draft', featured: false, image: '💡', createdAt: '2025-03-05' },
-  { id: 'ED004', title: 'Tái chế quần áo cũ thành túi xách', description: 'DIY túi xách từ quần áo không dùng nữa', content: '...', category: 'recycling', status: 'published', featured: true, image: '👕', createdAt: '2025-03-20' },
-  { id: 'ED005', title: 'Bảo vệ biển Đà Nẵng', description: 'Chiến dịch dọn rác bãi biển', content: '...', category: 'environment', status: 'published', featured: false, image: '🏖️', createdAt: '2025-04-01' },
+  {
+    id: 'ED001', title: '10 cách tái chế rác nhựa tại nhà', description: 'Hướng dẫn chi tiết cách tái chế nhựa đơn giản', content: 'Nhựa là một trong những loại rác thải khó phân hủy nhất. Bài viết này hướng dẫn 10 cách đơn giản để tái chế nhựa tại nhà...', category: 'recycling', status: 'published', featured: true, image: '♻️', coverImage: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=1200&q=80', co2SavedKg: 2.5, waterSavedL: 30, greenPoints: 10, readMinutesForPoints: 3, readMinutes: 5, likes: 124, comments: [
+      { id: 'C1', userId: 'U0002', userName: 'Trần Thị Bình', avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=Tran', content: 'Bài viết rất hữu ích, cảm ơn admin!', createdAt: '2025-01-16', replies: [] },
+      { id: 'C2', userId: 'U0003', userName: 'Lê Hoàng Cường', avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=Le', content: 'Mình đã áp dụng cách số 3 rất hiệu quả.', createdAt: '2025-01-17', replies: [] },
+    ], createdAt: '2025-01-15'
+  },
+  { id: 'ED002', title: 'Phân loại rác đúng cách', description: 'Cách phân loại rác thải sinh hoạt', content: 'Phân loại rác tại nguồn giúp quá trình tái chế hiệu quả hơn...', category: 'environment', status: 'published', featured: false, image: '🗑️', coverImage: 'https://images.unsplash.com/photo-1604187351574-c75ca79f5807?w=1200&q=80', co2SavedKg: 1.2, waterSavedL: 15, greenPoints: 5, readMinutesForPoints: 2, readMinutes: 4, likes: 67, comments: [], createdAt: '2025-02-10' },
+  { id: 'ED003', title: 'Tiết kiệm năng lượng mùa hè', description: 'Mẹo giảm hóa đơn điện hiệu quả', content: 'Mùa hè là thời điểm hóa đơn điện tăng cao...', category: 'saving', status: 'draft', featured: false, image: '💡', coverImage: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=1200&q=80', co2SavedKg: 3.0, waterSavedL: 0, greenPoints: 8, readMinutesForPoints: 3, readMinutes: 6, likes: 41, comments: [], createdAt: '2025-03-05' },
+  { id: 'ED004', title: 'Tái chế quần áo cũ thành túi xách', description: 'DIY túi xách từ quần áo không dùng nữa', content: 'Hướng dẫn DIY túi xách độc đáo từ quần áo cũ...', category: 'recycling', status: 'published', featured: true, image: '👕', coverImage: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=1200&q=80', co2SavedKg: 1.8, waterSavedL: 50, greenPoints: 12, readMinutesForPoints: 4, readMinutes: 7, likes: 203, comments: [], createdAt: '2025-03-20' },
+  { id: 'ED005', title: 'Bảo vệ biển Đà Nẵng', description: 'Chiến dịch dọn rác bãi biển', content: 'Chiến dịch dọn rác bãi biển định kỳ tại Đà Nẵng...', category: 'environment', status: 'published', featured: false, image: '🏖️', coverImage: 'https://images.unsplash.com/photo-1583212292454-1fe6229603b7?w=1200&q=80', co2SavedKg: 5.0, waterSavedL: 100, greenPoints: 15, readMinutesForPoints: 5, readMinutes: 8, likes: 312, comments: [], createdAt: '2025-04-01' },
 ];
 
 export const mockAILogs: AILog[] = Array.from({ length: 25 }, (_, i) => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -25,35 +25,125 @@ import {
   MessageSquare
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { useAuth } from '@/contexts/AuthContext';
 import { mockEducationTips } from '@/mocks/data';
 import BackButton from '@/components/BackButton';
 import { LinearGradient } from 'expo-linear-gradient';
+import EcoLoader from '@/components/EcoLoader';
 
 const { width } = Dimensions.get('window');
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+const catLabels: Record<string, string> = {
+  recycling: "Tái chế",
+  saving: "Tiết kiệm",
+  environment: "Môi trường"
+};
+
+interface EducationPost {
+  id: string;
+  title: string;
+  description: string;
+  content: string;
+  category: 'recycling' | 'saving' | 'environment';
+  status: 'published' | 'draft';
+  featured: boolean;
+  coverImage?: string;
+  co2SavedKg?: number;
+  waterSavedL?: number;
+  greenPoints?: number;
+  readMinutes?: number;
+  likes: number;
+  likedBy?: string[];
+  comments: any[];
+  createdAt: string;
+}
+
 export default function EducationDetailScreen() {
   const { id } = useLocalSearchParams();
+  const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Trạng thái tương tác được giữ nguyên từ phiên bản gốc của bạn
+  const [post, setPost] = useState<EducationPost | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Các trạng thái tương tác cục bộ
   const [isLiked, setIsLiked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [likeCount, setLikeCount] = useState(42);
+  const [likeCount, setLikeCount] = useState(0);
 
-  // Lấy dữ liệu bài viết từ mock data hoặc fallback theo ảnh mẫu
-  const tip = mockEducationTips.find(t => t.id === id) || {
-    id: id || '1',
-    title: "Cách phân loại rác tại nhà",
-    summary: "Hướng dẫn 4 nhóm rác cơ bản giúp tái chế hiệu quả",
-    content: "Rác hữu cơ (thức ăn thừa, lá cây), Rác tái chế (nhựa, giấy, kim loại), Rác nguy hại (pin, bóng đèn), Rác còn lại. Phân loại đúng giúp tăng giá trị tái chế lên 300%.",
-    imageUrl: "https://images.unsplash.com/photo-1532996122724-e3c354a0b15b"
+  // hiển thị dữ liệu bài viết chi tiết
+  const fetchPostDetail = async (showLoader = true) => {
+    try {
+      if (showLoader) setIsLoading(true);
+      const response = await fetch(`${API_URL}/api/educations/${id}`);
+      const json = await response.json();
+
+      if (json.success && json.data) {
+        setPost(json.data as EducationPost);
+        setLikeCount(json.data.likes || 0);
+        const currentUserId = user?.id || user?._id || 'GUEST';
+        setIsLiked(json.data.likedBy?.includes(currentUserId) || false);
+      }
+    } catch (error) {
+      console.error("Lỗi lấy chi tiết bài viết giáo dục:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleLikePress = () => {
-    setIsLiked(!isLiked);
-    setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (id) {
+        fetchPostDetail(false);
+      }
+    }, [id])
+  );
+
+  // xử lý thích bài viết
+  const handleLikePress = async () => {
+    if (!post) return;
+    const currentUserId = user?.id || user?._id || 'GUEST';
+    const originalLiked = isLiked;
+    const originalCount = likeCount;
+    setIsLiked(!originalLiked);
+    setLikeCount(prev => originalLiked ? prev - 1 : prev + 1);
+    try {
+      const response = await fetch(`${API_URL}/api/educations/${post.id}/toggle-like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId }),
+      });
+      const json = await response.json();
+      if (json.success) {
+        setLikeCount(json.likes);
+      } else {
+        setIsLiked(originalLiked);
+        setLikeCount(originalCount);
+      }
+    } catch (error) {
+      console.error("Lỗi đồng bộ like bài viết:", error);
+      setIsLiked(originalLiked);
+      setLikeCount(originalCount);
+    }
   };
+
+  if (isLoading) {
+    return <EcoLoader message="Đang tải nội dung kiến thức..." size="large" />;
+  }
+
+  if (!post) {
+
+    return (
+      <View style={styles.errorContainer}>
+        <Stack.Screen options={{ headerShown: true, title: 'Lỗi' }} />
+        <Leaf size={48} color="#CBD5E1" />
+        <Text style={styles.errorText}>Bài viết không tồn tại hoặc đã bị gỡ bỏ.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -82,13 +172,15 @@ export default function EducationDetailScreen() {
         {/* Top Hero Image Section */}
         <View style={styles.heroWrapper}>
           <Image
-            source={{ uri: tip.imageUrl }}
+            source={{ uri: post.coverImage || "https://images.unsplash.com/photo-1532996122724-e3c354a0b15b" }}
             style={styles.heroImage}
             contentFit="cover"
           />
           <View style={styles.heroTagContainer}>
             <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>HƯỚNG DẪN</Text>
+              <Text style={styles.categoryText}>
+                {(catLabels[post.category] || "Kiến thức").toUpperCase()}
+              </Text>
             </View>
           </View>
         </View>
@@ -99,7 +191,7 @@ export default function EducationDetailScreen() {
 
           {/* Title Area với Icon lá cây nhỏ bên phải */}
           <View style={styles.titleContainer}>
-            <Text style={styles.titleText}>{tip.title}</Text>
+            <Text style={styles.titleText}>{post.title}</Text>
             <Leaf size={22} color="#76BA1B" fill="#76BA1B" style={styles.titleIcon} />
           </View>
 
@@ -107,12 +199,12 @@ export default function EducationDetailScreen() {
           <View style={styles.infoBar}>
             <View style={styles.infoItem}>
               <Clock size={16} color="#666" />
-              <Text style={styles.infoLabel}>5 phút đọc</Text>
+              <Text style={styles.infoLabel}>{post.readMinutes || 5} phút đọc</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.infoItem}>
               <TrendingUp size={16} color="#2E7D32" />
-              <Text style={styles.pointLabel}>+10 Điểm xanh</Text>
+              <Text style={styles.pointLabel}>+{post.greenPoints || 10} Điểm xanh</Text>
             </View>
           </View>
 
@@ -121,12 +213,12 @@ export default function EducationDetailScreen() {
             <View style={styles.sapoIconContainer}>
               <Info size={20} color="#2E7D32" fill="#2E7D32" />
             </View>
-            <Text style={styles.sapoText}>{tip.summary}</Text>
+            <Text style={styles.sapoText}>{post.description}</Text>
           </View>
 
           {/* Article Body */}
           <View style={styles.articleBody}>
-            <Text style={styles.contentText}>{tip.content}</Text>
+            <Text style={styles.contentText}>{post.content}</Text>
           </View>
 
           {/* Ecological Impact Section */}
@@ -137,7 +229,7 @@ export default function EducationDetailScreen() {
                 <Leaf size={18} color="#2F80ED" fill="#2F80ED" />
               </View>
               <View style={styles.impactInfoDetails}>
-                <Text style={styles.impactMainValue}>2.5 kg</Text>
+                <Text style={styles.impactMainValue}>{post.co2SavedKg || 0} kg</Text>
                 <Text style={styles.impactSubLabel}>Giảm phát thải CO₂</Text>
               </View>
             </View>
@@ -147,7 +239,7 @@ export default function EducationDetailScreen() {
                 <Droplet size={18} color="#2E7D32" fill="#2E7D32" />
               </View>
               <View style={styles.impactInfoDetails}>
-                <Text style={styles.impactMainValue}>15 Lít</Text>
+                <Text style={styles.impactMainValue}>{post.waterSavedL || 0} Lít</Text>
                 <Text style={styles.impactSubLabel}>Tiết kiệm nước sạch</Text>
               </View>
             </View>
@@ -204,10 +296,12 @@ export default function EducationDetailScreen() {
             <TouchableOpacity
               style={styles.interactionButton}
               activeOpacity={0.8}
-              onPress={() => router.push(`/education-discussion?id=${tip.id}`)}
+              onPress={() => router.push(`/education-discussion?id=${post.id}`)}
             >
               <MessageSquare size={18} color="#37474F" />
-              <Text style={styles.interactionText}>Thảo luận (8)</Text>
+              <Text style={styles.interactionText}>
+                Thảo luận ({(post.comments || []).reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0)})
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -399,7 +493,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 2,
   },
-  
+
   /* Đã cập nhật: Khung chứa Call-to-Action hỗ trợ ảnh nền */
   ctaBox: {
     position: 'relative',
@@ -452,12 +546,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#154621',
   },
-  
+
   dividerLine: {
     height: 1,
     backgroundColor: '#ECEFF1',
     marginBottom: 16,
-    marginTop: 24, 
+    marginTop: 24,
   },
   footerActionRow: {
     flexDirection: 'row',
@@ -487,4 +581,17 @@ const styles = StyleSheet.create({
   activeButtonText: {
     color: '#FFF',
   },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+  }
 });

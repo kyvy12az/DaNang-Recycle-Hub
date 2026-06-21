@@ -103,28 +103,34 @@ exports.getLiveLeaderboard = async (req, res) => {
       });
     }
 
-    // Lấy greenPoints từ User (optional enrichment)
-    const userIds = aggregated.map((a) => a._id).filter(Boolean);
-    const users = await User.find({ _id: { $in: userIds } })
-      .select("_id greenPoints")
-      .lean();
-    const pointsMap = {};
-    users.forEach((u) => {
-      pointsMap[u._id.toString()] = u.greenPoints || 0;
-    });
+ // Lấy greenPoints + name + avatar từ User (nguồn dữ liệu chuẩn, không dùng sellerName lưu trong Listing)
+const userIds = aggregated.map((a) => a._id).filter(Boolean);
+const users = await User.find({ _id: { $in: userIds } })
+  .select("_id name greenPoints avatar")   
+  .lean();
 
-    const leaderboard = aggregated.map((entry, i) => ({
-      _id: `live_${entry._id}_${period}`,
-      userId: entry._id,
-      userName: entry.sellerName || "Unknown",
-      rankPosition: i + 1,
-      totalWeightScrapped: entry.periodWeight || 0,
-      accumulatedPoints: pointsMap[entry._id?.toString()] || 0,
-      listingCount: entry.listingCount || 0,
-      periodType: period,
-      snapshotDate: now,
-      rewardStatus: "pending",
-    }));
+const userMap = {};
+users.forEach((u) => {
+  userMap[u._id.toString()] = {
+    name: u.name,
+    greenPoints: u.greenPoints || 0,
+    avatar: u.avatar || null,
+  };
+});
+
+const leaderboard = aggregated.map((entry, i) => ({
+  _id: `live_${entry._id}_${period}`,
+  userId: entry._id,
+  userName: userMap[entry._id?.toString()]?.name || entry.sellerName || "Unknown", 
+  rankPosition: i + 1,
+  totalWeightScrapped: entry.periodWeight || 0,
+  accumulatedPoints: userMap[entry._id?.toString()]?.greenPoints || 0,
+  avatar: userMap[entry._id?.toString()]?.avatar || null,
+  listingCount: entry.listingCount || 0,
+  periodType: period,
+  snapshotDate: now,
+  rewardStatus: "pending",
+}));
 
     return res.status(200).json({
       success: true,
