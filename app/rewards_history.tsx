@@ -25,6 +25,7 @@ export default function RewardHistoryScreen() {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    // lấy danh sách lịch sử đổi thưởng 
     const fetchHistory = async () => {
       try {
         setLoading(true);
@@ -58,11 +59,9 @@ export default function RewardHistoryScreen() {
     };
 
     fetchHistory();
-  }, []); // Chạy 1 lần khi màn hình được kích hoạt
+  }, []); 
 
   const renderItem = ({ item, index }: { item: any; index: number }) => {
-    // BE sử dụng .populate('rewardId', 'image category') 
-    // Nên thông tin chi tiết quà nằm trong object `rewardId`
     const rewardDetail = item.rewardId;
 
     return (
@@ -72,7 +71,6 @@ export default function RewardHistoryScreen() {
         </View>
 
         <Image
-          // Map đúng trường 'image' từ Backend Reward Schema
           source={{ uri: rewardDetail?.image }}
           style={styles.thumbnail}
           contentFit="cover"
@@ -92,7 +90,6 @@ export default function RewardHistoryScreen() {
             </View>
           </View>
 
-          {/* Map chuẩn trường 'rewardName' lưu trong RedeemHistory Schema */}
           <Text style={styles.rewardTitle} numberOfLines={2}>
             {item.rewardName}
           </Text>

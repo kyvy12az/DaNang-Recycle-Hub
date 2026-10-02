@@ -59,6 +59,7 @@ export default function TransactionHistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // lấy danh sách lịch sử giao dịch 
   const fetchTransactions = useCallback(async () => {
     const token = await getAuthToken();
     if (!token) {

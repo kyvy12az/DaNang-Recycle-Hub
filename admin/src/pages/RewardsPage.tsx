@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { mockRewardHistory, Reward, RewardGroup, REWARD_GROUP_LABELS } from "@/data/mockData";
+import { Reward, RewardGroup, REWARD_GROUP_LABELS } from "@/data/mockData";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,8 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, ImageOff, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { useRewards } from "@/contexts/RewardsContext";
+import { useRewards, RewardHistory } from "@/contexts/RewardsContext"; 
 
 const groupBadgeClass: Record<RewardGroup, string> = {
   financial: "bg-blue-100 text-blue-700 hover:bg-blue-100",
@@ -39,18 +38,20 @@ function RewardImage({ src, alt, size = "h-12 w-12" }: { src: string; alt: strin
 
 export default function RewardsPage() {
   const navigate = useNavigate();
-  const { rewards, loading, deleteReward } = useRewards();
+  
+  const { rewards, historyData, loading, historyLoading, deleteReward } = useRewards();
+  
   const [selected, setSelected] = useState<Reward | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    
+
     setIsDeleting(true);
     const success = await deleteReward(deleteId);
     setIsDeleting(false);
-    
+
     if (success) {
       setDeleteId(null);
     }
@@ -105,44 +106,78 @@ export default function RewardsPage() {
             columns={[
               { key: "image", label: "Ảnh", render: (r) => <RewardImage src={r.image} alt={r.name} /> },
               { key: "name", label: "Tên quà", render: (r) => <span className="font-medium">{r.name}</span> },
-              { key: "group", label: "Nhóm quà", render: (r) => (
-                <Badge variant="secondary" className={groupBadgeClass[r.group]}>
-                  {REWARD_GROUP_LABELS[r.group]}
-                </Badge>
-              )},
+              {
+                key: "group", label: "Nhóm quà", render: (r) => (
+                  <Badge variant="secondary" className={groupBadgeClass[r.group]}>
+                    {REWARD_GROUP_LABELS[r.group]}
+                  </Badge>
+                )
+              },
               { key: "pointsRequired", label: "Điểm cần", render: (r) => <span className="text-primary font-semibold">{r.pointsRequired}</span> },
               { key: "stock", label: "Tồn kho" },
               { key: "totalRedeemed", label: "Đã đổi", render: (r) => <span>{r.totalRedeemed ?? 0}</span> },
               { key: "status", label: "Trạng thái", render: (r) => <StatusBadge status={r.status} /> },
-              { key: "actions", label: "", render: (r) => (
-                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" onClick={() => navigate(`/rewards/${getRecordId(r)}/edit`)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => setDeleteId(getRecordId(r))}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              )},
+              {
+                key: "actions", label: "", render: (r) => (
+                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="icon" onClick={() => navigate(`/rewards/${getRecordId(r)}/edit`)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => setDeleteId(getRecordId(r))}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                )
+              },
             ]}
           />
         </TabsContent>
 
-        {/* Tab 2: Lịch sử đổi quà của người dùng */}
         <TabsContent value="history" className="mt-4">
-          <DataTable
-            data={mockRewardHistory}
-            searchKey="userName"
-            searchPlaceholder="Tìm kiếm theo tên người dùng..."
-            columns={[
-              { key: "id", label: "ID" },
-              { key: "userName", label: "Người dùng", render: (r) => <span className="font-medium">{r.userName}</span> },
-              { key: "rewardName", label: "Quà được đổi" },
-              { key: "pointsUsed", label: "Điểm đã dùng", render: (r) => <span className="text-primary font-medium">{r.pointsUsed}</span> },
-              { key: "status", label: "Trạng thái", render: (r) => <StatusBadge status={r.status} /> },
-              { key: "createdAt", label: "Ngày đổi", render: (r) => new Date(r.createdAt).toLocaleDateString("vi-VN") },
-            ]}
-          />
+          {historyLoading ? (
+            <div className="h-40 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <p className="text-xs">Đang đồng bộ danh sách lịch sử giao dịch...</p>
+            </div>
+          ) : (
+            <DataTable<RewardHistory>
+              data={historyData}
+              searchKey="rewardName"
+              searchPlaceholder="Tìm kiếm theo tên phần quà..."
+              columns={[
+                {
+                  key: "_id",
+                  label: "Mã giao dịch",
+                  render: (r) => <span className="text-xs text-muted-foreground font-mono">{r._id}</span>
+                },
+                {
+                  key: "userId",
+                  label: "Người dùng",
+                  render: (r) => <span className="font-medium">{(r.userId as any)?.name || "Người dùng ẩn"}</span>
+                },
+                {
+                  key: "rewardName",
+                  label: "Quà được đổi",
+                  render: (r) => <span className="font-medium text-slate-700">{r.rewardName}</span>
+                },
+                {
+                  key: "pointsSpent", 
+                  label: "Điểm đã dùng",
+                  render: (r) => <span className="text-primary font-semibold">-{r.pointsSpent} 🌿</span>
+                },
+                {
+                  key: "status",
+                  label: "Trạng thái",
+                  render: (r) => <StatusBadge status={r.status} />
+                },
+                {
+                  key: "createdAt",
+                  label: "Ngày đổi",
+                  render: (r) => new Date(r.createdAt).toLocaleString("vi-VN")
+                },
+              ]}
+            />
+          )}
         </TabsContent>
       </Tabs>
 
@@ -191,10 +226,8 @@ export default function RewardsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Hủy bỏ</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={(e) => {
-                e.preventDefault(); 
-              }} 
+            <AlertDialogAction
+              onClick={handleDelete}
               disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

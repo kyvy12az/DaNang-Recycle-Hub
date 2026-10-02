@@ -37,7 +37,7 @@ const NotificationSchema = new mongoose.Schema(
       default: false,
     },
   },
-  { timestamps: true } // Tự động tạo createdAt (chính là timestamp) và updatedAt
+  { timestamps: true } 
 );
 
 module.exports = mongoose.model("Notification", NotificationSchema);

@@ -37,7 +37,6 @@ const logoImage = require('@/assets/images/logo.png');
 
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
 
-// Dùng lại hàm map từ BuyerListingsScreen
 const mapListingFromAPI = (item: any): WasteListing => ({
   id: item._id || item.id,
   sellerId: item.sellerId,
@@ -78,9 +77,7 @@ export default function BuyerDetailScreen() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState<boolean>(false);
-  // State sau khi buyer đã nhận đơn - lưu orderId để seller confirm
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
-  // State khi seller đang confirm/reject
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -88,7 +85,7 @@ export default function BuyerDetailScreen() {
   const { toasts, success, error: errorToast } = useToast();
   const socket = useSocketContext();
 
-  // Fetch dữ liệu thật từ API
+  // fetch dữ liệu
   useEffect(() => {
     const fetchListing = async () => {
       try {
@@ -99,9 +96,9 @@ export default function BuyerDetailScreen() {
         });
         const raw = response.data.listing || response.data;
         setListing(mapListingFromAPI(raw));
-        // Nếu bài đăng đang ở trạng thái pending_confirmation, kiểm tra xem buyer hiện tại có đơn không
+        // nếu bài đăng đang ở trạng thái pending_confirmation, kiểm tra xem buyer hiện tại có đơn không
         if (raw.status === 'pending_confirmation') {
-          // Kiểm tra order của buyer hoặc seller cho listing này
+          // kiểm tra đơn của buyer hoặc seller cho listing này
           try {
             const token = await getAuthToken();
             const orderRes = await axios.get(`${API_BASE_URL}/api/orders/ORDER_${raw._id || raw.id}`, {
@@ -115,7 +112,7 @@ export default function BuyerDetailScreen() {
             ) {
               setPendingOrderId(String(orderData._id));
             }
-          } catch (_) { /* không có đơn, bỏ qua */ }
+          } catch (_) { }
         }
       } catch (err: any) {
         console.error('Lỗi fetch listing detail:', err.message);
@@ -161,10 +158,11 @@ export default function BuyerDetailScreen() {
     }
   }, [isAccepting]);
 
-  // Lắng nghe socket: seller xác nhận -> buyer chuyển sang tracking
+  // lắng nghe real-time update từ server 
   useEffect(() => {
     if (!socket) return;
 
+    // xử lý khi seller đã xác nhận đơn
     const handleSellerConfirmed = (data: any) => {
       success('Người bán đã xác nhận! Đang chuyển tới trang theo dõi...');
       setTimeout(() => {
@@ -178,6 +176,7 @@ export default function BuyerDetailScreen() {
       }, 600);
     };
 
+    // xử lý khi seller từ chối đơn thu gom rác
     const handleSellerRejected = (data: any) => {
       setPendingOrderId(null);
       setListing(prev => prev ? { ...prev, status: 'approved' } : prev);
@@ -201,6 +200,7 @@ export default function BuyerDetailScreen() {
     outputRange: ['0deg', '360deg'],
   });
 
+  // xử lý khi người mua xác nhận đơn thu gom rác
   const handleAccept = () => {
     if (!listing) return;
     Alert.alert(
@@ -233,7 +233,7 @@ export default function BuyerDetailScreen() {
               const createdOrder = orderResponse.data;
               const actualOrderId = createdOrder._id || createdOrder.id;
 
-              // Cập nhật state: đơn pending, chờ seller xác nhận
+              // cập nhật state: đơn pending, chờ seller xác nhận
               setPendingOrderId(actualOrderId);
               setListing(prev => prev ? { ...prev, status: 'pending_confirmation' } : prev);
               success('Đã nhận đơn! Đang chờ người bán xác nhận...');
@@ -249,6 +249,7 @@ export default function BuyerDetailScreen() {
     );
   };
 
+  // xử lý khi người bán xác nhận đơn thu gom rác
   const handleSellerConfirm = async () => {
     if (!pendingOrderId) return;
     setIsConfirming(true);
@@ -260,7 +261,7 @@ export default function BuyerDetailScreen() {
         { headers: { 'bypass-tunnel-reminder': 'true', Authorization: `Bearer ${token}` } }
       );
       success('Đã xác nhận đơn hàng! Đang chuyển đến trang theo dõi...');
-      // Cập nhật listing status
+
       setListing(prev => prev ? { ...prev, status: 'pending' } : prev);
       setTimeout(() => {
         router.push({
@@ -276,6 +277,7 @@ export default function BuyerDetailScreen() {
     }
   };
 
+  // xử lý khi người bán từ chối đơn thu gom rác
   const handleSellerReject = async () => {
     if (!pendingOrderId) return;
     Alert.alert('Từ chối đơn?', 'Bạn chắc muốn từ chối người mua này?', [
@@ -305,7 +307,6 @@ export default function BuyerDetailScreen() {
     ]);
   };
 
-  // --- Loading state ---
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
@@ -321,7 +322,6 @@ export default function BuyerDetailScreen() {
     );
   }
 
-  // --- Error state ---
   if (error || !listing) {
     return (
       <View style={styles.centerContainer}>
@@ -339,7 +339,6 @@ export default function BuyerDetailScreen() {
     );
   }
 
-  // --- Main content ---
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />

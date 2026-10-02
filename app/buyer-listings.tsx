@@ -34,7 +34,6 @@ import BackButton from '@/components/BackButton';
 const { width } = Dimensions.get('window');
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
 
-// Logic MapListing giữ nguyên từ code cũ của bạn
 const mapListingFromAPI = (item: any): WasteListing => ({
   id: item._id || item.id,
   sellerId: item.sellerId,
@@ -99,7 +98,7 @@ export default function BuyerListingsScreen() {
     fetchListings(); 
   }, [fetchListings]);
 
-  // Listen for real-time listing updates via socket.io
+  // nhận dữ liệu real-time với socket.io khi có tin đăng mới từ người bán
   useEffect(() => {
     if (!socket) return;
 
@@ -120,7 +119,7 @@ export default function BuyerListingsScreen() {
     fetchListings(false);
   }, [fetchListings]);
 
-  // Logic lọc kết hợp tìm kiếm và quận
+  // lọc kết hợp tìm kiếm và quận
   const filteredListings = useMemo(() => {
     return listings.filter(l => {
       const matchDistrict = selectedDistrict === 'Tất cả' || l.district === selectedDistrict;

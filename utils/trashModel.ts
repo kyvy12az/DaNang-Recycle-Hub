@@ -229,19 +229,15 @@ function extractOutputScores(rawOutput: any): number[] {
 function normalizeProbabilities(scores: number[]): number[] {
     if (!scores.length) return [];
 
-    // 1. Kiểm tra xem có phải là Logits (số thô) hay không
-    // Nếu có số âm hoặc có số > 1.1, chắc chắn là Logits
     const isLogits = scores.some(v => v < 0 || v > 1.1);
 
     if (isLogits) {
-        // Áp dụng công thức Softmax chuẩn
         const maxLogit = Math.max(...scores);
         const exps = scores.map((v) => Math.exp(v - maxLogit));
         const expSum = exps.reduce((acc, v) => acc + v, 0);
         return exps.map((v) => v / expSum);
     }
 
-    // 2. Nếu đã là xác suất (0-1), đảm bảo tổng bằng 1
     const sum = scores.reduce((acc, v) => acc + v, 0);
     if (sum > 0) {
         return scores.map(v => v / sum);
@@ -251,7 +247,6 @@ function normalizeProbabilities(scores: number[]): number[] {
 }
 
 function estimateWeight(className: string, confidence: number): number {
-    // Deterministic weight estimate to keep pricing stable between scans.
     const profiles: Record<string, { min: number; base: number; max: number }> = {
         battery: { min: 0.2, base: 0.6, max: 1.5 },
         biological: { min: 0.5, base: 1.8, max: 6 },
@@ -304,7 +299,6 @@ function loadSubjectSegmentationModule(): any | null {
             return segmentationModuleCache;
         }
     } catch {
-        // No-op: try next package candidate.
     }
 
     try {
@@ -528,11 +522,10 @@ async function preprocessForTFLite(imageUri: string): Promise<{
     const { data, width, height } = decoded;
     const float32Array = new Float32Array(width * height * 3);
 
-    // Quan trọng: KHÔNG chia 255 ở đây
     for (let i = 0; i < width * height; i++) {
-        float32Array[i * 3 + 0] = data[i * 4 + 0]; // Red
-        float32Array[i * 3 + 1] = data[i * 4 + 1]; // Green
-        float32Array[i * 3 + 2] = data[i * 4 + 2]; // Blue
+        float32Array[i * 3 + 0] = data[i * 4 + 0]; 
+        float32Array[i * 3 + 1] = data[i * 4 + 1]; 
+        float32Array[i * 3 + 2] = data[i * 4 + 2]; 
     }
 
     return {

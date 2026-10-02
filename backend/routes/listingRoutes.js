@@ -3,16 +3,16 @@ const router = express.Router();
 const listingController = require("../controllers/listingController");
 const authController = require("../controllers/authController");
 
-// Get all listings with filters
+// api lấy danh sách bài thu gom rác 
 router.get("/", listingController.getListings);
 
-// Get single listing by ID
+// api chi tiết bài thu gom rác theo id
 router.get("/:id", listingController.getListingById);
 
-// Get current user's listings
+// api lấy các bài viết của người dùng
 router.get("/user/my-listings", authController.authMiddleware, listingController.getMyListings);
 
-// Create new listing
+// tạo bài viết mới
 router.post("/", authController.authMiddleware, listingController.createListing);
 
 module.exports = router;

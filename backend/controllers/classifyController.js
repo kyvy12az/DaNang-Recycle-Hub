@@ -4,6 +4,7 @@ const geminiService = require('../services/geminiService');
 const VALID_LABELS = ['battery', 'biological', 'cardboard', 'clothes', 'glass', 'metal', 'paper', 'plastic', 'shoes', 'trash', 'not_waste'];
 const AZURE_CONFIDENCE_THRESHOLD = 0.6;
 
+// xây dựng response thành công
 function buildSuccessResponse({ label, source, provider, confidence, fallbackFrom, raw }) {
     const normalizedLabel = VALID_LABELS.includes(String(label).toLowerCase())
         ? String(label).toLowerCase()
@@ -35,6 +36,7 @@ function buildSuccessResponse({ label, source, provider, confidence, fallbackFro
     return response;
 }
 
+// xử lý nhận diện rác
 const handleClassification = async (req, res) => {
     try {
         if (!req.file || !req.file.buffer) {
@@ -50,7 +52,7 @@ const handleClassification = async (req, res) => {
             console.warn("Azure Custom Vision thất bại, chuyển sang Gemini:", azureError.message);
         }
 
-        // Nếu Azure chạy tốt và độ tự tin cao => Trả kết quả ngay
+        // nếu Azure chạy tốt và độ tự tin cao (trên 60%) => Trả kết quả ngay
         if (azureResult && azureResult.topPrediction && azureResult.topPrediction.probability >= AZURE_CONFIDENCE_THRESHOLD) {
             const confidencePercent = Number((azureResult.topPrediction.probability * 100).toFixed(2));
 
@@ -65,11 +67,10 @@ const handleClassification = async (req, res) => {
             );
         }
 
-        // fallback sang gemini AI
+        // fallback sang gemini AI nếu như Azure thất bại hoặc độ tự tin thấp
         console.log("Azure không đủ tự tin hoặc bị lỗi, đang chuyển sang Gemini AI...");
         const geminiResult = await geminiService.classifyWithGemini(imageBuffer, req.file.mimetype);
-        
-        // Nếu là not_waste từ Gemini => Trả về phản hồi thành công
+
         return res.status(200).json(
             buildSuccessResponse({
                 label: geminiResult.label,

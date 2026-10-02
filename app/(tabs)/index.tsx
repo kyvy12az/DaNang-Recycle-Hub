@@ -35,7 +35,6 @@ export default function HomeScreen() {
   const counterAnim = useRef(new Animated.Value(0)).current;
   const [savedKg, setSavedKg] = useState<number>(0);
 
-  // useEffect 1: animations layout
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -65,7 +64,6 @@ export default function HomeScreen() {
     ]).start();
   }, []);
 
-  // useEffect 2: animate counter theo todayWeight
   useEffect(() => {
     counterAnim.setValue(0);
     const listener = counterAnim.addListener(({ value }) => {

@@ -78,6 +78,7 @@ export default function BuyerOrderTrackingScreen() {
   const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
+    // fetch thông tin đơn hàng và bài thu gom rác
     const fetchOrderAndListing = async () => {
       try {
         setIsLoading(true);
@@ -170,6 +171,7 @@ export default function BuyerOrderTrackingScreen() {
     return () => subscription.remove();
   }, []);
 
+  // xử lý khi ứng dụng chuyển đổi trạng thái
   const handleAppStateChange = (state: AppState.AppStateStatus) => {
     appStateRef.current = state;
     if (state === 'background' || state === 'inactive') {
@@ -179,6 +181,7 @@ export default function BuyerOrderTrackingScreen() {
     }
   };
 
+  // yêu cầu quyền truy cập vị trí
   const requestLocationPermission = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -188,6 +191,7 @@ export default function BuyerOrderTrackingScreen() {
     }
   };
 
+  // bắt đầu theo dõi vị trí
   const startLocationTracking = async () => {
     try {
       if (isTrackingLocation || locationPermission !== 'granted') return;
@@ -205,6 +209,7 @@ export default function BuyerOrderTrackingScreen() {
     }
   };
 
+  // gửi vị trí hiện tại
   const sendCurrentLocation = async () => {
     try {
       const enabled = await Location.hasServicesEnabledAsync();
@@ -229,6 +234,7 @@ export default function BuyerOrderTrackingScreen() {
     }
   };
 
+  // dừng theo dõi vị trí
   const stopLocationTracking = () => {
     if (locationTrackerRef.current) {
       clearInterval(locationTrackerRef.current);
@@ -237,6 +243,7 @@ export default function BuyerOrderTrackingScreen() {
     setIsTrackingLocation(false);
   };
 
+  // gọi điện cho người bán
   const handleCallSeller = () => {
     if (!listing?.sellerPhone) {
       Alert.alert('Lỗi', 'Không có số điện thoại của người bán');
@@ -245,6 +252,7 @@ export default function BuyerOrderTrackingScreen() {
     Linking.openURL(`tel:${listing.sellerPhone}`);
   };
 
+  // nhắn tin với người bán
   const handleChatSeller = () => {
     const receiverIdStr = typeof order?.sellerId === 'object' ? (order.sellerId as any)._id || (order.sellerId as any).id : order?.sellerId;
     const listingIdStr = typeof order?.listingId === 'object' ? (order.listingId as any)._id || (order.listingId as any).id : order?.listingId;
@@ -260,6 +268,7 @@ export default function BuyerOrderTrackingScreen() {
     });
   };
 
+  // xử lý khi cập nhật khối lượng
   const handleWeightUpdate = async (actualWeight: number, actualPrice: number, actualGreenPoints: number) => {
     setIsUpdatingWeight(true);
     try {
@@ -294,6 +303,7 @@ export default function BuyerOrderTrackingScreen() {
     }
   };
 
+  // xử lý khi hoàn thành đơn hàng
   const handleCompleteOrder = () => {
     if (!order?.actualWeight) {
       Alert.alert('Lỗi', 'Vui lòng cập nhật khối lượng thực tế trước');

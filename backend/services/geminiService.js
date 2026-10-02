@@ -60,7 +60,6 @@ function normalizeLabel(text) {
 async function classifyWithGemini(imageBuffer, mimeType = "image/jpeg") {
     const genAI = getGeminiClient(); 
     
-    // Tách danh sách nhãn sạch ra ngoài trước để Prompt gọn gàng, không bị dính khoảng trắng lỗi
     const cleanWasteLabels = DEFAULT_LABELS.filter(l => l !== 'not_waste').join(", ");
     
     const prompt = `Bạn là hệ thống AI kiểm định và phân loại góc nhìn cho ứng dụng DaNang Recycle Hub.
@@ -107,7 +106,6 @@ Hãy phân tích kỹ bức ảnh được cung cấp dựa trên các quy tắc
             const response = await result.response;
             const responseText = response.text();
             
-            // TỐI ƯU AN TOÀN: Bọc JSON.parse để nếu chuỗi lỗi thì fallback sang model tiếp theo chứ không làm sập hàm
             let jsonResult;
             try {
                 jsonResult = JSON.parse(responseText);

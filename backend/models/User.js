@@ -29,6 +29,12 @@ const userSchema = new mongoose.Schema(
       index: true,
       sparse: true,
     },
+    zaloId: {
+      type: String,
+      default: null,
+      index: true,
+      sparse: true,
+    },
     emailVerified: {
       type: Boolean,
       default: false,

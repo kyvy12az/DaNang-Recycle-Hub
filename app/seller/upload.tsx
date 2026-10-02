@@ -9,8 +9,7 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRouter, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Camera, ChevronDown, Plus, Minus, Image as ImageIcon, X, Calendar, Clock as ClockIcon, Search, ArrowLeft } from 'lucide-react-native';
 import { Image } from 'expo-image';
@@ -83,7 +82,6 @@ export default function SellerUploadScreen() {
 
   const resultFade = useState(new Animated.Value(0))[0];
 
-  // Load ảnh từ store khi mount
   useEffect(() => {
     
   }, []);
@@ -94,7 +92,6 @@ export default function SellerUploadScreen() {
     }
   }, [user?.address]);
 
-  // Always start with fresh state when reopening the selling screen.
   useFocusEffect(
     useCallback(() => {
       clearAll();
@@ -160,7 +157,7 @@ export default function SellerUploadScreen() {
     }
   }, [clearAll, setCapturedImage]);
 
-  // Xử lý kết quả nhận diện AI
+  // xử lý kết quả nhận diện AI
   const handleRecognitionComplete = useCallback(
     (
       preds: TrashPrediction[],
@@ -171,7 +168,7 @@ export default function SellerUploadScreen() {
 
       const primaryPrediction = preds[0];
       
-      // Check if it's not waste
+      // kiểm tra nếu không phải rác
       if (primaryPrediction.className?.toLowerCase() === 'not_waste' || analysis?.group === 'not_waste') {
         setStep('not_waste');
         resultFade.setValue(0);
@@ -182,7 +179,7 @@ export default function SellerUploadScreen() {
       const predictedWasteType = wasteItems[0]?.wasteType || mapPredictionToWasteType(primaryPrediction);
       const isRecyclable = (primaryPrediction.group || analysis?.group) === 'recyclable';
 
-      // Chỉ lưu vào giỏ hàng nếu thuộc nhóm tái chế
+      // chỉ lưu vào giỏ hàng nếu thuộc nhóm tái chế
       const formattedItems: WasteItem[] = isRecyclable
         ? wasteItems.map((item, index) => {
             const prediction = preds[index] || primaryPrediction;
@@ -201,10 +198,10 @@ export default function SellerUploadScreen() {
           })
         : [];
 
-      // Lưu vào Store
+      // lưu vào Store
       setRecognizedItems(formattedItems);
 
-      // Lưu kết quả phân tích chi tiết của AI (cho mục đích hiển thị/debug)
+      // lưu kết quả phân tích chi tiết của AI
       const aiResultData = {
         wasteType: predictedWasteType,
         labelVi: primaryPrediction.classNameVi,
@@ -223,8 +220,8 @@ export default function SellerUploadScreen() {
     [resultFade, setRecognizedItems, setAIResults]
   );
 
+  // hàm ánh xạ nhãn rác sang WasteType
   const mapPredictionToWasteType = useCallback((prediction: TrashPrediction): WasteType => {
-    // Kiểm tra an toàn để tránh lỗi toLowerCase của undefined
     if (!prediction || !prediction.className) {
       console.warn("Dữ liệu AI không hợp lệ:", prediction);
       return wasteTypes.find(wt => wt.category === 'residual') || wasteTypes[0];
@@ -232,7 +229,6 @@ export default function SellerUploadScreen() {
 
     const className = prediction.className.toLowerCase();
 
-    // Bảng ánh xạ nhãn sang tên hiển thị đúng taxonomy 10 loại
     const labelMapping: Record<string, string> = {
       'battery': 'Pin/Ắc quy',
       'biological': 'Thực phẩm',
@@ -261,7 +257,6 @@ export default function SellerUploadScreen() {
 
     const displayName = labelMapping[className];
 
-    // Tìm trong danh sách wasteTypes dựa trên tên hiển thị hoặc category tương ứng
     const matched = wasteTypes.find((wt) => wt.name === displayName)
       || wasteTypes.find((wt) => wt.category === categoryMapping[className]);
 
@@ -271,6 +266,7 @@ export default function SellerUploadScreen() {
       : { ...(wasteTypes.find(wt => wt.category === 'residual') || wasteTypes[0]), name: displayName || 'Rác còn lại' };
   }, []);
 
+  // mở map để chọn địa điểm thu gom rác
   const handleOpenMap = async () => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -316,6 +312,7 @@ export default function SellerUploadScreen() {
     } catch (e) { console.error(e); }
   };
 
+  // Xử lý chọn địa điểm thu gom
   const handleSelectPoint = async (point: any) => {
     try {
       setIsUpdatingAddress(true);
@@ -391,30 +388,27 @@ export default function SellerUploadScreen() {
     if (item) {
       const newQty = Math.max(0.5, item.quantity + delta);
       updateItemQuantity(itemId, newQty);
-      // Clear manual input when using +/- buttons
       setManualQuantityInputs(prev => ({ ...prev, [itemId]: '' }));
     }
   }, [recognizedItems, updateItemQuantity]);
 
   // Xử lý input thủ công số lượng
   const handleManualQuantityChange = useCallback((itemId: string, value: string) => {
-    // Update the input field display
     setManualQuantityInputs(prev => ({ ...prev, [itemId]: value }));
     
-    // Parse and validate the numeric value
     if (value.trim() === '') {
-      return; // Allow empty input while editing
+      return;
     }
     
     const numValue = parseFloat(value);
     
-    // Validate: must be positive number and reasonable limit (e.g., 1000 kg)
+    // Kiểm tra số lượng hợp lệ: số dương, không vượt quá 1000kg
     if (!isNaN(numValue) && numValue > 0 && numValue <= 1000) {
       updateItemQuantity(itemId, numValue);
     }
   }, [updateItemQuantity]);
 
-  // Xóa item
+  // Xóa item khỏi danh sách rác đã nhận diện
   const handleRemoveItem = useCallback((itemId: string) => {
     removeItem(itemId);
   }, [removeItem]);
@@ -424,9 +418,7 @@ export default function SellerUploadScreen() {
   const totalWeight = recognizedItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalPoints = Math.round(totalWeight * 10);
 
-  // Xác nhận và đi đến trang xác nhận
   const handleConfirm = useCallback(() => {
-    // Filter to only recyclable items
     const recyclableItems = recognizedItems.filter(item => {
       const isRecyclable = ['plastic', 'paper', 'metal', 'glass', 'electronics'].includes(item.wasteType.category);
       return isRecyclable;
@@ -443,7 +435,7 @@ export default function SellerUploadScreen() {
       return;
     }
 
-    // Determine pickup time to send
+    // Lấy thời gian thu gom để gửi đi
     const pickupTimeToSend = useCustomTime 
       ? customPickupDate.toLocaleString('vi-VN', {
           weekday: 'long',

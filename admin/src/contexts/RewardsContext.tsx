@@ -4,22 +4,42 @@ import { toast } from "sonner";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+export interface RewardHistory {
+  _id: string;
+  userId: {
+    _id: string;
+    name: string;
+    email: string;
+  } | null;
+  rewardId: string;
+  rewardName: string;
+  pointsSpent: number;
+  status: "pending" | "completed" | "cancelled";
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface RewardsContextValue {
   rewards: Reward[];
+  historyData: RewardHistory[];
   loading: boolean;
+  historyLoading: boolean;       
   getReward: (id: string) => Reward | undefined;
   addReward: (data: Omit<Reward, "id" | "totalRedeemed">, file?: File) => Promise<boolean>;
   updateReward: (id: string, data: Partial<Reward>, file?: File) => Promise<boolean>;
   deleteReward: (id: string) => Promise<boolean>;
+  fetchHistory: () => Promise<void>;
 }
 
 const RewardsContext = createContext<RewardsContextValue | undefined>(undefined);
 
 export function RewardsProvider({ children }: { children: ReactNode }) {
   const [rewards, setRewards] = useState<Reward[]>([]);
+  const [historyData, setHistoryData] = useState<RewardHistory[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [historyLoading, setHistoryLoading] = useState<boolean>(true); 
 
-  // tải danh sách quà thưởng
+  // Tải danh sách quà thưởng
   const fetchRewards = async () => {
     try {
       setLoading(true);
@@ -38,14 +58,35 @@ export function RewardsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Tải danh sách lịch sử đổi quà 
+  const fetchHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      const response = await fetch(`${API_URL}/api/rewards/admin/history`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+      const json = await response.json();
+      if (json.success) {
+        setHistoryData(json.data);
+      } else {
+        console.error("Lỗi fetchHistory response:", json.message);
+      }
+    } catch (error) {
+      console.error("Lỗi fetchHistory:", error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchRewards();
+    fetchHistory();
   }, []);
 
-  // tìm kiếm thông tin chi tiết 1 phần quà
   const getReward = (id: string) => rewards.find((r) => r.id === id || (r as any)._id === id);
 
-  // thêm mới quà thưởng
   const addReward: RewardsContextValue["addReward"] = async (data, file) => {
     try {
       const formData = new FormData();
@@ -80,7 +121,7 @@ export function RewardsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // cập nhật thông tin quà thưởng
+  // Cập nhật thông tin quà thưởng
   const updateReward: RewardsContextValue["updateReward"] = async (id, data, file) => {
     try {
       const formData = new FormData();
@@ -117,7 +158,7 @@ export function RewardsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // xóa quà thưởng
+  // Xóa quà thưởng
   const deleteReward = async (id: string): Promise<boolean> => {
     try {
       const response = await fetch(`${API_URL}/api/rewards/${id}`, {
@@ -142,7 +183,17 @@ export function RewardsProvider({ children }: { children: ReactNode }) {
 
   return (
     <RewardsContext.Provider
-      value={{ rewards, loading, getReward, addReward, updateReward, deleteReward }}
+      value={{ 
+        rewards, 
+        historyData,
+        loading, 
+        historyLoading, 
+        getReward, 
+        addReward, 
+        updateReward, 
+        deleteReward,
+        fetchHistory 
+      }}
     >
       {children}
     </RewardsContext.Provider>

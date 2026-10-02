@@ -17,7 +17,7 @@ import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import EcoLoader from '@/components/EcoLoader';
 
-// CẤU HÌNH API GOONG
+// cấu hình api Goong Map
 const GOONG_MAP_KEY = process.env.EXPO_PUBLIC_GOONG_API_KEY;
 const GOONG_API_KEY = process.env.EXPO_PUBLIC_GOONG_REST_KEY;
 
@@ -35,6 +35,7 @@ const MAP_THEME = {
   line: '#43A047'
 };
 
+// giải mã polyline
 const decodePolyline = (encoded: string): [number, number][] => {
   let index = 0, lat = 0, lng = 0;
   const coordinates: [number, number][] = [];
@@ -65,6 +66,7 @@ export default function MapScreen() {
     initLocation();
   }, []);
 
+  // lấy vị trí hiện tại
   const initLocation = async () => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -91,6 +93,7 @@ export default function MapScreen() {
     }
   };
 
+  // lấy điểm thu gom rác
   const fetchGreenPoints = async (lat: number, lng: number) => {
     const keywords = ['rác thải', 'tái chế', 'thùng rác'];
     try {
@@ -129,6 +132,7 @@ export default function MapScreen() {
     } catch (e) { console.error(e); }
   };
 
+  // lấy khoảng cách thực tế
   const fetchRealDistance = async (destLat: number, destLng: number) => {
     if (!userCoords) return;
     try {
@@ -142,6 +146,7 @@ export default function MapScreen() {
     } catch (e) { console.error(e); }
   };
 
+  // vẽ tuyến đường
   const handleDrawRoute = async () => {
     if (!userCoords || !selectedPoint) return;
     setModalVisible(false);
@@ -171,6 +176,7 @@ export default function MapScreen() {
     }
   };
 
+  // xác định lại vị trí
   const handleLocateMe = async () => {
     setIsLocating(true);
     try {
@@ -541,7 +547,6 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
 
-  // Distance Matrix Cards Wrapper
   distanceMatrixContainer: { 
     flexDirection: 'row', 
     gap: 12,

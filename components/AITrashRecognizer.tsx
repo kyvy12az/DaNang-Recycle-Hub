@@ -25,7 +25,7 @@ interface AITrashRecognizerProps {
   onRetry: () => void;
 }
 
-// Cấu hình nhãn tiếng Việt và Metadata tương ứng với 10 nhãn từ Backend
+// cấu hình nhãn tiếng việt
 const LABEL_MAP: Record<string, any> = {
   'battery': { vi: 'Pin/Ắc quy', group: 'hazardous', cat: 'hazardous', price: 0, guidance: 'Gom riêng, đưa đến điểm thu gom pin chuyên dụng.' },
   'biological': { vi: 'Thực phẩm', group: 'organic', cat: 'organic', price: 0, guidance: 'Ủ phân compost hoặc làm thức ăn gia súc.' },
@@ -85,12 +85,14 @@ function normalizeText(value: string) {
     .trim();
 }
 
+// chuẩn hóa nhãn
 function normalizeLabel(label?: string) {
   const normalized = normalizeText(label || '');
   if (!normalized) return 'trash';
   return LABEL_ALIASES[normalized] || normalized;
 }
 
+// lấy tên model từ response
 function resolveSourceLabel(response: ApiClassificationResponse) {
   const source = `${response.source || ''} ${response.provider || ''}`.toLowerCase();
   if (source.includes('gemini')) return 'Gemini AI';
@@ -98,6 +100,7 @@ function resolveSourceLabel(response: ApiClassificationResponse) {
   return response.source || response.provider || 'Unknown';
 }
 
+// chuẩn hóa confidence
 function normalizeConfidence(value: number | string | undefined, sourceLabel: string) {
   const parsed = typeof value === 'string' ? Number(value) : value;
   if (typeof parsed === 'number' && Number.isFinite(parsed)) {
@@ -120,6 +123,7 @@ export default function AITrashRecognizer({
   const scanProgress = useRef(new Animated.Value(0)).current;
   const resultFade = useRef(new Animated.Value(0)).current;
 
+  // xử lý nhận diện
   const handleRecognize = useCallback(async () => {
     if (!imageUri) return;
 
@@ -182,7 +186,7 @@ export default function AITrashRecognizer({
 
       setPredictions([finalPrediction]);
 
-      // For not_waste, don't match to any wasteType
+      // đối với không phải rác, không thêm vào danh sách
       const wasteItems = (meta.group !== 'not_waste' && meta.group === 'recyclable') ? [{
         wasteType: wasteTypes.find(wt => wt.category === meta.cat) || wasteTypes[0],
         quantity: 1,

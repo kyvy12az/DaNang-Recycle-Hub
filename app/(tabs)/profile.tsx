@@ -91,6 +91,7 @@ export default function ProfileScreen() {
 
 
   useEffect(() => {
+    // lấy giao dịch gần nhất
     const fetchRecentTransactions = async () => {
       try {
         const token = await getAuthToken();
@@ -120,6 +121,7 @@ export default function ProfileScreen() {
     }
   }, [uploadError]);
 
+  // xử lý khi nhấn vào avatar
   const handleAvatarPress = async () => {
     if (isUploadingAvatar) return;
     const success = await handleAvatarUpload();
@@ -128,6 +130,7 @@ export default function ProfileScreen() {
     }
   };
 
+  // mở modal chỉnh sửa
   const handleOpenEditModal = () => {
     setEditForm({
       name: user?.name || '',
@@ -137,6 +140,7 @@ export default function ProfileScreen() {
     setIsEditModalVisible(true);
   };
 
+  // xử lý khi lưu thông tin
   const handleSaveProfile = async () => {
     if (!editForm.name.trim()) {
       Alert.alert('Lỗi', 'Tên không được để trống');

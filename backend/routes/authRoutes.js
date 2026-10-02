@@ -8,9 +8,11 @@ const listingController = require("../controllers/listingController");
 router.post("/register", authController.register);
 router.post("/login", authController.login);
 router.post("/auth/google", authController.googleLogin);
+router.post("/auth/zalo", authController.zaloLogin);
+router.get("/users/profile", authController.authMiddleware, authController.getProfile);
 router.put("/users/profile", authController.authMiddleware, authController.updateProfile);
 
-// router cho listing các bài đăng mua bán rác
+// api cho listing các bài đăng mua bán rác
 router.post("/listings", authController.authMiddleware, listingController.createListing);
 router.get("/listings/my", authController.authMiddleware, listingController.getMyListings); 
 router.get("/listings/:id", listingController.getListingById);

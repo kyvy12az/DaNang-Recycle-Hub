@@ -3,31 +3,31 @@ const router = express.Router();
 const orderController = require("../controllers/orderController");
 const authController = require("../controllers/authController");
 
-// Get order by ID
+// api lấy order theo id
 router.get("/:id", orderController.getOrderById);
 
-// Create new order
+// api tạo order mới
 router.post("/", authController.authMiddleware, orderController.createOrder);
 
-// Update order status
+// api cập nhật trạng thái order
 router.put("/:id/status", authController.authMiddleware, orderController.updateOrderStatus);
 
-// Get current user's orders (buyer)
+// api lấy danh sách order của user hiện tại
 router.get("/user/my-orders", authController.authMiddleware, orderController.getMyOrders);
 
-// Get seller's orders
+// api lấy danh sách order của seller
 router.get("/seller/orders", authController.authMiddleware, orderController.getSellerOrders);
 
-// Accept order
+// api chấp nhận order
 router.post("/:id/accept", authController.authMiddleware, orderController.acceptOrder);
 
-// Seller confirms buyer's order (realtime navigate buyer to tracking)
+// api xác nhận order của buyer
 router.put("/:id/seller-confirm", authController.authMiddleware, orderController.sellerConfirmOrder);
 
-// Seller rejects buyer's order
+// api từ chối order của buyer
 router.put("/:id/seller-reject", authController.authMiddleware, orderController.sellerRejectOrder);
 
-// Add GPS coordinate
+// api thêm tọa độ GPS
 router.post("/:id/gps", orderController.addGPSCoordinate);
 
 module.exports = router;

@@ -8,7 +8,7 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET là bắt buộc");
 }
 
-// Middleware để xác minh mã thông báo JWT
+// middleware xác minh token JWT
 const verifyToken = (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
   
@@ -27,6 +27,7 @@ const verifyToken = (req, res, next) => {
 
 exports.verifyToken = verifyToken;
 
+// cập nhật avatar người dùng
 exports.updateAvatarUrl = async (req, res) => {
   try {
     const { avatarUrl } = req.body;
@@ -46,7 +47,7 @@ exports.updateAvatarUrl = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy tài khoản" });
     }
 
-    // Cập nhật avatar trong các bài đăng của người dùng (Listing)
+    // cập nhật avatar trong các bài đăng của người dùng (Listing)
     await Listing.updateMany(
       { sellerId: userId },
       { $set: { sellerAvatar: avatarUrl } }

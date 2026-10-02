@@ -211,6 +211,7 @@ exports.redeemReward = async (req, res) => {
 
         user.greenPoints -= reward.pointsRequired;
         reward.stock -= 1;
+        reward.totalRedeemed += 1;
 
         await user.save();
         await reward.save();
@@ -224,7 +225,7 @@ exports.redeemReward = async (req, res) => {
         });
 
         if (global.io) {
-            global.io.emit("reward_stock_updated", { rewardId: reward._id, stock: reward.stock });
+            global.io.emit("reward_stock_updated", { rewardId: reward._id, stock: reward.stock, totalRedeemed: reward.totalRedeemed });
             global.io.to(userId.toString()).emit("user_points_updated", { greenPoints: user.greenPoints });
         }
 
@@ -270,5 +271,18 @@ exports.getRedeemHistory = async (req, res) => {
     } catch (error) {
         console.error("Lỗi lấy lịch sử đổi quà:", error);
         return res.status(500).json({ success: false, message: "Không tải được lịch sử đổi quà" });
+    }
+};
+
+// lấy toàn bộ lịch sử đổi quà cho Admin
+exports.getAllRedeemHistoryForAdmin = async (req, res) => {
+    try {
+        const history = await RedeemHistory.find()
+            .populate("userId", "name email")
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({ success: true, data: history });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
     }
 };

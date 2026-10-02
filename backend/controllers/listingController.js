@@ -1,13 +1,14 @@
 const Listing = require("../models/Listing");
 const User = require("../models/User");
 
-// Pass io instance from server.js
+// truyền dữ liệu real-time
 let io = null;
 
 exports.setIO = (ioInstance) => {
   io = ioInstance;
 };
 
+// đăng bài thu gom rác mới
 exports.createListing = async (req, res) => {
   try {
     const { items, totalPrice, totalWeight, greenPoints, note, pickupTime, imageUrl, address: customAddress } = req.body;
@@ -24,7 +25,6 @@ exports.createListing = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
     }
 
-    // Ưu tiên dùng địa chỉ từ request body, nếu không có mới dùng địa chỉ từ profile
     const finalAddress = customAddress || user.address || "";
     if (!finalAddress) {
       return res.status(400).json({ message: "Vui lòng cung cấp địa chỉ thu gom" });
@@ -58,7 +58,7 @@ exports.createListing = async (req, res) => {
       imageUrl: imageUrl || null,
     });
 
-    // Emit real-time update to all connected clients
+    // Gửi real-time update cho tất cả client
     if (io) {
       io.emit('new:listing', {
         _id: listing._id,
@@ -78,7 +78,7 @@ exports.createListing = async (req, res) => {
         greenPoints: listing.greenPoints,
       });
 
-      // Also notify the seller about their new listing
+      // gửi real-time update cho người đăng bài
       io.to(req.userId).emit('seller:listing:created', {
         listing,
         message: "Đăng bài thành công",
@@ -95,7 +95,7 @@ exports.createListing = async (req, res) => {
   }
 };
 
-
+// lấy danh sách bài thu gom rác
 exports.getListings = async (req, res) => {
   try {
     const { district, status = "available", page = 1, limit = 20 } = req.query;
@@ -124,7 +124,7 @@ exports.getListings = async (req, res) => {
   }
 };
 
-
+// lấy thông tin chi tiết một bài đăng
 exports.getListingById = async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -140,7 +140,7 @@ exports.getListingById = async (req, res) => {
   }
 };
 
-
+// lấy danh sách bài thu gom rác của user hiện tại
 exports.getMyListings = async (req, res) => {
   try {
     const listings = await Listing.find({ sellerId: req.userId }).sort({ createdAt: -1 });

@@ -68,9 +68,9 @@ export default function EducationDiscussionScreen() {
   const [post, setPost] = useState<EducationPost | null>(null);
   const [comments, setComments] = useState<EducationComment[]>([]);
   const [replyingToComment, setReplyingToComment] = useState<EducationComment | null>(null);
-
   const [newCommentText, setNewCommentText] = useState('');
 
+  // lấy danh sách comment
   const fetchComments = async () => {
     try {
       setIsLoading(true);
@@ -95,6 +95,7 @@ export default function EducationDiscussionScreen() {
     }
   }, [id]);
 
+  // tải lại comment
   const reloadCommentsOnly = async () => {
     try {
       const response = await fetch(`${API_URL}/api/educations/${id}/comments`);
@@ -183,7 +184,7 @@ export default function EducationDiscussionScreen() {
     }
   };
 
-  // Tạo bình luận mới hoặc phản hồi bình luận cũ
+  // tạo bình luận hoặc phản hồi bình luận
   const handleSendCommentOrReply = async () => {
     if (!newCommentText.trim()) return;
 
@@ -228,10 +229,10 @@ export default function EducationDiscussionScreen() {
     }
   };
 
+  // xử lý like comment 
   const handleLikeComment = async (commentId: string, replyId?: string) => {
     const currentUserId = user?.id || user?._id || 'GUEST';
     
-    // Optimistic UI
     setComments(prev => prev.map(c => {
       if (c._id === commentId || c.id === commentId) {
         if (replyId) {
@@ -271,7 +272,6 @@ export default function EducationDiscussionScreen() {
       });
     } catch(err) {
       console.error('Error toggling like:', err);
-      // Revert in real app if error, but ok for now
     }
   };
 

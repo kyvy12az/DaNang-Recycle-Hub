@@ -35,12 +35,13 @@ export default function RewardsScreen() {
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
   const toastOpacity = useRef(new Animated.Value(0)).current;
 
-  // Lắng nghe biến động điểm số toàn cục từ AuthContext để đồng bộ ngược vào state màn hình này
+  // lắng nghe thay đổi điểm toàn cục để đồng bộ vào state màn hình này
   useEffect(() => {
     setPoints(user?.greenPoints ?? 0);
   }, [user?.greenPoints]);
 
   useEffect(() => {
+    // lấy danh sách quà cùng với lịch sử quà đã đổi trước đó
     const fetchRewardsAndHistory = async () => {
       try {
         const token = await getAuthToken();
@@ -50,7 +51,6 @@ export default function RewardsScreen() {
           return;
         }
 
-        // Gọi song song: Lấy danh sách quà cùng với lịch sử quà đã đổi trước đó
         const [resRewards, resHistory] = await Promise.all([
           fetch(`${API_URL}/api/rewards`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -63,7 +63,6 @@ export default function RewardsScreen() {
         const jsonRewards = await resRewards.json();
         const jsonHistory = await resHistory.json();
 
-        // 1. Xử lý danh sách lịch sử quà đã đổi thành công để đánh dấu nhãn "Đã đổi"
         if (jsonHistory.success && jsonHistory.data) {
           const listIds = jsonHistory.data.map((h: any) => {
             if (h.rewardId && typeof h.rewardId === 'object') {
@@ -74,10 +73,9 @@ export default function RewardsScreen() {
           setRedeemedIds(listIds);
         }
 
-        // 2. Xử lý map dữ liệu từ Backend Schema sang chuẩn hiển thị của Frontend
         if (jsonRewards.success) {
           const mappedRewards = (jsonRewards.data || [])
-            .filter((item: any) => item.status !== 'hidden') // Không hiển thị quà bị ẩn
+            .filter((item: any) => item.status !== 'hidden')
             .map((item: any) => ({
               _id: item._id || item.id, 
               title: item.name, 
@@ -122,6 +120,7 @@ export default function RewardsScreen() {
     ]).start(() => setToastVisible(false));
   };
 
+  // xử lý đổi quà
   const handleRedeem = async (reward: any) => {
     try {
       if (reward.stock <= 0) {
@@ -158,26 +157,22 @@ export default function RewardsScreen() {
         return;
       }
 
-      // Đổi quà thành công: Xác định điểm số mới còn lại sau khi trừ
+      // đổi quà thành công: xác định điểm số mới sau khi trừ
       let nextPoints = points - reward.pointsCost;
       if (json.data && json.data.remainingPoints !== undefined) {
         nextPoints = json.data.remainingPoints;
       }
 
-      // 1. Cập nhật state điểm số hiển thị tức thì tại màn hình hiện tại
       setPoints(nextPoints);
 
-      // 2. 🛠️ ĐỒNG BỘ ĐIỂM SỐ MỚI XUỐNG AUTH_CONTEXT VÀ ASYNCSTORAGE
       if (updateRealtimeStats) {
         await updateRealtimeStats({
           greenPoints: nextPoints
         });
       }
 
-      // 3. Đánh dấu sản phẩm đã đổi vào mảng id cục bộ
       setRedeemedIds(prev => [...prev, reward._id]);
       
-      // 4. Giảm số lượng kho (stock) cục bộ của quà tặng giúp UI phản hồi nhanh nhạy
       setRewards(prev => prev.map(item => item._id === reward._id ? { ...item, stock: item.stock - 1 } : item));
 
       showToast(json.message || `Đã đổi thành công ${reward.title}! 🎉`, 'success');

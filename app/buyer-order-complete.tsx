@@ -62,11 +62,13 @@ export default function BuyerOrderCompleteScreen() {
     }, 300);
   }, [orderId, listingId, actualWeight, actualPrice, actualGreenPoints]);
 
+  // xử lý khi bắt đầu thanh toán
   const handleProcessPayment = async () => {
     if (!completion) return;
     setShowMomoModal(true);
   };
 
+  // xử lý khi thanh toán thành công
   const handlePaymentSuccess = async () => {
     if (!completion) return;
     setShowMomoModal(false);
@@ -109,6 +111,7 @@ export default function BuyerOrderCompleteScreen() {
     }
   };
 
+  // xử lý khi thanh toán thất bại
   const handlePaymentError = (errorMsg: string) => {
     setShowMomoModal(false);
     setErrorMessage(errorMsg || 'Giao dịch bị từ chối hoặc đã xảy ra lỗi trong quá trình kết nối cổng thanh toán MoMo.');
@@ -120,7 +123,7 @@ export default function BuyerOrderCompleteScreen() {
     router.replace('/');
   };
 
-  // ---  GIAO DIỆN ĐANG TẢI / ĐANG XỬ LÝ ---
+  // giao diện đang tải
   if (statusState === 'preparing' || statusState === 'processing') {
     return (
       <View style={styles.centerContainer}>
@@ -137,7 +140,7 @@ export default function BuyerOrderCompleteScreen() {
     );
   }
 
-  // --- GIAO DIỆN THANH TOÁN THÀNH CÔNG ---
+  // giao diện thanh toán thành công
   if (statusState === 'success') {
     return (
       <View style={styles.container}>
@@ -190,7 +193,7 @@ export default function BuyerOrderCompleteScreen() {
     );
   }
 
-  // --- GIAO DIỆN THANH TOÁN THẤT BẠI 
+  // giao diện thanh toán thất bại
   if (statusState === 'failed') {
     return (
       <View style={styles.container}>
@@ -244,7 +247,7 @@ export default function BuyerOrderCompleteScreen() {
     );
   }
 
-  // --- GIAO DIỆN SẴN SÀNG THANH TOÁN BAN ĐẦU ---
+  // giao diện sẵn sàng thanh toán
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />

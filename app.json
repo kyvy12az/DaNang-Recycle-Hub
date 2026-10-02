@@ -11,11 +11,6 @@
       "com.googleusercontent.apps.198264775029-q60jd2n7v1oqtg04319cbj5hv1rf9ndg"
     ],
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.kyvydev.danangrecyclehub",
@@ -58,7 +53,20 @@
           "locationWhenInUsePermission": "Cho phep ung dung truy cap vi tri de tim diem thu gom gan ban"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-image",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-status-bar",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

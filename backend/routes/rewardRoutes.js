@@ -21,5 +21,6 @@ router.delete("/:id", rewardController.deleteReward);
 // api đổi thưởng và lấy lịch sử đổi thưởng
 router.post("/redeem", protect, rewardController.redeemReward);
 router.get("/history/me", protect, rewardController.getRedeemHistory);
+router.get("/admin/history", protect, rewardController.getAllRedeemHistoryForAdmin);
 
 module.exports = router;

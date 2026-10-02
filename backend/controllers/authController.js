@@ -27,9 +27,10 @@ const normalizeUser = (user, provider = user.provider || "email") => ({
   createdAt: user.createdAt,
 });
 
+// đăng ký tài khoản mới
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, phone, address } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Thiếu thông tin đăng ký" });
@@ -46,6 +47,8 @@ exports.register = async (req, res) => {
       name: name.trim(),
       email: normalizedEmail,
       password: hashedPassword,
+      phone: phone ? phone.trim() : null,
+      address: address ? address.trim() : null,
       provider: "email",
       emailVerified: false,
     });
@@ -63,6 +66,7 @@ exports.register = async (req, res) => {
   }
 };
 
+// đăng nhập tài khoản
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -99,8 +103,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// hàm này sẽ gọi API của Google để xác minh idToken và lấy thông tin hồ sơ người dùng, 
-// bao gồm cả email đã xác minh nếu có
+// xác minh token google api
 const verifyGoogleIdToken = async (idToken) => {
   const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
 
@@ -116,6 +119,7 @@ const verifyGoogleIdToken = async (idToken) => {
   return payload;
 };
 
+// đăng nhập tài khoản bằng google
 exports.googleLogin = async (req, res) => {
   try {
     const { idToken, profile } = req.body;
@@ -172,7 +176,7 @@ exports.googleLogin = async (req, res) => {
   }
 };
 
-// ── Middleware xác thực JWT ──
+// middleware xác thực JWT
 exports.authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -188,7 +192,7 @@ exports.authMiddleware = (req, res, next) => {
   }
 };
 
-
+// cập nhật profile
 exports.updateProfile = async (req, res) => {
   try {
     const { name, address, phone } = req.body;
@@ -219,7 +223,7 @@ exports.updateProfile = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
     }
 
-    // Cập nhật tên trong các bài đăng của người dùng (Listing) nếu tên thay đổi
+    // cập nhật tên trong các bài đăng của người dùng (Listing) nếu tên thay đổi
     if (name !== undefined) {
       await Listing.updateMany(
         { sellerId: req.userId },
@@ -234,5 +238,125 @@ exports.updateProfile = async (req, res) => {
   } catch (error) {
     console.error("Lỗi cập nhật profile:", error);
     return res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+// lấy profile hiện tại
+exports.getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+    return res.status(200).json({
+      user: normalizeUser(user, user.provider || "email"),
+    });
+  } catch (error) {
+    console.error("Lỗi lấy profile:", error);
+    return res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+// xác minh token zalo api
+const verifyZaloAccessToken = async (accessToken) => {
+  const response = await fetch(`https://graph.zalo.me/v2.0/me?fields=id,name,picture,email`, {
+    headers: {
+      access_token: accessToken,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Zalo access token không hợp lệ");
+  }
+
+  const payload = await response.json();
+  return payload;
+};
+
+// đăng nhập tài khoản bằng zalo (OAuth 2.0 PKCE)
+exports.zaloLogin = async (req, res) => {
+  try {
+    const { code, codeVerifier } = req.body;
+
+    if (!code || !codeVerifier) {
+      return res.status(400).json({ message: "Thiếu Zalo authorization code hoặc codeVerifier" });
+    }
+
+    const zaloAppId = process.env.ZALO_APP_ID || "830326267110984004";
+    const zaloAppSecret = process.env.ZALO_APP_SECRET;
+
+    if (!zaloAppSecret) {
+      return res.status(500).json({ message: "Chưa cấu hình ZALO_APP_SECRET trong file .env của Backend" });
+    }
+
+    // 1. Đổi code lấy access token
+    const tokenResponse = await fetch("https://oauth.zalo.me/v2.0/access_token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        secret_key: zaloAppSecret,
+      },
+      body: new URLSearchParams({
+        code,
+        app_id: zaloAppId,
+        code_verifier: codeVerifier,
+        grant_type: "authorization_code",
+      }).toString(),
+    });
+
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok || !tokenData.access_token) {
+      console.error("Lỗi đổi token Zalo:", tokenData);
+      return res.status(400).json({ message: tokenData.error_description || "Không thể lấy Zalo access token từ code" });
+    }
+
+    const accessToken = tokenData.access_token;
+
+    // 2. Lấy thông tin user bằng access token
+    const zaloPayload = await verifyZaloAccessToken(accessToken);
+    const zaloId = zaloPayload.id;
+    const name = zaloPayload.name || "Zalo User";
+    const avatar = zaloPayload.picture?.data?.url || null;
+    
+    let email = zaloPayload.email || "";
+    email = email.trim().toLowerCase();
+
+    if (!zaloId) {
+      return res.status(400).json({ message: "Không lấy được Zalo ID" });
+    }
+
+    let user = await User.findOne({ zaloId });
+
+    if (!user && email) {
+      user = await User.findOne({ email });
+      if (user) {
+        user.zaloId = zaloId;
+        if (!user.avatar && avatar) user.avatar = avatar;
+        await user.save();
+      }
+    }
+
+    if (!user) {
+      const finalEmail = email || `zalo_${zaloId}@danangrecyclehub.vn`;
+      user = await User.create({
+        name,
+        email: finalEmail,
+        zaloId,
+        provider: "zalo",
+        avatar,
+        emailVerified: !!email,
+      });
+    }
+
+    const token = createToken(user._id);
+
+    return res.json({
+      message: "Login success",
+      token,
+      user: normalizeUser(user, "zalo"),
+    });
+  } catch (err) {
+    console.error("Lỗi Zalo Login BE:", err);
+    res.status(500).json({ message: err.message || "Lỗi Server nội bộ" });
   }
 };

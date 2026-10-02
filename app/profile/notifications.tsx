@@ -29,6 +29,7 @@ export default function NotificationsScreen() {
     const [loading, setLoading] = useState(true);
     const { onAdminNotification } = useSocket(user?.id, 'seller');
 
+    // lấy danh sách thông báo
     const fetchNotificationsFromDB = async () => {
         if (!user?.id) return;
         try {
@@ -69,6 +70,7 @@ export default function NotificationsScreen() {
         const unsubscribe = onAdminNotification((newNotifyItem: any) => {
             console.log("[Realtime Socket] Nhận được thông báo mới:", newNotifyItem);
 
+            // update danh sách thông báo
             setNotifications(prevList => {
                 const isExist = prevList.some(item => item.id === newNotifyItem.id);
                 if (isExist) return prevList;
@@ -95,6 +97,7 @@ export default function NotificationsScreen() {
         };
     }, [user?.id]);
 
+    // đánh dấu thông báo đã đọc
     const handleMarkAsRead = async (item: NotificationItem) => {
         setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
 
@@ -122,6 +125,7 @@ export default function NotificationsScreen() {
         }
     };
 
+    // xóa tất cả thông báo
     const handleClearAll = async () => {
         setNotifications([]);
         try {

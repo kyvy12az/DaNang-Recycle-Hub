@@ -5,10 +5,10 @@ const { handleClassification } = require("../controllers/classifyController");
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 } // Giới hạn 5MB
+  limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
-// Định nghĩa endpoint POST /api/ai/classify
+// api nhận diện rác
 router.post("/classify", upload.single("image"), handleClassification);
 
 module.exports = router;

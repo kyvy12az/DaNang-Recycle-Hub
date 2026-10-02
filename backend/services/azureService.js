@@ -3,6 +3,7 @@ const { ApiKeyCredentials } = require("@azure/ms-rest-js");
 
 const DEFAULT_AZURE_TIMEOUT_MESSAGE = "Azure Custom Vision không thể nhận diện ảnh này.";
 
+// xử lý endpoint của azure
 function normalizeAzureEndpoint(endpoint) {
     if (!endpoint) {
         throw new Error("Thiếu biến môi trường AZURE_CUSTOM_VISION_ENDPOINT.");
@@ -30,6 +31,7 @@ function createAzureClient() {
     return new PredictionAPIClient(credentials, endpoint);
 }
 
+// xử lý lấy kết quả đầu ra
 function pickTopPrediction(predictions) {
     if (!Array.isArray(predictions) || predictions.length === 0) {
         return null;
@@ -40,6 +42,7 @@ function pickTopPrediction(predictions) {
         .sort((left, right) => (right.probability || 0) - (left.probability || 0))[0] || null;
 }
 
+// xử lý nhận diện rác với azure
 async function classifyWithAzure(imageBuffer) {
     if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {
         throw new Error("Dữ liệu ảnh không hợp lệ.");

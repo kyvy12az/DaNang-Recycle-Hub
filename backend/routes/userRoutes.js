@@ -8,14 +8,14 @@ const notificationController = require("../controllers/notificationController");
 const User = require("../models/User");
 const Transaction = require("../models/Transaction");
 
-// Route để cập nhật URL avatar của người dùng, yêu cầu xác thực bằng JWT
+// api cập nhật url avatar của người dùng
 router.put(
   "/avatar",
   userController.verifyToken,
   userController.updateAvatarUrl
 );
 
-// Cập nhật trạng thái Online / Offline
+// api cập nhật trạng thái online/offline
 router.put('/status', authController.authMiddleware, async (req, res) => {
   try {
     const { isOnline, lastSeen } = req.body;
@@ -26,7 +26,7 @@ router.put('/status', authController.authMiddleware, async (req, res) => {
   }
 });
 
-// Lấy lịch sử giao dịch Điểm xanh / Ví tiền
+// api lấy lịch sử giao dịch điểm xanh/ví tiền
 router.get('/transactions', authController.authMiddleware, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200);
@@ -53,7 +53,7 @@ router.get('/transactions', authController.authMiddleware, async (req, res) => {
   }
 });
 
-// Lấy số điện thoại và tên của User cụ thể
+// api lấy số điện thoại và tên của user cụ thể
 router.get('/:userId/phone', authController.authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId).select('phone name');
@@ -64,8 +64,11 @@ router.get('/:userId/phone', authController.authMiddleware, async (req, res) => 
   }
 });
 
+// api lấy danh sách thông báo của user
 router.get("/notifications", authController.authMiddleware, notificationController.getUserNotifications);
+// api đánh dấu thông báo là đã đọc
 router.put("/notifications/:id/read", authController.authMiddleware, notificationController.markAsRead);
+// api xóa tất cả thông báo
 router.delete("/notifications/clear", authController.authMiddleware, notificationController.clearAllNotifications);
 
 module.exports = router;

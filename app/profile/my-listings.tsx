@@ -71,6 +71,7 @@ export default function MyListingsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // fetch danh sách bài rác của tôi
   const fetchListings = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
@@ -123,7 +124,6 @@ export default function MyListingsScreen() {
         activeOpacity={0.9}
       // onPress={() => router.push(`/buyer-detail/${id}`)}
       >
-        {/* --- Image Banner --- */}
         <View style={styles.imageWrap}>
           <Image
             source={{ uri: imgUri }}
@@ -131,27 +131,22 @@ export default function MyListingsScreen() {
             contentFit="cover"
             transition={300}
           />
-          {/* overlay gradient */}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.6)']}
             style={styles.imageOverlay}
           />
-          {/* Price chip */}
           <View style={styles.priceChip}>
             <Text style={styles.priceChipText}>
               {new Intl.NumberFormat('vi-VN').format(item.totalPrice)}đ
             </Text>
           </View>
-          {/* Weight chip */}
           <View style={styles.weightChip}>
             <Scale size={11} color="#fff" />
             <Text style={styles.weightChipText}>{item.totalWeight} kg</Text>
           </View>
         </View>
 
-        {/* --- Card body --- */}
         <View style={styles.cardBody}>
-          {/* top row: id + status */}
           <View style={styles.cardTopRow}>
             <View>
               <Text style={styles.cardIdLabel}>MÃ ĐƠN HÀNG</Text>
@@ -165,13 +160,11 @@ export default function MyListingsScreen() {
             </View>
           </View>
 
-          {/* Item names */}
           <View style={styles.itemsRow}>
             <Leaf size={14} color="#4CAF50" style={{ marginTop: 2 }} />
             <Text style={styles.itemsText} numberOfLines={2}>{itemNames || 'Không có vật phẩm'}</Text>
           </View>
-
-          {/* Stats strip */}
+          
           <View style={styles.statsStrip}>
             <View style={styles.statsCell}>
               <Text style={styles.statsCellLabel}>Khối lượng</Text>
@@ -191,7 +184,6 @@ export default function MyListingsScreen() {
             </View>
           </View>
 
-          {/* Footer: time & address */}
           <View style={styles.cardFooter}>
             {item.pickupTime && (
               <View style={styles.footerRow}>
@@ -224,7 +216,6 @@ export default function MyListingsScreen() {
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* ── Gradient Header ── */}
       <LinearGradient
         colors={['#1B5E20', '#2E7D32', '#43A047']}
         style={[styles.header, { paddingTop: insets.top + 12 }]}
@@ -239,7 +230,6 @@ export default function MyListingsScreen() {
         </View>
       </LinearGradient>
 
-      {/* ── Tab Switcher ── */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'pending' && styles.tabItemActive]}
@@ -272,7 +262,6 @@ export default function MyListingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Content ── */}
       {loading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator size="large" color="#2E7D32" />
@@ -308,7 +297,6 @@ export default function MyListingsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F4F6F9' },
 
-  // Header
   header: {
     paddingHorizontal: 16,
     paddingBottom: 20,
@@ -333,7 +321,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Tabs
   tabBar: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -374,7 +361,6 @@ const styles = StyleSheet.create({
   tabBadgeText: { fontSize: 11, fontWeight: '700', color: '#94A3B8' },
   tabBadgeTextActive: { color: '#1B5E20' },
 
-  // Loading / empty
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { fontSize: 13, color: '#78909C', fontWeight: '500' },
   emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, paddingHorizontal: 32 },

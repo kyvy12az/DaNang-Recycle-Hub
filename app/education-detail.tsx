@@ -69,7 +69,6 @@ export default function EducationDetailScreen() {
   const [post, setPost] = useState<EducationPost | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Các trạng thái tương tác cục bộ
   const [isLiked, setIsLiked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -150,7 +149,6 @@ export default function EducationDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Floating Header Navigation chuẩn hình mẫu */}
       <View style={[styles.headerNav, { top: insets.top + 6 }]}>
         <BackButton color="#fff" size={24} style={styles.navCircle} />
 
@@ -169,7 +167,6 @@ export default function EducationDetailScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} bounces={false} style={styles.scrollView}>
-        {/* Top Hero Image Section */}
         <View style={styles.heroWrapper}>
           <Image
             source={{ uri: post.coverImage || "https://images.unsplash.com/photo-1532996122724-e3c354a0b15b" }}
@@ -185,17 +182,14 @@ export default function EducationDetailScreen() {
           </View>
         </View>
 
-        {/* Bottom Sheet Styled Main Content Block */}
         <View style={styles.mainContent}>
           <View style={styles.dragHandle} />
 
-          {/* Title Area với Icon lá cây nhỏ bên phải */}
           <View style={styles.titleContainer}>
             <Text style={styles.titleText}>{post.title}</Text>
             <Leaf size={22} color="#76BA1B" fill="#76BA1B" style={styles.titleIcon} />
           </View>
 
-          {/* Info Bar Indicators */}
           <View style={styles.infoBar}>
             <View style={styles.infoItem}>
               <Clock size={16} color="#666" />
@@ -208,7 +202,6 @@ export default function EducationDetailScreen() {
             </View>
           </View>
 
-          {/* Grayish-Green Info/Summary Box */}
           <View style={styles.sapoBox}>
             <View style={styles.sapoIconContainer}>
               <Info size={20} color="#2E7D32" fill="#2E7D32" />
@@ -216,12 +209,10 @@ export default function EducationDetailScreen() {
             <Text style={styles.sapoText}>{post.description}</Text>
           </View>
 
-          {/* Article Body */}
           <View style={styles.articleBody}>
             <Text style={styles.contentText}>{post.content}</Text>
           </View>
 
-          {/* Ecological Impact Section */}
           <Text style={styles.sectionHeading}>Tác động sinh thái dự kiến</Text>
           <View style={styles.impactGrid}>
             <View style={[styles.impactCardItem, { backgroundColor: '#F4F7FF' }]}>
@@ -245,7 +236,6 @@ export default function EducationDetailScreen() {
             </View>
           </View>
 
-          {/* Action-Oriented Call to Action Block với Background Ảnh Lá Cây */}
           <View style={styles.ctaBox}>
             <Image
               source={require('@/assets/images/pictures/background_la_3.png')}

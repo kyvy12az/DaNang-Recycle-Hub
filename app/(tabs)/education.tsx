@@ -124,13 +124,11 @@ export default function EducationScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Header chuẩn thiết kế thư viện xanh */}
       <LinearGradient
         colors={['#1B5E20', '#2E7D32']}
         locations={[0, 0.6, 1]}
         style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
-        {/* Hình minh họa góc phải header (Thùng rác tái chế và chai lọ) */}
         <View style={styles.headerIllustrationContainer}>
           <Image
             source={require('@/assets/images/pictures/anh_thung_rac.png')}
@@ -149,7 +147,6 @@ export default function EducationScreen() {
           </TouchableOpacity> */}
         </View>
 
-        {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.miniStat}>
             <Award size={16} color="#FFD54F" />
@@ -168,10 +165,8 @@ export default function EducationScreen() {
         contentContainerStyle={styles.bodyContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Widget: Mẹo hay hôm nay */}
         <TouchableOpacity activeOpacity={0.9} style={styles.featuredWidget}>
           <View style={styles.featuredContentRow}>
-            {/* Hình ảnh hộp quà bên trái */}
             <Image
               source={{ uri: 'https://cdn-icons-png.flaticon.com/512/4213/4213958.png' }}
               style={styles.giftIcon}
@@ -185,12 +180,9 @@ export default function EducationScreen() {
               </Text>
             </View>
 
-            {/* Mũi tên đi tiếp bên phải */}
             <ChevronRight size={18} color="#CCCCCC" style={styles.arrowRight} />
           </View>
         </TouchableOpacity>
-
-        {/* Categories Grid/Row */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -222,7 +214,6 @@ export default function EducationScreen() {
           })}
         </ScrollView>
 
-        {/* Section Header */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Khám phá bài viết</Text>
           <TouchableOpacity

@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useRoute } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -210,15 +209,13 @@ const formatLastSeen = (timestamp?: string) => {
 };
 
 export default function SellerOrderTrackingScreen() {
-  const route = useRoute();
   const router = useRouter();
   const params = useLocalSearchParams();
   const socket = useAppSocket();
   const webViewRef = useRef<WebView>(null);
 
-  const routeParams = (route.params || {}) as any;
-  const orderId = (params.orderId as string) || routeParams.orderId;
-  const initialOrderRef = useRef<TrackingOrder | null>(routeParams.order ? normalizeOrder(routeParams.order) : null);
+  const orderId = params.orderId as string | undefined;
+  const initialOrderRef = useRef<TrackingOrder | null>(null);
   const initialOrder = initialOrderRef.current;
 
   const [order, setOrder] = useState<TrackingOrder | null>(initialOrder);

@@ -11,6 +11,7 @@ exports.setIO = (ioInstance) => {
   io = ioInstance;
 };
 
+// lấy order theo id
 exports.getOrderById = async (req, res) => {
   try {
     let orderId = req.params.id;
@@ -44,11 +45,11 @@ exports.getOrderById = async (req, res) => {
   }
 };
 
+// tạo order mới
 exports.createOrder = async (req, res) => {
   try {
     const { listingId, estimatedWeight, estimatedPrice, estimatedGreenPoints, status } = req.body;
 
-    // Get listing to find seller
     const listing = await Listing.findById(listingId);
     if (!listing) {
       return res.status(404).json({ message: "Bài đăng không tồn tại" });
@@ -77,7 +78,6 @@ exports.createOrder = async (req, res) => {
       const sellerId = populatedOrder.sellerId._id.toString();
       const buyerName = buyer.name || "Người mua";
 
-      // Lưu thông báo vào DB cho seller
       try {
         const dbNotif = await Notification.create({
           userId: sellerId,
@@ -90,7 +90,7 @@ exports.createOrder = async (req, res) => {
           isRead: false,
         });
 
-        // Emit socket notification:new cho seller (realtime vào trang thông báo)
+        // realtime thông báo cho seller , thông báo đến trang thông báo real-time
         io.to(sellerId).emit("notification:new", {
           id: dbNotif._id.toString(),
           type: "order_created",
@@ -106,7 +106,7 @@ exports.createOrder = async (req, res) => {
         console.error("[Order] Lỗi lưu notification:", notifErr);
       }
 
-      // Emit order:notification cho seller (toast in app)
+      // realtime thông báo cho seller , thông báo đến thông báo popup trong ứng dụng
       io.to(sellerId).emit("order:notification", {
         orderId: populatedOrder._id.toString(),
         listingId: listing._id.toString(),
@@ -127,6 +127,7 @@ exports.createOrder = async (req, res) => {
   }
 };
 
+// cập nhật trạng thái order
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -224,6 +225,7 @@ exports.updateOrderStatus = async (req, res) => {
   }
 };
 
+// lấy danh sách order của buyer
 exports.getMyOrders = async (req, res) => {
   try {
     const orders = await Order.find({ buyerId: req.userId })
@@ -238,6 +240,7 @@ exports.getMyOrders = async (req, res) => {
   }
 };
 
+// lấy danh sách order của seller
 exports.getSellerOrders = async (req, res) => {
   try {
     const orders = await Order.find({ sellerId: req.userId })
@@ -252,6 +255,7 @@ exports.getSellerOrders = async (req, res) => {
   }
 };
 
+// xác nhận order
 exports.acceptOrder = async (req, res) => {
   try {
     const { id } = req.params;
@@ -278,6 +282,7 @@ exports.acceptOrder = async (req, res) => {
   }
 };
 
+// thêm tọa độ GPS
 exports.addGPSCoordinate = async (req, res) => {
   try {
     const { id } = req.params;
@@ -304,10 +309,10 @@ exports.addGPSCoordinate = async (req, res) => {
   }
 };
 
-// Seller xác nhận đơn hàng (chấp nhận người mua)
+// seller xác nhận đơn hàng (chấp nhận người mua)
 exports.sellerConfirmOrder = async (req, res) => {
   try {
-    const { id } = req.params; // orderId
+    const { id } = req.params; 
 
     const order = await Order.findById(id)
       .populate("buyerId", "name phone avatar")
@@ -317,7 +322,6 @@ exports.sellerConfirmOrder = async (req, res) => {
       return res.status(404).json({ message: "Đơn hàng không tồn tại" });
     }
 
-    // Kiểm tra seller là người đang request
     if (String(order.sellerId?._id || order.sellerId) !== String(req.userId)) {
       return res.status(403).json({ message: "Bạn không có quyền xác nhận đơn này" });
     }
@@ -330,7 +334,7 @@ exports.sellerConfirmOrder = async (req, res) => {
     const buyerId = order.buyerId?._id?.toString() || order.buyerId?.toString();
 
     if (io && buyerId) {
-      // Emit cho buyer để chuyển sang tracking page realtime
+      // emit cho buyer để chuyển sang tracking page realtime
       io.to(buyerId).emit("order:seller_confirmed", {
         orderId: id,
         listingId: String(order.listingId),
@@ -339,7 +343,7 @@ exports.sellerConfirmOrder = async (req, res) => {
         timestamp: new Date().toISOString(),
       });
 
-      // Lưu thông báo vào DB cho buyer
+      // lưu thông báo vào db cho buyer
       try {
         const dbNotif = await Notification.create({
           userId: buyerId,
@@ -352,6 +356,7 @@ exports.sellerConfirmOrder = async (req, res) => {
           isRead: false,
         });
 
+        // emit thông báo cho buyer, giúp hiện thông báo realtime
         io.to(buyerId).emit("notification:new", {
           id: dbNotif._id.toString(),
           type: "order_accepted",
@@ -375,7 +380,7 @@ exports.sellerConfirmOrder = async (req, res) => {
   }
 };
 
-// Seller hủy đơn hàng
+// seller từ chối đơn hàng
 exports.sellerRejectOrder = async (req, res) => {
   try {
     const { id } = req.params;
@@ -395,7 +400,7 @@ exports.sellerRejectOrder = async (req, res) => {
     const listingId = order.listingId?.toString();
     const buyerId = order.buyerId?._id?.toString() || order.buyerId?.toString();
 
-    // Xóa order và khôi phục listing về approved
+    // xóa order và khôi phục listing về approved
     await order.deleteOne();
     await Listing.findByIdAndUpdate(listingId, { status: "approved" });
 

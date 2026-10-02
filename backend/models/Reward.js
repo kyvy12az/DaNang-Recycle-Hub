@@ -24,6 +24,13 @@ const rewardSchema = new mongoose.Schema({
         min: 0
     },
 
+    totalRedeemed: {
+        type: Number,
+        required: true,
+        default: 0,
+        min: 0
+    },
+
     status: {
         type: String,
         enum: ["available", "hidden"],
@@ -34,7 +41,7 @@ const rewardSchema = new mongoose.Schema({
         type: String,
         required: true,
         default: null
-    }, 
+    },
 
     category: {
         type: String,
@@ -53,9 +60,9 @@ const rewardSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
-    
-}, { 
-    timestamps: true 
+
+}, {
+    timestamps: true
 });
 
 rewardSchema.virtual("id").get(function () {

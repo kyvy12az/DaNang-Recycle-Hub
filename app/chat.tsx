@@ -7,7 +7,7 @@ import {
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import * as ImagePicker from 'expo-image-picker';
 import { Send, Phone, ImagePlus, ChevronRight } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -20,6 +20,19 @@ import BackButton from '@/components/BackButton';
 
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://172.26.40.30:5000').replace(/\/$/, '');
 const BUCKET = 'message-images';
+
+function ChatVideo({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri);
+
+  return (
+    <VideoView
+      player={player}
+      style={styles.mediaVideo}
+      nativeControls
+      contentFit="contain"
+    />
+  );
+}
 
 async function uploadToSupabase(uri: string, mediaType: 'image' | 'video'): Promise<string> {
   const ext = uri.split('.').pop() ?? (mediaType === 'video' ? 'mp4' : 'jpg');
@@ -311,7 +324,7 @@ export default function ChatScreen() {
             <Image source={{ uri: item.mediaUrl }} style={styles.mediaImage} contentFit="cover" />
           )}
           {item.mediaType === 'video' && item.mediaUrl && (
-            <Video source={{ uri: item.mediaUrl }} style={styles.mediaVideo} useNativeControls resizeMode={ResizeMode.CONTAIN} />
+            <ChatVideo uri={item.mediaUrl} />
           )}
           {!!item.text && (
             <Text style={[styles.messageText, item.isMe && styles.myMessageText]}>{item.text}</Text>
