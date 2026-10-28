@@ -2,7 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, Animated, Dimensions, Image, ActivityIndicator, StatusBar, Alert, Platform } from "react-native";
+import { View, Text, StyleSheet, Animated, Image, StatusBar, Platform, Easing } from "react-native";
+import { Recycle, Leaf, Package, Droplets } from "lucide-react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Notifications from 'expo-notifications';
 import Colors from "@/constants/colors";
@@ -45,7 +46,8 @@ const queryClient = new QueryClient();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -173,47 +175,109 @@ function RootLayoutNav() {
 }
 
 function AppSplash({ onFinish }: { onFinish: () => void }) {
-  const fadeOut = useRef(new Animated.Value(1)).current;
-  const scaleLogo = useRef(new Animated.Value(0.9)).current;
+  const materials = useRef(new Animated.Value(0)).current;
+  const emblem = useRef(new Animated.Value(0)).current;
+  const copy = useRef(new Animated.Value(0)).current;
+  const exit = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.timing(scaleLogo, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: true,
-    }).start();
-
-    const timer = setTimeout(() => {
-      Animated.timing(fadeOut, {
-        toValue: 0,
-        duration: 500,
+    const animation = Animated.sequence([
+      Animated.timing(materials, {
+        toValue: 1,
+        duration: 850,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-      }).start(() => {
-        onFinish();
-      });
-    }, 2500);
+      }),
+      Animated.parallel([
+        Animated.spring(emblem, {
+          toValue: 1,
+          friction: 7,
+          tension: 65,
+          useNativeDriver: true,
+        }),
+        Animated.timing(copy, {
+          toValue: 1,
+          duration: 550,
+          delay: 120,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(850),
+      Animated.timing(exit, {
+        toValue: 0,
+        duration: 430,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]);
+    animation.start(({ finished }) => {
+      if (finished) onFinish();
+    });
+    return () => animation.stop();
+  }, [materials, emblem, copy, exit, onFinish]);
 
-    return () => clearTimeout(timer);
-  }, [fadeOut, scaleLogo, onFinish]);
+  const materialOpacity = materials.interpolate({
+    inputRange: [0, 0.25, 0.75, 1],
+    outputRange: [0, 1, 1, 0],
+  });
+  const logoScale = emblem.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.72, 1],
+  });
 
   return (
-    <Animated.View style={[splashStyles.container, { opacity: fadeOut }]}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+    <Animated.View style={[splashStyles.container, { opacity: exit }]} pointerEvents="auto">
+      <StatusBar barStyle="light-content" />
+      <View style={splashStyles.glowTop} />
+      <View style={splashStyles.glowBottom} />
       <View style={splashStyles.content}>
-        <Animated.View style={[splashStyles.logoContainer, { transform: [{ scale: scaleLogo }] }]}>
+        <View style={splashStyles.emblemStage}>
+          <Animated.View style={[splashStyles.material, {
+            opacity: materialOpacity,
+            transform: [
+              { translateX: materials.interpolate({ inputRange: [0, 1], outputRange: [-115, 0] }) },
+              { translateY: materials.interpolate({ inputRange: [0, 1], outputRange: [-65, 0] }) },
+            ],
+          }]}>
+            <Package size={26} color="#D7EDB3" strokeWidth={1.8} />
+          </Animated.View>
+          <Animated.View style={[splashStyles.material, {
+            opacity: materialOpacity,
+            transform: [
+              { translateX: materials.interpolate({ inputRange: [0, 1], outputRange: [115, 0] }) },
+              { translateY: materials.interpolate({ inputRange: [0, 1], outputRange: [-50, 0] }) },
+            ],
+          }]}>
+            <Droplets size={26} color="#AEDFE0" strokeWidth={1.8} />
+          </Animated.View>
+          <Animated.View style={[splashStyles.material, {
+            opacity: materialOpacity,
+            transform: [{ translateY: materials.interpolate({ inputRange: [0, 1], outputRange: [105, 0] }) }],
+          }]}>
+            <Leaf size={26} color="#D4EBAA" strokeWidth={1.8} />
+          </Animated.View>
+          <Animated.View style={[splashStyles.logoContainer, {
+            opacity: emblem,
+            transform: [{ scale: logoScale }, {
+              rotate: emblem.interpolate({ inputRange: [0, 1], outputRange: ['-12deg', '0deg'] }),
+            }],
+          }]}>
           <Image
             source={require("@/assets/images/logo.png")}
             style={splashStyles.logoImage}
             resizeMode="contain"
           />
-        </Animated.View>
-        <View style={splashStyles.textGroup}>
-          <Text style={splashStyles.title}>DaNang Recycle Hub</Text>
+          </Animated.View>
+        </View>
+        <Animated.View style={[splashStyles.textGroup, {
+          opacity: copy,
+          transform: [{ translateY: copy.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+        }]}>
+          <Text style={splashStyles.eyebrow}>ĐÀ NẴNG · SỐNG XANH</Text>
+          <Text style={splashStyles.title}>DaNang <Text style={splashStyles.titleAccent}>Recycle Hub</Text></Text>
           <Text style={splashStyles.slogan}>Tái chế vì một Đà Nẵng xanh</Text>
-        </View>
-        <View style={splashStyles.loaderWrapper}>
-          <ActivityIndicator size="small" color="#FFFFFF" />
-        </View>
+          <View style={splashStyles.rule}><Recycle size={16} color="#B7D98A" /></View>
+        </Animated.View>
       </View>
     </Animated.View>
   );
@@ -221,30 +285,40 @@ function AppSplash({ onFinish }: { onFinish: () => void }) {
 
 const splashStyles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 99999,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#173922',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
+  glowTop: { position: 'absolute', width: 350, height: 350, borderRadius: 175, backgroundColor: '#285837', top: -180, right: -140, opacity: 0.55 },
+  glowBottom: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: '#206352', bottom: -190, left: -150, opacity: 0.35 },
   content: {
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
   },
+  emblemStage: { width: 238, height: 238, justifyContent: 'center', alignItems: 'center' },
   logoContainer: {
-    width: 150,
-    height: 150,
+    width: 168,
+    height: 168,
+    borderRadius: 40,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(214, 238, 189, 0.35)',
   },
   logoImage: { width: '100%', height: '100%' },
-  textGroup: { alignItems: 'center', marginBottom: 50 },
-  title: { fontSize: 26, fontWeight: '800' as const, color: '#FFFFFF', letterSpacing: 1, textAlign: 'center' },
-  slogan: { marginTop: 10, fontSize: 14, color: 'rgba(255, 255, 255, 0.8)', fontWeight: '400' as const, textAlign: 'center', fontStyle: 'italic' },
-  loaderWrapper: { position: 'absolute', bottom: -100, alignItems: 'center' },
+  material: { position: 'absolute', left: 91, top: 91, width: 56, height: 56, borderRadius: 20, backgroundColor: '#24543A', alignItems: 'center', justifyContent: 'center' },
+  textGroup: { alignItems: 'center', marginTop: 28, minHeight: 128 },
+  eyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 3, color: '#B7D98A', marginBottom: 14 },
+  title: { fontSize: 26, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.6, textAlign: 'center' },
+  titleAccent: { color: '#B7D98A' },
+  slogan: { marginTop: 10, fontSize: 14, color: '#D7E7D5', textAlign: 'center' },
+  rule: { marginTop: 22, width: 60, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#6C9B72', paddingTop: 10 },
 });
 
 export default function RootLayout() {
