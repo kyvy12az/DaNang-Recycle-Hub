@@ -22,6 +22,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import Constants from 'expo-constants';
 import Colors from '@/constants/colors';
+import AuthHero from '@/components/AuthHero';
 import { useAuth } from '@/contexts/AuthContext';
 import Toast from 'react-native-toast-message';
 
@@ -69,24 +70,14 @@ export default function LoginScreen() {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
-  const logoScale = useRef(new Animated.Value(0.8)).current;
-  const logoRotate = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 700, easing: Easing.out(Easing.back(1.2)), useNativeDriver: true }),
-      Animated.spring(logoScale, { toValue: 1, friction: 4, useNativeDriver: true }),
     ]).start();
 
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(logoRotate, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: true }),
-      ])
-    ).start();
   }, []);
-
-  const spin = logoRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
   useEffect(() => {
     const decodeJwtPayload = (token: string) => {
@@ -235,7 +226,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#E8F5E9', '#F1F8E9', '#E0F7FA']}
+        colors={['#FFFFFF', '#FFFFFF', '#F4F8F1']}
         style={StyleSheet.absoluteFill}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -243,21 +234,11 @@ export default function LoginScreen() {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
         <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* HEADER LOGO */}
-          <Animated.View style={[styles.logoSection, { opacity: fadeAnim, transform: [{ scale: logoScale }] }]}>
-            <View style={styles.logoWrapper}>
-              <Animated.View style={[styles.logoRing, { transform: [{ rotate: spin }] }]} />
-              <View style={styles.logoCenter}>
-                <Image source={require('@/assets/images/logo.png')} style={styles.logoImage} contentFit="contain" />
-              </View>
-            </View>
-            <Text style={styles.appName}>DaNang Recycle Hub</Text>
-            <Text style={styles.appSlogan}>Kiếm tiền từ rác – Bảo vệ biển Đà Nẵng</Text>
-          </Animated.View>
+          <AuthHero topInset={insets.top} variant="login" />
 
           {/* FORM SECTION */}
           <Animated.View style={[styles.formSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
@@ -363,22 +344,8 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 24 },
-  logoSection: { alignItems: 'center', marginBottom: 32 },
-  logoWrapper: { width: 90, height: 90, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  logoRing: {
-    position: 'absolute', width: 90, height: 90, borderRadius: 45, borderWidth: 3,
-    borderColor: 'transparent', borderTopColor: '#2E7D32', borderRightColor: '#4CAF50', borderBottomColor: '#2196F3',
-  },
-  logoCenter: {
-    width: 70, height: 70, borderRadius: 35, backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center', justifyContent: 'center',
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6,
-  },
-  logoImage: { width: 50, height: 50 },
-  appName: { fontSize: 24, fontWeight: '800', color: '#1B5E20', letterSpacing: 0.5 },
-  appSlogan: { fontSize: 13, color: Colors.textSecondary, marginTop: 4, fontWeight: '500' },
-  formSection: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+  formSection: { flex: 1, paddingHorizontal: 24, paddingTop: 28 },
   welcomeText: { fontSize: 28, fontWeight: '800', color: Colors.text, marginBottom: 6 },
   subtitleText: { fontSize: 15, color: Colors.textSecondary, marginBottom: 24 },
   errorContainer: { backgroundColor: '#FFEBEE', borderRadius: 12, padding: 12, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: Colors.error },
