@@ -10,6 +10,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { RefreshCw, AlertCircle, Check, Scan, Brain } from 'lucide-react-native';
 import { Image } from 'expo-image';
+import { File } from 'expo-file-system';
+import { fetch } from 'expo/fetch';
 import Colors from '@/constants/colors';
 import { TrashPrediction } from '@/utils/trashModel';
 import { wasteTypes } from '@/mocks/data';
@@ -139,12 +141,13 @@ export default function AITrashRecognizer({
     scanLoop.start();
 
     try {
+      const imageFile = new File(imageUri);
+      if (!imageFile.exists) {
+        throw new Error('Không tìm thấy ảnh để nhận diện. Vui lòng chọn lại ảnh.');
+      }
+
       const formData = new FormData();
-      formData.append('image', {
-        uri: imageUri,
-        name: 'trash.jpg',
-        type: 'image/jpeg',
-      } as any);
+      formData.append('image', imageFile);
 
       const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/ai/classify`, {
         method: 'POST',
@@ -364,13 +367,13 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   scanOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(46, 125, 50, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   segmentPreview: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.9,
     transform: [{ translateY: -24 }],
   },
@@ -634,7 +637,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: Colors.text, fontWeight: '600' },
   
   successOverlay: {
-  ...StyleSheet.absoluteFillObject,
+  ...StyleSheet.absoluteFill,
   backgroundColor: 'rgba(46, 125, 50, 0.2)', // Màu xanh lá trong suốt
   justifyContent: 'center',
   alignItems: 'center',
