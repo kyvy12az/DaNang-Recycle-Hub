@@ -97,6 +97,7 @@ function normalizeLabel(label?: string) {
 // lấy tên model từ response
 function resolveSourceLabel(response: ApiClassificationResponse) {
   const source = `${response.source || ''} ${response.provider || ''}`.toLowerCase();
+  if (source.includes('groq')) return 'Groq AI';
   if (source.includes('gemini')) return 'Gemini AI';
   if (source.includes('azure')) return 'Azure Custom Vision';
   return response.source || response.provider || 'Unknown';
@@ -167,7 +168,11 @@ export default function AITrashRecognizer({
       const label = LABEL_MAP[normalizedLabel] ? normalizedLabel : 'trash';
       const meta = LABEL_MAP[label] || LABEL_MAP['trash'];
       const confidenceNum = normalizeConfidence(result.confidence ?? result.data?.confidence, resolvedSourceLabel);
-      const status = resolvedSourceLabel === 'Gemini AI'
+      const isFallback =
+        resolvedSourceLabel === 'Groq AI' ||
+        resolvedSourceLabel === 'Gemini AI';
+
+      const status = isFallback
         ? 'fallback'
         : confidenceNum >= 0.8
           ? 'success'
@@ -287,7 +292,7 @@ export default function AITrashRecognizer({
             <Brain size={12} color={Colors.primary} />
             <Text style={styles.aiBadgeText}>AI ENGINE ACTIVE</Text>
           </View>
-          <Text style={styles.modelText}>Hybrid Mode: Azure & Gemini</Text>
+          <Text style={styles.modelText}>Hybrid Mode: Azure & Groq</Text>
         </View>
 
         {step === 'result' && predictions[0] && (
@@ -621,7 +626,7 @@ const styles = StyleSheet.create({
   resultMainRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
   predictionLabel: { fontSize: 12, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1 },
   predictionValue: { fontSize: 24, fontWeight: 'bold', color: Colors.text, marginTop: 4 },
-  
+
   confidenceBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
 
   infoGrid: { flexDirection: 'row', backgroundColor: '#F8F9FA', borderRadius: 16, padding: 15, marginBottom: 20 },
@@ -635,99 +640,99 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
   secondaryButton: { flex: 1, borderWidth: 1, borderColor: '#DDD', flexDirection: 'row', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 8 },
   secondaryButtonText: { color: Colors.text, fontWeight: '600' },
-  
+
   successOverlay: {
-  ...StyleSheet.absoluteFill,
-  backgroundColor: 'rgba(46, 125, 50, 0.2)', // Màu xanh lá trong suốt
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-checkCircle: {
-  width: 60,
-  height: 60,
-  borderRadius: 30,
-  backgroundColor: Colors.primary,
-  justifyContent: 'center',
-  alignItems: 'center',
-  shadowColor: Colors.primary,
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.3,
-  shadowRadius: 8,
-},
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(46, 125, 50, 0.2)', // Màu xanh lá trong suốt
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
 
-// Trạng thái trống
-emptyContainer: {
-  flex: 1,
-  height: 300,
-  justifyContent: 'center',
-  alignItems: 'center',
-  backgroundColor: '#F5F5F5',
-  borderRadius: 20,
-  borderWidth: 2,
-  borderColor: '#E0E0E0',
-  borderStyle: 'dashed',
-},
+  // Trạng thái trống
+  emptyContainer: {
+    flex: 1,
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    borderStyle: 'dashed',
+  },
 
-// Thông tin Header (AI Status)
-headerInfo: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  marginBottom: 15,
-},
-modelText: {
-  fontSize: 12,
-  color: Colors.textSecondary,
-  fontStyle: 'italic',
-},
+  // Thông tin Header (AI Status)
+  headerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  modelText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+  },
 
-// Thông báo lỗi (Error Box)
-errorBox: {
-  backgroundColor: '#FFEBEE',
-  padding: 20,
-  borderRadius: 20,
-  alignItems: 'center',
-  borderWidth: 1,
-  borderColor: '#FFCDD2',
-},
-errorTitle: {
-  fontSize: 18,
-  fontWeight: 'bold',
-  color: '#C62828',
-  marginTop: 10,
-},
-errorDesc: {
-  fontSize: 14,
-  color: '#D32F2F',
-  textAlign: 'center',
-  marginTop: 8,
-  marginBottom: 15,
-},
-retryAction: {
-  paddingHorizontal: 20,
-  paddingVertical: 10,
-  backgroundColor: '#C62828',
-  borderRadius: 10,
-},
-retryActionText: {
-  color: Colors.white,
-  fontWeight: '600',
-  fontSize: 14,
-},
+  // Thông báo lỗi (Error Box)
+  errorBox: {
+    backgroundColor: '#FFEBEE',
+    padding: 20,
+    borderRadius: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#C62828',
+    marginTop: 10,
+  },
+  errorDesc: {
+    fontSize: 14,
+    color: '#D32F2F',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 15,
+  },
+  retryAction: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#C62828',
+    borderRadius: 10,
+  },
+  retryActionText: {
+    color: Colors.white,
+    fontWeight: '600',
+    fontSize: 14,
+  },
 
-// Style phụ trợ cho Badge
-aiBadge: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 4,
-  backgroundColor: '#E8F5E9',
-  paddingHorizontal: 10,
-  paddingVertical: 4,
-  borderRadius: 8,
-},
-aiBadgeText: {
-  fontSize: 11,
-  fontWeight: '800',
-  color: Colors.primary,
-},
+  // Style phụ trợ cho Badge
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  aiBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
 });

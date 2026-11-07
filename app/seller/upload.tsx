@@ -506,7 +506,7 @@ export default function SellerUploadScreen() {
       case 'low-confidence':
         return 'Độ tin cậy trung bình';
       case 'fallback':
-        return 'Đã dùng Gemini AI';
+        return 'Đã dùng Groq AI';
       case 'needs-review':
         return 'Cần kiểm tra lại';
       default:

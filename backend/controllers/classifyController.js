@@ -1,5 +1,6 @@
 const azureService = require('../services/azureService');
-const geminiService = require('../services/geminiService');
+// const geminiService = require('../services/geminiService');
+const groqService = require('../services/groqService');
 
 const VALID_LABELS = ['battery', 'biological', 'cardboard', 'clothes', 'glass', 'metal', 'paper', 'plastic', 'shoes', 'trash', 'not_waste'];
 const AZURE_CONFIDENCE_THRESHOLD = 0.6;
@@ -49,7 +50,7 @@ const handleClassification = async (req, res) => {
         try {
             azureResult = await azureService.classifyWithAzure(imageBuffer);
         } catch (azureError) {
-            console.warn("Azure Custom Vision thất bại, chuyển sang Gemini:", azureError.message);
+            console.warn("Azure Custom Vision thất bại, chuyển sang Groq:", azureError.message);
         }
 
         // nếu Azure chạy tốt và độ tự tin cao (trên 60%) => Trả kết quả ngay
@@ -68,20 +69,46 @@ const handleClassification = async (req, res) => {
         }
 
         // fallback sang gemini AI nếu như Azure thất bại hoặc độ tự tin thấp
-        console.log("Azure không đủ tự tin hoặc bị lỗi, đang chuyển sang Gemini AI...");
-        const geminiResult = await geminiService.classifyWithGemini(imageBuffer, req.file.mimetype);
+        // console.log("Azure không đủ tự tin hoặc bị lỗi, đang chuyển sang Gemini AI...");
+        // const geminiResult = await geminiService.classifyWithGemini(imageBuffer, req.file.mimetype);
+
+        // return res.status(200).json(
+        //     buildSuccessResponse({
+        //         label: geminiResult.label,
+        //         source: "Gemini AI",
+        //         provider: "gemini",
+        //         confidence: null,
+        //         fallbackFrom: azureResult ? "azure-low-confidence" : "azure-error",
+        //         raw: {
+        //             model: geminiResult.model,
+        //             rawText: geminiResult.rawText || geminiResult.label, 
+        //         },
+        //     })
+        // );
+
+        // fallback sang Groq AI nếu như Azure thất bại hoặc độ tự tin thấp
+        console.log(
+            "Azure không đủ tự tin hoặc bị lỗi, đang chuyển sang Groq..."
+        );
+
+        const groqResult = await groqService.classifyWithGroq(
+            imageBuffer,
+            req.file.mimetype
+        );
 
         return res.status(200).json(
             buildSuccessResponse({
-                label: geminiResult.label,
-                source: "Gemini AI",
-                provider: "gemini",
+                label: groqResult.label,
+                source: "Groq AI",
+                provider: "groq",
                 confidence: null,
-                fallbackFrom: azureResult ? "azure-low-confidence" : "azure-error",
+                fallbackFrom: azureResult
+                    ? "azure-low-confidence"
+                    : "azure-error",
                 raw: {
-                    model: geminiResult.model,
-                    rawText: geminiResult.rawText || geminiResult.label, 
-                },
+                    model: groqResult.model,
+                    rawText: groqResult.rawText
+                }
             })
         );
 
