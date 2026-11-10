@@ -16,6 +16,8 @@
     "@azure/cognitiveservices-customvision-prediction": "^5.1.2",
     "@azure/ms-rest-js": "^2.7.0",
     "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.118.0",
+    "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

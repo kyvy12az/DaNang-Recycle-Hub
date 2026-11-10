@@ -6,6 +6,7 @@ import { View, Text, StyleSheet, Animated, Image, StatusBar, Platform, Easing } 
 import { Recycle, Leaf, Package, Droplets } from "lucide-react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import Colors from "@/constants/colors";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SocketProvider } from "@/contexts/SocketContext";
@@ -54,24 +55,34 @@ Notifications.setNotificationHandler({
 });
 
 async function registerForPushNotificationsAsync() {
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
-    });
+  // Expo Go on Android does not support remote push notifications.
+  // Avoid calling native channel setup there; local notifications are handled separately.
+  if (Platform.OS === 'android' && Constants.appOwnership === 'expo') {
+    console.log('Expo Go: skipping push notification registration');
+    return;
   }
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-  if (finalStatus !== 'granted') {
-    console.log('Failed to get push token for push notification!');
-    return;
+  try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.log('Notification permission not granted');
+    }
+  } catch (error) {
+    console.warn('Notification initialization failed:', error);
   }
 }
 
@@ -99,7 +110,7 @@ function RootLayoutNav() {
   const socket = useSocket();
 
   useEffect(() => {
-    registerForPushNotificationsAsync();
+    void registerForPushNotificationsAsync();
 
     const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
@@ -126,15 +137,19 @@ function RootLayoutNav() {
         targetUrl = `/buyer-order-tracking?orderId=${notification.orderId}&listingId=${notification.listingId}`;
       }
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: notification.title || "Thông báo mới",
-          body: notification.message,
-          data: { url: targetUrl },
-          sound: true,
-        },
-        trigger: null, // show immediately
-      });
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: notification.title || "Thông báo mới",
+            body: notification.message,
+            data: { url: targetUrl },
+            sound: true,
+          },
+          trigger: null, // show immediately
+        });
+      } catch (error) {
+        console.warn('Unable to display local notification:', error);
+      }
     };
 
     socket.on('notification:new', handleAdminNotification);
@@ -165,7 +180,6 @@ function RootLayoutNav() {
       <Stack.Screen name="buyer-listings" options={{ title: "Danh sách rác bán" }} />
       <Stack.Screen name="buyer-detail" options={{ title: "Chi tiết" }} />
       <Stack.Screen name="chat" options={{ title: "Nhắn tin" }} />
-      <Stack.Screen name="game" options={{ headerShown: false }} />
       <Stack.Screen name="rewards" options={{ title: "Đổi thưởng" }} />
       <Stack.Screen name="education-detail" options={{ title: "Chi tiết", headerShown: false }} />
       <Stack.Screen name="education-discussion" options={{ title: "Thảo luận xanh", headerShown: false }} />
