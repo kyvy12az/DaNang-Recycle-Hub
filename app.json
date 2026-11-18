@@ -1,7 +1,8 @@
+﻿
 {
   "expo": {
     "name": "DaNang Recycle Hub",
-    "owner": "kyvynguyen2006",
+    "owner": "npa2912",
     "slug": "jbals497ao7taka2w26of",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -50,7 +51,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Cho phep ung dung truy cap vi tri de tim diem thu gom gan ban"
+          "locationWhenInUsePermission": "Cho phép ứng dụng truy cập vị trí để tìm điểm thu gom gần bạn"
         }
       ],
       "expo-font",
@@ -73,15 +74,15 @@
     },
     "extra": {
       "router": {
-        "origin": "https://rork.com/"
+        "origin": "https://rork.com/",
+        "asyncRoutes": {
+          "web": true
+        }
       },
       "eas": {
-        "projectId": "575cbe82-12d2-4f70-bf74-b3141ca79018"
+        "projectId": "e2d6c116-a91e-4cbd-81bf-607152141649"
       }
     },
-    "runtimeVersion": "1.0.0",
-    "updates": {
-      "url": "https://u.expo.dev/575cbe82-12d2-4f70-bf74-b3141ca79018"
-    }
+    "runtimeVersion": "1.0.0"
   }
 }

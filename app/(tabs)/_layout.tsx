@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
-import { Home, Map, BookOpen, User, Trophy } from "lucide-react-native";
+import { Home, Map, BookOpen, User, Camera } from "lucide-react-native";
+import { View } from "react-native";
 import Colors from "@/constants/colors";
 
 export default function TabLayout() {
@@ -13,6 +14,9 @@ export default function TabLayout() {
           backgroundColor: Colors.white,
           borderTopColor: Colors.border,
           borderTopWidth: 1,
+          height: 65,
+          paddingTop: 5,
+          overflow: "visible",
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -35,14 +39,42 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="leaderboard"
-        options={{
-          title: 'Xếp hạng',
-          tabBarIcon: ({ color, size }) => (
-            <Trophy size={size} color={color} strokeWidth={1.8} />
-          ),
+  name="camera"
+  options={{
+    title: "",
+    tabBarLabel: () => null,
+    tabBarIcon: () => (
+      <View
+        style={{
+          width: 66,
+          height: 66,
+          borderRadius: 33,
+          backgroundColor: "#207A35",
+          alignItems: "center",
+          justifyContent: "center",
+          marginTop: -18,
+          borderWidth: 4,
+          borderColor: "#FFFFFF",
+          elevation: 5,
+          shadowColor: "#14532D",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.2,
+          shadowRadius: 5,
         }}
-      />
+      >
+        <Camera size={31} color="#FFFFFF" strokeWidth={2.2} />
+      </View>
+    ),
+  }}
+/>
+
+<Tabs.Screen
+  name="leaderboard"
+  options={{
+    href: null,
+  }}
+/>
+
       <Tabs.Screen
         name="education"
         options={{

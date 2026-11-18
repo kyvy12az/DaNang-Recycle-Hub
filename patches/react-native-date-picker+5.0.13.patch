@@ -1,0 +1,6 @@
+diff --git a/node_modules/react-native-date-picker/android/build.gradle b/node_modules/react-native-date-picker/android/build.gradle
+--- a/node_modules/react-native-date-picker/android/build.gradle
++++ b/node_modules/react-native-date-picker/android/build.gradle
+@@ -54,1 +54,1 @@
+-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
++            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

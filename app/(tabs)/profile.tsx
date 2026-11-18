@@ -304,8 +304,30 @@ export default function ProfileScreen() {
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+            </View>
+</View>
+            {/* Xếp hạng */}
+<TouchableOpacity
+  style={styles.ecoMenuItem}
+  onPress={() => router.push('/leaderboard' as any)}
+  activeOpacity={0.7}
+>
+  <View style={styles.menuItemLeft}>
+    <View style={styles.ecoIconWrapper}>
+      <Trophy size={20} color="#E5A000" strokeWidth={2} />
+    </View>
+
+    <View style={styles.menuItemTextGroup}>
+      <Text style={styles.ecoMenuTitle}>Xếp hạng</Text>
+      <Text style={styles.ecoMenuSubtitle}>
+        Xem thứ hạng và điểm tích lũy
+      </Text>
+    </View>
+  </View>
+
+  <ChevronRight size={16} color="#94A3B8" strokeWidth={2.5} />
+</TouchableOpacity>
+      
 
         <TouchableOpacity
           style={styles.ecoMenuItem}

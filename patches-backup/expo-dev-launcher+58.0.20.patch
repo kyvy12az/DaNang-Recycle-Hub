@@ -1,0 +1,13 @@
+diff --git a/node_modules/expo-dev-launcher/android/src/debug/AndroidManifest.xml b/node_modules/expo-dev-launcher/android/src/debug/AndroidManifest.xml
+index fd3f55a..c023a41 100644
+--- a/node_modules/expo-dev-launcher/android/src/debug/AndroidManifest.xml
++++ b/node_modules/expo-dev-launcher/android/src/debug/AndroidManifest.xml
+@@ -6,7 +6,7 @@
+   <application>
+     <meta-data
+       android:name="com.google.mlkit.vision.DEPENDENCIES"
+-      android:value="barcode_ui"/>
++      android:value="barcode_ui,subject_segment" />
+ 
+     <activity
+       android:name="expo.modules.devlauncher.launcher.DevLauncherActivity"

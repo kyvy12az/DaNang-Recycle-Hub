@@ -1,0 +1,6 @@
+diff --git a/node_modules/@blazejkustra/react-native-alert/android/src/main/java/com/blazejkustra/reactnativealert/ReactNativeAlertModule.kt b/node_modules/@blazejkustra/react-native-alert/android/src/main/java/com/blazejkustra/reactnativealert/ReactNativeAlertModule.kt
+--- a/node_modules/@blazejkustra/react-native-alert/android/src/main/java/com/blazejkustra/reactnativealert/ReactNativeAlertModule.kt
++++ b/node_modules/@blazejkustra/react-native-alert/android/src/main/java/com/blazejkustra/reactnativealert/ReactNativeAlertModule.kt
+@@ -48,1 +48,1 @@
+-    val activity = currentActivity ?: return
++    val activity = getCurrentActivity() ?: return
